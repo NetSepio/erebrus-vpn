@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vpn/vpn/vpn_models.dart';
+import 'package:erebrus_vpn/vpn/vpn_models.dart';
 
 // A minimal node-style credential bundle: a sing-box profile with the WG
 // endpoint + both carrier outbounds (as the gateway/node returns).

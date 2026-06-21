@@ -1,56 +1,59 @@
-# Erebrus VPN
+# Erebrus VPN 🛡️
 
-The Erebrus mobile app — a premium, stealth-capable DePIN VPN client. Ships as
-`com.erebrus.vpn` (Flutter).
+A premium, privacy-first VPN app for the Erebrus network — built with Flutter,
+ships as `com.erebrus.vpn`.
 
-One **sing-box engine** drives every protocol: WireGuard is an endpoint *inside*
-the sing-box config, and when WireGuard's UDP is throttled or DPI-blocked the
-same tunnel falls back to a stealth carrier that looks like ordinary traffic:
-
-- **Auto** — WireGuard → VLESS+REALITY → Hysteria2 (the controller probes and
-  falls through within a budget per transport).
-- **Stealth** — VLESS+REALITY → Hysteria2 (skips raw UDP).
-- **WireGuard** — direct, fastest, most detectable.
-
-## Layout
+Most VPNs stop working the moment a network decides to block them. Erebrus
+doesn't. When the normal connection is blocked, it quietly **disguises your
+traffic as everyday internet** (regular HTTPS / video-call traffic) so you stay
+connected — without you having to do anything.
 
 ```
-lib/theme/         design system (stealth-aurora dark theme, glass components)
-lib/vpn/           the engine:
-  vpn_models.dart      ConnectMode/Transport, CredentialBundle, SingboxConfigBuilder
-  singbox_engine.dart  method/event-channel facade over native libbox
-  vpn_controller.dart  GetX state machine: keypair, provision, auto-failover
-lib/view/          premium screens (connect, servers, profile, settings) + shell
-android/app/src/main/kotlin/com/erebrus/vpn/
-  MainActivity.kt      channel wiring + VPN permission + x25519 keygen
-  ErebrusVpnService.kt VpnService running sing-box via libbox
-  SingboxBridge.kt     service ↔ Flutter event bridge
+ Auto      → tries the fast path, falls back to stealth automatically
+ Stealth   → always disguised (best on strict networks)
+ WireGuard → classic, fastest, most detectable
 ```
 
-## Build
+## Run it locally
+
+You'll need [Flutter](https://docs.flutter.dev/get-started/install) installed.
+Then:
 
 ```bash
-flutter pub get
-flutter analyze
-flutter test
+flutter pub get      # fetch dependencies
+flutter analyze      # check the code (should say "No issues found!")
+flutter test         # run the tests (should pass)
+flutter run          # launch on a connected device or emulator
 ```
 
-### Native tunnel (required to actually connect)
+> **Heads-up:** the app builds and runs the UI today, but **actually connecting
+> to a VPN needs one extra native step** (building the tunnel engine). It's a
+> one-time command — see **[docs/BUILD.md](docs/BUILD.md)**.
 
-The Android tunnel links sing-box's `libbox` (`io.nekohasekai.libbox.*`), which
-is **not committed** — build it once:
+## Where things live
 
-```bash
-./scripts/build-libbox.sh        # gomobile build → android/app/libs/libbox.aar
-flutter run                       # arm64 device
-```
+| Folder | What's inside |
+|---|---|
+| `lib/view/` | The screens — connect, servers, account, settings |
+| `lib/theme/` | Colors, fonts, and reusable UI pieces (the look & feel) |
+| `lib/vpn/` | The connection brain — picks the protocol and talks to the tunnel |
+| `android/` · `ios/` | The native bits that move your traffic |
+| `docs/` | Deeper explanations (read these when you want the "how") |
 
-See [docs/STEALTH_CLIENT.md](docs/STEALTH_CLIENT.md) for the channel contract and
-the iOS `NEPacketTunnelProvider` integration.
+## Learn more
 
-## Wiring to the network
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the app actually works:
+  the single engine, the three protocols, and the stealth trick. Start here to
+  understand the codebase.
+- **[docs/BUILD.md](docs/BUILD.md)** — full setup, building the native tunnel,
+  iOS notes, and troubleshooting.
+- **[docs/STEALTH_CLIENT.md](docs/STEALTH_CLIENT.md)** — the exact contract
+  between the Flutter code and the native tunnel (for native contributors).
 
-`VpnController.provisioner` must be set to a function that provisions a client
-via the Erebrus gateway (`POST /api/v2/vpn/clients`) and returns a
-`CredentialBundle`. A manual-import path (paste a node's `singbox_profile` / share
-URI) can drive a standalone node without the gateway for testing.
+## Status
+
+✅ UI, theming, and the connection logic are in place and tested.
+🚧 Next: build the native tunnel engine, then connect it to the Erebrus network
+(automatic via the gateway, or by pasting a node's config for quick testing).
+
+Questions or stuck? Open an issue — we'd rather help than have you guess. 💜
