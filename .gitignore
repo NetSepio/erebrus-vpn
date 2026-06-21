@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# sing-box libbox binaries (build via scripts/build-libbox*.sh)
+/android/app/libs/libbox.aar
+/macos/Frameworks/Libbox.xcframework/
+/ios/Frameworks/Libbox.xcframework/
+/windows/native/libbox/
+/linux/native/libbox/

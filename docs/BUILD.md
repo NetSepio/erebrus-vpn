@@ -23,24 +23,29 @@ At this point the app runs, the screens work, and you can move around. It
 
 ## 3. Build the native tunnel (`libbox`)
 
-The Android tunnel links sing-box's mobile core, `libbox`
-(`io.nekohasekai.libbox.*`). It's a large generated binary, so it isn't checked
-in — build it once:
+The tunnel links sing-box's mobile core, `libbox` (`io.nekohasekai.libbox.*`).
+It's a large generated binary, so it isn't checked in — build it once per platform.
+
+All scripts share pinned versions via `scripts/libbox-common.sh`
+(`SING_BOX_COMMIT`, `GOMOBILE_VERSION`, `LIBBOX_TAGS`).
+
+| Platform | Script | Output |
+|---|---|---|
+| Android arm64 | `./scripts/build-libbox.sh` | `android/app/libs/libbox.aar` |
+| macOS M + Intel | `./scripts/build-libbox-macos.sh` | `macos/Frameworks/Libbox.xcframework` |
+| Windows x64 + arm64 | `./scripts/build-libbox-windows.sh` | `windows/native/libbox/libbox.dll` |
+| Linux x64 + arm64 | `./scripts/build-libbox-linux.sh` | `linux/native/libbox/libbox.so` |
+| All | `./scripts/build-libbox-all.sh` | all of the above |
+
+Android example:
 
 ```bash
 ./scripts/build-libbox.sh
+flutter run            # arm64 device — can establish a tunnel
 ```
 
-This uses `gomobile` to compile sing-box from a **pinned git commit**
-(`SING_BOX_COMMIT` in the script, default `bc35aca…` = `v1.11.15`) into
-`android/app/libs/libbox.aar`. After it finishes:
-
-```bash
-flutter run            # on an arm64 device — now it can establish a tunnel
-```
-
-> The app is restricted to `arm64-v8a` (that's what `libbox.aar` is built for).
-> CI should run `build-libbox.sh` and cache the artifact.
+> Android is restricted to `arm64-v8a`. CI should run the libbox scripts and
+> cache artifacts per platform.
 
 ## 4. Connect to the network
 
@@ -54,6 +59,34 @@ The app needs a server config (a "credential bundle"). Wire one of:
   / `hysteria2://` share URI to connect directly to one node — no gateway needed.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how a bundle becomes a live tunnel.
+
+## macOS (menu bar + stealth)
+
+```bash
+./scripts/build-libbox-macos.sh
+flutter run -d macos
+```
+
+1. Build `Libbox.xcframework` (see table above).
+2. Open `macos/Runner.xcworkspace` in Xcode and add the **ErebrusTunnel**
+   Network Extension target (scaffold in `macos/ErebrusTunnel/`).
+3. Enable App Group + Network Extension entitlements on app + extension.
+4. Embed `Libbox.xcframework` in the extension target.
+5. Notarize for distribution outside the Mac App Store.
+
+Auth on desktop uses **Reown** (wallets + social). Stealth modes use the same
+Dart `SingboxConfigBuilder` as mobile.
+
+## Windows / Linux
+
+```bash
+./scripts/build-libbox-windows.sh   # or build-libbox-linux.sh
+flutter run -d windows                # or -d linux
+```
+
+Wire the generated libbox binary into the native `singbox_plugin` (see
+`windows/runner/` and `linux/runner/`). Windows uses Wintun; Linux needs TUN
+capabilities (`cap_net_admin` or polkit).
 
 ## iOS
 
