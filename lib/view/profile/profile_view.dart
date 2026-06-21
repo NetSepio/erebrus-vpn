@@ -15,6 +15,10 @@ class ProfileView extends StatelessWidget {
     this.daysLeft,
     this.orgCount = 0,
     this.onManagePlan,
+    this.unlockLabel = 'Unlock access',
+    this.isLoadingEntitlement = false,
+    this.isStartingTrial = false,
+    this.entitlementError,
     this.onOpenOrgs,
     this.onOpenSettings,
     this.onSignOut,
@@ -28,6 +32,10 @@ class ProfileView extends StatelessWidget {
   final int? daysLeft;
   final int orgCount;
   final VoidCallback? onManagePlan;
+  final String unlockLabel;
+  final bool isLoadingEntitlement;
+  final bool isStartingTrial;
+  final String? entitlementError;
   final VoidCallback? onOpenOrgs;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onSignOut;
@@ -52,7 +60,16 @@ class ProfileView extends StatelessWidget {
             _AuthError(message: authError!),
           ],
           const SizedBox(height: AppSpace.xl),
-          _EntitlementCard(plan: planLabel, source: entitlementSource, daysLeft: daysLeft, onManage: onManagePlan),
+          _EntitlementCard(
+            plan: planLabel,
+            source: entitlementSource,
+            daysLeft: daysLeft,
+            onManage: onManagePlan,
+            unlockLabel: unlockLabel,
+            isLoading: isLoadingEntitlement,
+            isStartingTrial: isStartingTrial,
+            entitlementError: entitlementError,
+          ),
           const SizedBox(height: AppSpace.lg),
           const SectionLabel('Workspace'),
           const SizedBox(height: AppSpace.md),
@@ -122,11 +139,24 @@ class _AuthError extends StatelessWidget {
 }
 
 class _EntitlementCard extends StatelessWidget {
-  const _EntitlementCard({required this.plan, this.source, this.daysLeft, this.onManage});
+  const _EntitlementCard({
+    required this.plan,
+    this.source,
+    this.daysLeft,
+    this.onManage,
+    this.unlockLabel = 'Unlock access',
+    this.isLoading = false,
+    this.isStartingTrial = false,
+    this.entitlementError,
+  });
   final String plan;
   final String? source;
   final int? daysLeft;
   final VoidCallback? onManage;
+  final String unlockLabel;
+  final bool isLoading;
+  final bool isStartingTrial;
+  final String? entitlementError;
 
   @override
   Widget build(BuildContext context) {
@@ -134,8 +164,18 @@ class _EntitlementCard extends StatelessWidget {
     final badge = switch (source) {
       'trial' => 'Trial',
       'nft' => 'NFT access',
-      _ => 'Inactive',
+      'crypto' => 'Subscriber',
+      'admin' => 'Admin',
+      _ => entitled ? 'Active' : 'Inactive',
     };
+    final busy = isLoading || isStartingTrial;
+    final subtitle = isLoading
+        ? 'Checking subscription…'
+        : entitled
+            ? (daysLeft != null ? '$daysLeft days remaining' : 'Active')
+            : 'Start a free 14-day trial to connect';
+    final actionLabel = entitled ? 'Manage access' : unlockLabel;
+
     return GlassCard(
       borderColor: entitled ? AppColors.connected.withValues(alpha: 0.5) : null,
       child: Column(
@@ -149,28 +189,40 @@ class _EntitlementCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white)),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (entitled ? AppColors.connected : AppColors.textMuted).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
+              if (busy)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textMuted),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (entitled ? AppColors.connected : AppColors.textMuted).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Text(badge,
+                      style: TextStyle(
+                          color: entitled ? AppColors.connected : AppColors.textMuted,
+                          fontSize: 11, fontWeight: FontWeight.w700)),
                 ),
-                child: Text(badge,
-                    style: TextStyle(
-                        color: entitled ? AppColors.connected : AppColors.textMuted,
-                        fontSize: 11, fontWeight: FontWeight.w700)),
-              ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            entitled
-                ? (daysLeft != null ? '$daysLeft days remaining' : 'Active')
-                : 'Start a trial or connect an NFT to unlock',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpace.lg),
-          GradientButton(label: entitled ? 'Manage access' : 'Unlock access', onPressed: onManage),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          if (entitlementError != null && entitlementError!.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(entitlementError!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+          ],
+          if (!entitled) ...[
+            const SizedBox(height: AppSpace.lg),
+            GradientButton(
+              label: actionLabel,
+              onPressed: busy ? null : onManage,
+              enabled: !busy && onManage != null,
+            ),
+          ],
         ],
       ),
     );

@@ -8,6 +8,7 @@ import 'package:reown_appkit/reown_appkit.dart';
 
 import 'auth_config.dart';
 import 'deep_link_handler.dart';
+import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
 import '../vpn/gateway_controller.dart';
 
@@ -30,6 +31,10 @@ class WalletAuthController extends GetxController {
   final isAuthenticating = false.obs;
   final reownReady = false.obs;
   final authError = RxnString();
+  final entitlement = EntitlementState.none.obs;
+  final isLoadingEntitlement = false.obs;
+  final isStartingTrial = false.obs;
+  final entitlementError = RxnString();
 
   String? _token;
 
@@ -39,6 +44,7 @@ class WalletAuthController extends GetxController {
   static const _kRole = 'erebrus_user_role';
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  bool get isEntitled => entitlement.value.entitled;
   String? get bearerToken => _token;
 
   @override
@@ -133,6 +139,8 @@ class WalletAuthController extends GetxController {
 
   Future<void> signOut() async {
     authError.value = null;
+    entitlementError.value = null;
+    entitlement.value = EntitlementState.none;
     _token = null;
     walletAddress.value = '';
     userId.value = '';
@@ -153,6 +161,54 @@ class WalletAuthController extends GetxController {
     userId.value = await _storage.read(key: _kUserId) ?? '';
     role.value = await _storage.read(key: _kRole) ?? '';
     _syncGatewayToken();
+    if (isAuthenticated) {
+      await refreshEntitlement();
+    } else {
+      entitlement.value = EntitlementState.none;
+    }
+  }
+
+  /// Loads subscription state from `GET /api/v2/subscriptions`.
+  Future<void> refreshEntitlement() async {
+    final token = _token;
+    if (token == null || token.isEmpty) {
+      entitlement.value = EntitlementState.none;
+      return;
+    }
+    isLoadingEntitlement.value = true;
+    entitlementError.value = null;
+    try {
+      entitlement.value = await _authClient.fetchSubscription(token);
+    } on AuthException catch (e) {
+      entitlementError.value = e.message;
+      entitlement.value = EntitlementState.none;
+    } catch (e) {
+      entitlementError.value = e.toString();
+      entitlement.value = EntitlementState.none;
+    } finally {
+      isLoadingEntitlement.value = false;
+    }
+  }
+
+  /// Activates the one-time 14-day pro trial via `POST /api/v2/subscriptions/trial`.
+  Future<void> startFreeTrial() async {
+    if (!isAuthenticated) {
+      entitlementError.value = 'Connect your Solana wallet first';
+      return;
+    }
+    if (isEntitled) return;
+
+    isStartingTrial.value = true;
+    entitlementError.value = null;
+    try {
+      entitlement.value = await _authClient.startTrial(_token!);
+    } on AuthException catch (e) {
+      entitlementError.value = e.message;
+    } catch (e) {
+      entitlementError.value = e.toString();
+    } finally {
+      isStartingTrial.value = false;
+    }
   }
 
   Future<void> _persistSession(AuthSession session) async {
@@ -206,6 +262,7 @@ class WalletAuthController extends GetxController {
         publicKey: address,
       );
       await _persistSession(session);
+      await refreshEntitlement();
       if (modal.isOpen) modal.closeModal();
       debugPrint('[Reown] gateway auth OK for $address');
     } on AuthException catch (e) {

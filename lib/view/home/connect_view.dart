@@ -34,21 +34,31 @@ class ConnectView extends StatelessWidget {
                 children: [
                   const _TopBar(),
                   const Spacer(flex: 2),
-                  Obx(() => ConnectOrb(
-                        stage: c.stage.value,
-                        transport: c.activeTransport.value,
-                        onTap: c.isBusy
-                            ? null
-                            : () {
-                                if (auth != null && !auth.isAuthenticated) {
-                                  c.error.value =
-                                      'Connect your Solana wallet in Account first';
-                                  onRequireAuth?.call();
-                                  return;
-                                }
-                                c.toggle();
-                              },
-                      )),
+                  Obx(() {
+                    final authed = auth?.isAuthenticated ?? false;
+                    final entitled = auth?.isEntitled ?? false;
+                    return ConnectOrb(
+                      stage: c.stage.value,
+                      transport: c.activeTransport.value,
+                      onTap: c.isBusy
+                          ? null
+                          : () {
+                              if (auth != null && !authed) {
+                                c.error.value =
+                                    'Connect your Solana wallet in Account first';
+                                onRequireAuth?.call();
+                                return;
+                              }
+                              if (auth != null && !entitled) {
+                                c.error.value =
+                                    'Start a free trial in Account to connect';
+                                onRequireAuth?.call();
+                                return;
+                              }
+                              c.toggle();
+                            },
+                    );
+                  }),
                   const SizedBox(height: AppSpace.xl),
                   Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
                   const Spacer(flex: 2),

@@ -43,16 +43,36 @@ class _MainShellState extends State<MainShell> {
       }),
       Obx(() {
         final auth = Get.find<WalletAuthController>();
+        final ent = auth.entitlement.value;
+        final authed = auth.isAuthenticated;
+        final entitled = auth.isEntitled;
+        final trialBusy = auth.isStartingTrial.value;
+
+        VoidCallback? onUnlock;
+        String unlockLabel = 'Unlock access';
+        if (!authed) {
+          onUnlock = auth.openWalletModal;
+          unlockLabel = 'Connect wallet';
+        } else if (!entitled) {
+          onUnlock = trialBusy ? null : auth.startFreeTrial;
+          unlockLabel = trialBusy ? 'Starting trial…' : 'Start free trial';
+        }
+
         return ProfileView(
           walletAddress: auth.walletAddress.value,
-          planLabel: auth.isAuthenticated ? 'Member' : 'Free',
-          entitlementSource: auth.isAuthenticated ? 'trial' : null,
-          onManagePlan: auth.isAuthenticated ? null : auth.openWalletModal,
+          planLabel: authed ? ent.planLabel : 'Free',
+          entitlementSource: entitled ? ent.source : null,
+          daysLeft: entitled ? ent.daysRemaining : null,
+          onManagePlan: onUnlock,
+          unlockLabel: unlockLabel,
+          isLoadingEntitlement: auth.isLoadingEntitlement.value,
+          isStartingTrial: trialBusy,
+          entitlementError: auth.entitlementError.value,
           onOpenSettings: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SettingsView()),
           ),
-          onSignOut: auth.isAuthenticated ? auth.signOut : auth.openWalletModal,
-          signInLabel: auth.isAuthenticated
+          onSignOut: authed ? auth.signOut : auth.openWalletModal,
+          signInLabel: authed
               ? 'Sign out'
               : (auth.isAuthenticating.value ? 'Signing in…' : 'Connect Solana wallet'),
           authError: auth.authError.value,
