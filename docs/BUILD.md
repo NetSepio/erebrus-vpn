@@ -72,7 +72,10 @@ flutter run -d macos
    Network Extension target (scaffold in `macos/ErebrusTunnel/`).
 3. Enable App Group + Network Extension entitlements on app + extension.
 4. Embed `Libbox.xcframework` in the extension target.
-5. Notarize for distribution outside the Mac App Store.
+5. For **tunnel testing**, set Debug entitlements to `Runner/DebugProfile.Tunnel.entitlements`
+   in Xcode (requires an Apple Development certificate). Unsigned debug builds use the
+   slimmer `DebugProfile.entitlements` so `flutter build macos` works without signing.
+6. Notarize for distribution outside the Mac App Store.
 
 Auth on desktop uses **Reown** (wallets + social). Stealth modes use the same
 Dart `SingboxConfigBuilder` as mobile.

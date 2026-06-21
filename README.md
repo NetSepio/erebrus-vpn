@@ -37,7 +37,8 @@ flutter run          # launch on a connected device or emulator
 | `lib/view/` | The screens — connect, servers, account, settings |
 | `lib/theme/` | Colors, fonts, and reusable UI pieces (the look & feel) |
 | `lib/vpn/` | The connection brain — picks the protocol and talks to the tunnel |
-| `android/` · `ios/` | The native bits that move your traffic |
+| `android/` · `ios/` · `macos/` · `windows/` · `linux/` | Native tunnel + platform shells |
+| `lib/platform/` | Desktop menu-bar tray and platform routing |
 | `docs/` | Deeper explanations (read these when you want the "how") |
 
 ## Learn more

@@ -6,6 +6,7 @@ import 'package:reown_appkit/reown_appkit.dart';
 
 import 'auth/deep_link_handler.dart';
 import 'auth/wallet_auth_controller.dart';
+import 'platform/desktop_shell.dart';
 import 'platform/platform_capabilities.dart';
 import 'theme/app_theme.dart';
 import 'view/auth/reown_host.dart';
@@ -32,24 +33,33 @@ Future<void> main() async {
     '[Erebrus] started — platform=${PlatformCapabilities.platformLabel} '
     'solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
   );
-  runApp(ErebrusVpnApp(usesReown: auth.usesReown));
+  runApp(ErebrusVpnApp(
+    usesReown: auth.usesReown,
+    useDesktopShell: PlatformCapabilities.supportsTray,
+  ));
 }
 
 class ErebrusVpnApp extends StatelessWidget {
-  const ErebrusVpnApp({super.key, required this.usesReown});
+  const ErebrusVpnApp({
+    super.key,
+    required this.usesReown,
+    required this.useDesktopShell,
+  });
 
   final bool usesReown;
+  final bool useDesktopShell;
 
   @override
   Widget build(BuildContext context) {
     final shell = usesReown ? const ReownHost(child: MainShell()) : const MainShell();
+    final home = useDesktopShell ? DesktopShell(child: shell) : shell;
 
     final app = GetMaterialApp(
       title: 'Erebrus VPN',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
-      home: shell,
+      home: home,
     );
 
     if (!usesReown) return app;
