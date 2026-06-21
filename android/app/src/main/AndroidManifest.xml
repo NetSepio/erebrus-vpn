@@ -68,6 +68,9 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <intent>
+            <action android:name="solana.mobilewalletadapter.action.AUTHORIZE"/>
+        </intent>
         <package android:name="app.phantom"/>
         <package android:name="com.solflare.mobile"/>
         <package android:name="io.metamask"/>

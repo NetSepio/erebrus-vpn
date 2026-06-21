@@ -12,17 +12,19 @@ import 'view/bottombar/main_shell.dart';
 import 'vpn/gateway_controller.dart';
 import 'vpn/vpn_controller.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   DeepLinkHandler.initListener();
-  SystemChrome.setPreferredOrientations([
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
   Get.put(VpnController(), permanent: true);
-  Get.put(WalletAuthController(), permanent: true);
+  final auth = WalletAuthController();
+  Get.put(auth, permanent: true);
+  await auth.loadPersistedSession();
   Get.put(GatewayController(), permanent: true);
-  debugPrint('[Erebrus] started — gateway + Reown controllers registered');
+  debugPrint('[Erebrus] started — session restored, gateway registered');
   runApp(const ErebrusVpnApp());
 }
 

@@ -805,6 +805,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  solana_mobile_client:
+    dependency: "direct main"
+    description:
+      name: solana_mobile_client
+      sha256: "6d72b9788c20d267b3b91d81aca3248dda31a7b7ce63f0d59c4045825f2b7779"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   source_span:
     dependency: transitive
     description:

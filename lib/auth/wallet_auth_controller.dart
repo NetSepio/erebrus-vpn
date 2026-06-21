@@ -2,34 +2,38 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 
 import 'auth_config.dart';
+import 'auth_session_store.dart';
 import 'deep_link_handler.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import 'solana_mobile_wallet.dart';
+import '../view/auth/auth_sheet.dart';
 import '../vpn/gateway_controller.dart';
 
-/// Solana wallet login via Reown AppKit + gateway v2 signature auth.
+/// Wallet login via Reown AppKit, Solana Mobile (Seeker/Saga), and gateway v2 auth.
 class WalletAuthController extends GetxController {
   WalletAuthController({
     GatewayAuthClient? authClient,
-    FlutterSecureStorage? storage,
+    AuthSessionStore? store,
   })  : _authClient = authClient ?? GatewayAuthClient(),
-        _storage = storage ?? const FlutterSecureStorage();
+        _store = store ?? AuthSessionStore();
 
   final GatewayAuthClient _authClient;
-  final FlutterSecureStorage _storage;
+  final AuthSessionStore _store;
 
   ReownAppKitModal? appKitModal;
 
   final walletAddress = ''.obs;
   final userId = ''.obs;
   final role = ''.obs;
+  final authMethod = ''.obs;
   final isAuthenticating = false.obs;
   final reownReady = false.obs;
+  final sessionReady = false.obs;
   final authError = RxnString();
   final entitlement = EntitlementState.none.obs;
   final isLoadingEntitlement = false.obs;
@@ -37,20 +41,17 @@ class WalletAuthController extends GetxController {
   final entitlementError = RxnString();
 
   String? _token;
-
-  static const _kToken = 'erebrus_gateway_token';
-  static const _kWallet = 'erebrus_wallet_address';
-  static const _kUserId = 'erebrus_user_id';
-  static const _kRole = 'erebrus_user_role';
+  String? _mwaAuthToken;
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled => entitlement.value.entitled;
+  bool get showSolanaMobileOption => solanaMobilePlatformSupported;
   String? get bearerToken => _token;
 
   @override
   void onInit() {
     super.onInit();
-    _restoreSession();
+    loadPersistedSession();
   }
 
   @override
@@ -59,6 +60,31 @@ class WalletAuthController extends GetxController {
     appKitModal?.onModalDisconnect.unsubscribe(_onModalDisconnect);
     appKitModal?.onModalError.unsubscribe(_onModalError);
     super.onClose();
+  }
+
+  /// Restores token + profile from secure storage before the UI loads.
+  Future<void> loadPersistedSession() async {
+    sessionReady.value = false;
+    try {
+      final stored = await _store.read();
+      if (stored != null) {
+        _token = stored.token;
+        _mwaAuthToken = stored.mwaAuthToken;
+        walletAddress.value = stored.walletAddress;
+        userId.value = stored.userId;
+        role.value = stored.role;
+        authMethod.value = stored.authMethod;
+        _syncGatewayToken();
+        await refreshEntitlement();
+        debugPrint('[Auth] restored session for ${stored.walletAddress}');
+      } else {
+        entitlement.value = EntitlementState.none;
+      }
+    } catch (e) {
+      debugPrint('[Auth] restore failed: $e');
+    } finally {
+      sessionReady.value = true;
+    }
   }
 
   Future<void> initReown(BuildContext context) async {
@@ -97,12 +123,19 @@ class WalletAuthController extends GetxController {
         redirect: const Redirect(
           native: kErebrusNativeRedirect,
           universal: kErebrusUniversalRedirect,
-          // Native `erebrusvpn://` — universal links not on erebrus.io yet.
           linkMode: false,
         ),
       ),
       optionalNamespaces: solanaNamespaces,
-      featuresConfig: FeaturesConfig(showMainWallets: true),
+      featuresConfig: FeaturesConfig(
+        showMainWallets: true,
+        socials: const [
+          AppKitSocialOption.Google,
+          AppKitSocialOption.Apple,
+          AppKitSocialOption.Email,
+          AppKitSocialOption.X,
+        ],
+      ),
       disconnectOnDispose: false,
     );
 
@@ -116,9 +149,9 @@ class WalletAuthController extends GetxController {
       DeepLinkHandler.bind(this);
       DeepLinkHandler.checkInitialLink();
       reownReady.value = true;
-      debugPrint('[Reown] ready — Solana wallets available');
+      debugPrint('[Reown] ready — wallets + social login available');
 
-      if (appKitModal!.isConnected) {
+      if (appKitModal!.isConnected && !isAuthenticated) {
         await _authenticateConnectedWallet();
       }
     } catch (e) {
@@ -126,6 +159,18 @@ class WalletAuthController extends GetxController {
       authError.value = 'Wallet connect failed to start: $e';
       reownReady.value = false;
     }
+  }
+
+  /// Shows login options: Solana Mobile on Android, Reown wallets + social everywhere.
+  Future<void> openAuthSheet(BuildContext context) async {
+    authError.value = null;
+    await AuthSheet.show(
+      context,
+      showSolanaMobile: showSolanaMobileOption,
+      busy: isAuthenticating.value,
+      onSolanaMobile: showSolanaMobileOption ? signInWithSolanaMobile : null,
+      onReown: openWalletModal,
+    );
   }
 
   Future<void> openWalletModal() async {
@@ -137,38 +182,71 @@ class WalletAuthController extends GetxController {
     await appKitModal!.openModalView();
   }
 
+  /// Seed Vault / Mobile Wallet Adapter path for Seeker and Saga devices.
+  Future<void> signInWithSolanaMobile() async {
+    if (!showSolanaMobileOption) {
+      authError.value = 'Solana Mobile is only available on Seeker and Saga';
+      return;
+    }
+
+    isAuthenticating.value = true;
+    authError.value = null;
+    try {
+      final mwa = await connectSolanaMobile(storedAuthToken: _mwaAuthToken);
+      if (mwa == null) {
+        authError.value = 'Could not open Seed Vault — try Wallet or social login';
+        return;
+      }
+
+      _mwaAuthToken = mwa.authToken;
+
+      final challenge = await _authClient.fetchFlowId(walletAddress: mwa.address);
+      final signature = await signSolanaMobileMessage(
+        mwaAuthToken: mwa.authToken,
+        publicKey: mwa.publicKey,
+        message: challenge.message,
+      );
+      if (signature == null || signature.isEmpty) {
+        authError.value = 'Seed Vault did not sign the login challenge';
+        return;
+      }
+
+      final session = await _authClient.authenticate(
+        flowId: challenge.flowId,
+        signature: signature,
+        publicKey: mwa.address,
+      );
+      await _persistSession(session, method: 'solana_mobile', mwaToken: mwa.authToken);
+      await refreshEntitlement();
+      debugPrint('[MWA] gateway auth OK for ${mwa.address}');
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
   Future<void> signOut() async {
     authError.value = null;
     entitlementError.value = null;
     entitlement.value = EntitlementState.none;
+    final mwaToken = _mwaAuthToken;
     _token = null;
+    _mwaAuthToken = null;
     walletAddress.value = '';
     userId.value = '';
     role.value = '';
-    await _storage.delete(key: _kToken);
-    await _storage.delete(key: _kWallet);
-    await _storage.delete(key: _kUserId);
-    await _storage.delete(key: _kRole);
+    authMethod.value = '';
+    await _store.clear();
     if (appKitModal?.isConnected == true) {
       await appKitModal?.disconnect();
     }
+    await disconnectSolanaMobile(mwaToken);
     _syncGatewayToken();
   }
 
-  Future<void> _restoreSession() async {
-    _token = await _storage.read(key: _kToken);
-    walletAddress.value = await _storage.read(key: _kWallet) ?? '';
-    userId.value = await _storage.read(key: _kUserId) ?? '';
-    role.value = await _storage.read(key: _kRole) ?? '';
-    _syncGatewayToken();
-    if (isAuthenticated) {
-      await refreshEntitlement();
-    } else {
-      entitlement.value = EntitlementState.none;
-    }
-  }
-
-  /// Loads subscription state from `GET /api/v2/subscriptions`.
   Future<void> refreshEntitlement() async {
     final token = _token;
     if (token == null || token.isEmpty) {
@@ -190,7 +268,6 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  /// Activates the one-time 14-day pro trial via `POST /api/v2/subscriptions/trial`.
   Future<void> startFreeTrial() async {
     if (!isAuthenticated) {
       entitlementError.value = 'Connect your Solana wallet first';
@@ -211,15 +288,25 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  Future<void> _persistSession(AuthSession session) async {
+  Future<void> _persistSession(
+    AuthSession session, {
+    required String method,
+    String? mwaToken,
+  }) async {
     _token = session.token;
     walletAddress.value = session.walletAddress;
     userId.value = session.userId;
     role.value = session.role;
-    await _storage.write(key: _kToken, value: session.token);
-    await _storage.write(key: _kWallet, value: session.walletAddress);
-    await _storage.write(key: _kUserId, value: session.userId);
-    await _storage.write(key: _kRole, value: session.role);
+    authMethod.value = method;
+    if (mwaToken != null) _mwaAuthToken = mwaToken;
+    await _store.write(
+      token: session.token,
+      walletAddress: session.walletAddress,
+      userId: session.userId,
+      role: session.role,
+      authMethod: method,
+      mwaAuthToken: mwaToken ?? _mwaAuthToken,
+    );
     _syncGatewayToken();
   }
 
@@ -261,7 +348,7 @@ class WalletAuthController extends GetxController {
         signature: signature,
         publicKey: address,
       );
-      await _persistSession(session);
+      await _persistSession(session, method: 'reown');
       await refreshEntitlement();
       if (modal.isOpen) modal.closeModal();
       debugPrint('[Reown] gateway auth OK for $address');

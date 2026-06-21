@@ -51,8 +51,8 @@ class _MainShellState extends State<MainShell> {
         VoidCallback? onUnlock;
         String unlockLabel = 'Unlock access';
         if (!authed) {
-          onUnlock = auth.openWalletModal;
-          unlockLabel = 'Connect wallet';
+          onUnlock = () => auth.openAuthSheet(context);
+          unlockLabel = 'Sign in';
         } else if (!entitled) {
           onUnlock = trialBusy ? null : auth.startFreeTrial;
           unlockLabel = trialBusy ? 'Starting trial…' : 'Start free trial';
@@ -71,10 +71,10 @@ class _MainShellState extends State<MainShell> {
           onOpenSettings: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SettingsView()),
           ),
-          onSignOut: authed ? auth.signOut : auth.openWalletModal,
+          onSignOut: authed ? auth.signOut : () => auth.openAuthSheet(context),
           signInLabel: authed
               ? 'Sign out'
-              : (auth.isAuthenticating.value ? 'Signing in…' : 'Connect Solana wallet'),
+              : (auth.isAuthenticating.value ? 'Signing in…' : 'Sign in'),
           authError: auth.authError.value,
         );
       }),
