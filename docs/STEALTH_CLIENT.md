@@ -53,6 +53,18 @@ stream (12s connect budget per transport).
 3. `MainActivity` registers the MethodChannel and forwards to the service;
    `prepare` calls `VpnService.prepare(this)` and resolves on the activity result.
 
+### macOS (`macos`)
+1. Build `Libbox.xcframework` via `./scripts/build-libbox-macos.sh`.
+2. `SingboxPlugin.swift` + `TunnelManager.swift` in the Runner target implement
+   the Flutter channels and drive `NETunnelProviderManager`.
+3. Add the **ErebrusTunnel** Packet Tunnel extension (see `macos/ErebrusTunnel/README.md`).
+4. App Group `group.com.erebrus.vpn` shares config between app and extension.
+
+### Windows / Linux
+1. Build libbox via `./scripts/build-libbox-windows.sh` or `build-libbox-linux.sh`.
+2. `windows/runner/singbox_plugin.cpp` and `linux/runner/singbox_plugin.cc` implement
+   the channel stubs — wire libbox + Wintun (Windows) or TUN (Linux) when linking.
+
 ### iOS (`ios`)
 1. Add `Libbox.xcframework` (gomobile `-target=ios`).
 2. A Network Extension target (`NEPacketTunnelProvider`) that starts libbox with
