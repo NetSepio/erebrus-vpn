@@ -1,8 +1,11 @@
 package com.erebrus.vpn
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.Bundle
 import android.util.Base64
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,11 +23,51 @@ import java.security.SecureRandom
 class MainActivity : FlutterActivity() {
 
     private val vpnRequestCode = 0x5713
+    private val deeplinkEventsChannel = "com.erebrus.vpn/events"
+    private val deeplinkMethodsChannel = "com.erebrus.vpn/methods"
+
     private var pendingPrepare: MethodChannel.Result? = null
+    private var initialLink: String? = null
+    private var linksReceiver: BroadcastReceiver? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        initialLink = intent?.data?.toString()
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+
+        EventChannel(messenger, deeplinkEventsChannel).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, events: EventChannel.EventSink) {
+                    linksReceiver = createChangeReceiver(events)
+                    initialLink?.let { link ->
+                        events.success(link)
+                        initialLink = null
+                    }
+                }
+
+                override fun onCancel(args: Any?) {
+                    linksReceiver = null
+                }
+            }
+        )
+
+        MethodChannel(messenger, deeplinkMethodsChannel).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "initialLink" -> {
+                    if (initialLink != null) {
+                        result.success(initialLink)
+                        initialLink = null
+                    } else {
+                        result.success(null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         MethodChannel(messenger, SingboxBridge.METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -57,6 +100,26 @@ class MainActivity : FlutterActivity() {
                 override fun onCancel(args: Any?) = SingboxBridge.setStatsSink(null)
             }
         )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == Intent.ACTION_VIEW) {
+            linksReceiver?.onReceive(applicationContext, intent)
+        }
+    }
+
+    private fun createChangeReceiver(events: EventChannel.EventSink): BroadcastReceiver {
+        return object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val dataString = intent.dataString
+                if (dataString == null) {
+                    events.error("UNAVAILABLE", "Link unavailable", null)
+                } else {
+                    events.success(dataString)
+                }
+            }
+        }
     }
 
     /** Requests the OS VPN consent; resolves true once granted/already held. */

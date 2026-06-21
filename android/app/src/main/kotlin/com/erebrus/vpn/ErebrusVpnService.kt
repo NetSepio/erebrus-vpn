@@ -9,25 +9,22 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
-import io.nekohasekai.libbox.BoxService
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.PlatformInterface
-import io.nekohasekai.libbox.TunOptions
+import io.nekohasekai.libbox.libbox.BoxService
+import io.nekohasekai.libbox.libbox.InterfaceUpdateListener
+import io.nekohasekai.libbox.libbox.Libbox
+import io.nekohasekai.libbox.libbox.NetworkInterface
+import io.nekohasekai.libbox.libbox.NetworkInterfaceIterator
+import io.nekohasekai.libbox.libbox.Notification as LibboxNotification
+import io.nekohasekai.libbox.libbox.PlatformInterface
+import io.nekohasekai.libbox.libbox.RoutePrefixIterator
+import io.nekohasekai.libbox.libbox.SetupOptions
+import io.nekohasekai.libbox.libbox.TunOptions
+import io.nekohasekai.libbox.libbox.WIFIState
 
 /**
  * The single on-device tunnel for every Erebrus protocol. It runs sing-box via
  * libbox; WireGuard and the stealth carriers (VLESS+REALITY / Hysteria2) are
- * just outbounds/endpoints inside the config we are handed — there is no
- * separate WireGuard service anymore.
- *
- * ── REQUIRES the libbox AAR ──────────────────────────────────────────────
- * This file imports `io.nekohasekai.libbox.*`, which comes from a gomobile
- * build of sing-box (see scripts/build-libbox.sh + android/app/libs/README.md).
- * Without `android/app/libs/libbox.aar` present it will not compile — that is
- * expected; the AAR is a build prerequisite. The PlatformInterface surface is
- * version-specific: pin the sing-box version used to build the AAR and verify
- * the overridden method signatures against it (copying sing-box-for-android's
- * `PlatformInterfaceWrapper` is the fastest way to cover the long tail).
+ * just outbounds/endpoints inside the config we are handed.
  */
 class ErebrusVpnService : VpnService(), PlatformInterface {
 
@@ -45,7 +42,11 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 putExtra(EXTRA_CONFIG, config)
                 putExtra(EXTRA_NAME, name)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i) else ctx.startService(i)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(i)
+            } else {
+                ctx.startService(i)
+            }
         }
 
         fun stop(ctx: Context) {
@@ -74,12 +75,19 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         SingboxBridge.emitStage("connecting")
         startForeground(NOTIF_ID, buildNotification(name))
         try {
-            Libbox.setup(filesDir.absolutePath, filesDir.absolutePath, cacheDir.absolutePath, false)
+            val setup = SetupOptions().apply {
+                basePath = filesDir.absolutePath
+                workingPath = filesDir.absolutePath
+                tempPath = cacheDir.absolutePath
+                fixAndroidStack = true
+            }
+            Libbox.setup(setup)
             val service = Libbox.newService(config, this)
             service.start()
             box = service
             SingboxBridge.emitStage("connected")
         } catch (e: Exception) {
+            android.util.Log.e("erebrus-singbox", "startTunnel failed", e)
             SingboxBridge.emitStage("error")
             stopTunnel()
         }
@@ -103,31 +111,23 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         super.onDestroy()
     }
 
-    // ── PlatformInterface (libbox) ───────────────────────────────────────
+    // ── PlatformInterface (libbox v1.11.x) ───────────────────────────────
 
-    /** Builds the tun device from sing-box's resolved options and returns its fd. */
     override fun openTun(options: TunOptions): Int {
         val builder = Builder()
             .setSession("Erebrus")
             .setMtu(options.mtu)
 
-        val inet4 = options.inet4Address
-        while (inet4.hasNext()) {
-            val p = inet4.next()
-            builder.addAddress(p.address, p.prefix)
-        }
-        val inet6 = options.inet6Address
-        while (inet6.hasNext()) {
-            val p = inet6.next()
-            builder.addAddress(p.address, p.prefix)
-        }
+        addAddresses(builder, options.inet4Address)
+        addAddresses(builder, options.inet6Address)
+
         if (options.autoRoute) {
             builder.addRoute("0.0.0.0", 0)
             builder.addRoute("::", 0)
-            val dns = options.dnsServerAddress
+            val dns = options.dnsServerAddress?.value.orEmpty()
             if (dns.isNotEmpty()) builder.addDnsServer(dns)
         }
-        // Keep our own sockets (and the OS UI) out of the tunnel.
+
         runCatching { builder.addDisallowedApplication(packageName) }
 
         val pfd: ParcelFileDescriptor = builder.establish()
@@ -135,7 +135,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         return pfd.detachFd()
     }
 
-    /** Lets sing-box protect its outbound sockets from the VPN route loop. */
+    private fun addAddresses(builder: Builder, prefixes: RoutePrefixIterator) {
+        while (prefixes.hasNext()) {
+            val p = prefixes.next()
+            builder.addAddress(p.address(), p.prefix())
+        }
+    }
+
     override fun autoDetectInterfaceControl(fd: Int) {
         protect(fd)
     }
@@ -144,18 +150,44 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     override fun useProcFS(): Boolean = false
 
+    override fun underNetworkExtension(): Boolean = false
+
+    override fun includeAllNetworks(): Boolean = false
+
+    override fun clearDNSCache() {}
+
+    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {}
+
+    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {}
+
+    override fun getInterfaces(): NetworkInterfaceIterator = EmptyNetworkInterfaceIterator
+
+    override fun findConnectionOwner(
+        ipProtocol: Int,
+        sourceAddress: String,
+        sourcePort: Int,
+        destinationAddress: String,
+        destinationPort: Int,
+    ): Int = -1
+
+    override fun packageNameByUid(uid: Int): String = ""
+
+    override fun uidByPackageName(packageName: String): Int = -1
+
+    override fun readWIFIState(): WIFIState = Libbox.newWIFIState("", "")
+
+    override fun sendNotification(notification: LibboxNotification) {}
+
     override fun writeLog(message: String) {
-        // Forwarded to logcat; surface to Flutter later if useful.
         android.util.Log.i("erebrus-singbox", message)
     }
 
-    // NOTE: depending on the pinned libbox version, additional PlatformInterface
-    // members may be required (default interface monitor, network interface
-    // getter, findConnectionOwner, package/uid lookups, readWIFIState,
-    // systemCertificates, underNetworkExtension, includeAllNetworks…). Implement
-    // them per that version — sing-box-for-android's PlatformInterfaceWrapper is
-    // the reference. Sensible defaults: underNetworkExtension=false,
-    // includeAllNetworks=false, useProcFS=false.
+    private object EmptyNetworkInterfaceIterator : NetworkInterfaceIterator {
+        override fun hasNext(): Boolean = false
+        override fun next(): NetworkInterface {
+            throw NoSuchElementException()
+        }
+    }
 
     private fun buildNotification(name: String): Notification {
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -165,7 +197,9 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             )
         }
         val tap = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(this, NOTIF_CHANNEL)

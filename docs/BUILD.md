@@ -31,8 +31,9 @@ in — build it once:
 ./scripts/build-libbox.sh
 ```
 
-This uses `gomobile` to compile sing-box (pinned to a version that matches the
-node's carriers) into `android/app/libs/libbox.aar`. After it finishes:
+This uses `gomobile` to compile sing-box from a **pinned git commit**
+(`SING_BOX_COMMIT` in the script, default `bc35aca…` = `v1.11.15`) into
+`android/app/libs/libbox.aar`. After it finishes:
 
 ```bash
 flutter run            # on an arm64 device — now it can establish a tunnel

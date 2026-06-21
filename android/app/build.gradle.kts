@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.erebrus.vpn"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = maxOf(flutter.compileSdkVersion, 36)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
