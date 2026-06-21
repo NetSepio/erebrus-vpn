@@ -6,6 +6,7 @@ import 'package:reown_appkit/reown_appkit.dart';
 
 import 'auth/deep_link_handler.dart';
 import 'auth/wallet_auth_controller.dart';
+import 'platform/platform_capabilities.dart';
 import 'theme/app_theme.dart';
 import 'view/auth/reown_host.dart';
 import 'view/bottombar/main_shell.dart';
@@ -15,10 +16,12 @@ import 'vpn/vpn_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   DeepLinkHandler.initListener();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  if (PlatformCapabilities.isMobile) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  }
   Get.put(VpnController(), permanent: true);
   final auth = WalletAuthController();
   Get.put(auth, permanent: true);
@@ -26,7 +29,8 @@ Future<void> main() async {
   await auth.loadPersistedSession();
   Get.put(GatewayController(), permanent: true);
   debugPrint(
-    '[Erebrus] started — solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
+    '[Erebrus] started — platform=${PlatformCapabilities.platformLabel} '
+    'solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
   );
   runApp(ErebrusVpnApp(usesReown: auth.usesReown));
 }
@@ -38,12 +42,14 @@ class ErebrusVpnApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shell = usesReown ? const ReownHost(child: MainShell()) : const MainShell();
+
     final app = GetMaterialApp(
       title: 'Erebrus VPN',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
-      home: usesReown ? const ReownHost(child: MainShell()) : const MainShell(),
+      home: shell,
     );
 
     if (!usesReown) return app;

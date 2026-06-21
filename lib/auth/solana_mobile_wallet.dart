@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 import 'package:solana_mobile_client/solana_mobile_client.dart';
 
+import '../platform/platform_capabilities.dart';
 import 'auth_config.dart';
 
 bool? _solanaMobileDeviceCache;
@@ -26,6 +27,7 @@ Future<bool> detectSolanaMobileDevice() async {
   try {
     final info = await DeviceInfoPlugin().androidInfo;
     _solanaMobileDeviceCache = _isSolanaMobileAndroid(info);
+    PlatformCapabilities.isSolanaMobileDevice = _solanaMobileDeviceCache!;
     debugPrint(
       '[MWA] device=${info.brand}/${info.model} solanaMobile=$_solanaMobileDeviceCache',
     );

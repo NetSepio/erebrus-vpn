@@ -10,6 +10,7 @@ import 'auth_session_store.dart';
 import 'deep_link_handler.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import '../platform/platform_capabilities.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
 
@@ -46,7 +47,7 @@ class WalletAuthController extends GetxController {
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled => entitlement.value.entitled;
-  bool get usesReown => !isSolanaMobileDevice.value;
+  bool get usesReown => PlatformCapabilities.usesReown;
   String? get bearerToken => _token;
 
   @override
@@ -65,7 +66,9 @@ class WalletAuthController extends GetxController {
 
   /// Detects Seeker/Saga hardware so auth can skip Reown on Solana Mobile.
   Future<void> detectDevice() async {
-    isSolanaMobileDevice.value = await detectSolanaMobileDevice();
+    final detected = await detectSolanaMobileDevice();
+    isSolanaMobileDevice.value = detected;
+    PlatformCapabilities.isSolanaMobileDevice = detected;
   }
 
   /// Restores token + profile from secure storage before the UI loads.
