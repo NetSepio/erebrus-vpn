@@ -47,6 +47,15 @@ final class SingboxBridge {
     stats.setStreamHandler(StatsStreamHandler())
   }
 
+  func bindStatusSink(_ sink: @escaping FlutterEventSink) {
+    statusSink = sink
+    sink(stage)
+  }
+
+  func unbindStatusSink() {
+    statusSink = nil
+  }
+
   func emitStatus() {
     statusSink?(stage)
   }
@@ -66,20 +75,19 @@ private final class StatusStreamHandler: NSObject, FlutterStreamHandler {
   init(bridge: SingboxBridge) { self.bridge = bridge }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    bridge?.statusSink = events
-    if let stage = bridge?.stage { events(stage) }
+    bridge?.bindStatusSink(events)
     return nil
   }
 
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    bridge?.statusSink = nil
+    bridge?.unbindStatusSink()
     return nil
   }
 }
 
 private final class StatsStreamHandler: NSObject, FlutterStreamHandler {
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-    events(["rxBytes": 0, "txBytes": 0, "downlinkBps": 0, "uplinkBps": 0])
+    events(["rx_bytes": 0, "tx_bytes": 0, "downlink_bps": 0, "uplink_bps": 0])
     return nil
   }
 
