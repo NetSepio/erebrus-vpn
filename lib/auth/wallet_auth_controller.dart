@@ -11,10 +11,9 @@ import 'deep_link_handler.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
 import 'solana_mobile_wallet.dart';
-import '../view/auth/auth_sheet.dart';
 import '../vpn/gateway_controller.dart';
 
-/// Wallet login via Reown AppKit, Solana Mobile (Seeker/Saga), and gateway v2 auth.
+/// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
 class WalletAuthController extends GetxController {
   WalletAuthController({
     GatewayAuthClient? authClient,
@@ -43,9 +42,11 @@ class WalletAuthController extends GetxController {
   String? _token;
   String? _mwaAuthToken;
 
+  final isSolanaMobileDevice = false.obs;
+
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled => entitlement.value.entitled;
-  bool get showSolanaMobileOption => solanaMobilePlatformSupported;
+  bool get usesReown => !isSolanaMobileDevice.value;
   String? get bearerToken => _token;
 
   @override
@@ -60,6 +61,11 @@ class WalletAuthController extends GetxController {
     appKitModal?.onModalDisconnect.unsubscribe(_onModalDisconnect);
     appKitModal?.onModalError.unsubscribe(_onModalError);
     super.onClose();
+  }
+
+  /// Detects Seeker/Saga hardware so auth can skip Reown on Solana Mobile.
+  Future<void> detectDevice() async {
+    isSolanaMobileDevice.value = await detectSolanaMobileDevice();
   }
 
   /// Restores token + profile from secure storage before the UI loads.
@@ -88,6 +94,10 @@ class WalletAuthController extends GetxController {
   }
 
   Future<void> initReown(BuildContext context) async {
+    if (!usesReown) {
+      reownReady.value = false;
+      return;
+    }
     if (appKitModal != null) {
       reownReady.value = true;
       return;
@@ -161,16 +171,14 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  /// Shows login options: Solana Mobile on Android, Reown wallets + social everywhere.
-  Future<void> openAuthSheet(BuildContext context) async {
+  /// Opens MWA wallet selector on Solana Mobile, Reown modal elsewhere.
+  Future<void> openSignIn() async {
     authError.value = null;
-    await AuthSheet.show(
-      context,
-      showSolanaMobile: showSolanaMobileOption,
-      busy: isAuthenticating.value,
-      onSolanaMobile: showSolanaMobileOption ? signInWithSolanaMobile : null,
-      onReown: openWalletModal,
-    );
+    if (isSolanaMobileDevice.value) {
+      await signInWithSolanaMobile();
+    } else {
+      await openWalletModal();
+    }
   }
 
   Future<void> openWalletModal() async {
@@ -182,10 +190,10 @@ class WalletAuthController extends GetxController {
     await appKitModal!.openModalView();
   }
 
-  /// Seed Vault / Mobile Wallet Adapter path for Seeker and Saga devices.
+  /// Mobile Wallet Adapter path — opens the native wallet selector on Seeker/Saga.
   Future<void> signInWithSolanaMobile() async {
-    if (!showSolanaMobileOption) {
-      authError.value = 'Solana Mobile is only available on Seeker and Saga';
+    if (!isSolanaMobileDevice.value) {
+      authError.value = 'Solana Mobile sign-in is only available on Seeker and Saga';
       return;
     }
 
@@ -194,7 +202,7 @@ class WalletAuthController extends GetxController {
     try {
       final mwa = await connectSolanaMobile(storedAuthToken: _mwaAuthToken);
       if (mwa == null) {
-        authError.value = 'Could not open Seed Vault — try Wallet or social login';
+        authError.value = 'Wallet sign-in was cancelled or failed';
         return;
       }
 

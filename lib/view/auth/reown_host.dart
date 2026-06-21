@@ -18,7 +18,9 @@ class _ReownHostState extends State<ReownHost> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Get.find<WalletAuthController>().initReown(context);
+      final auth = Get.find<WalletAuthController>();
+      if (!auth.usesReown) return;
+      await auth.initReown(context);
     });
   }
 

@@ -51,7 +51,7 @@ class _MainShellState extends State<MainShell> {
         VoidCallback? onUnlock;
         String unlockLabel = 'Unlock access';
         if (!authed) {
-          onUnlock = () => auth.openAuthSheet(context);
+          onUnlock = auth.openSignIn;
           unlockLabel = 'Sign in';
         } else if (!entitled) {
           onUnlock = trialBusy ? null : auth.startFreeTrial;
@@ -71,7 +71,7 @@ class _MainShellState extends State<MainShell> {
           onOpenSettings: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SettingsView()),
           ),
-          onSignOut: authed ? auth.signOut : () => auth.openAuthSheet(context),
+          onSignOut: authed ? auth.signOut : auth.openSignIn,
           signInLabel: authed
               ? 'Sign out'
               : (auth.isAuthenticating.value ? 'Signing in…' : 'Sign in'),

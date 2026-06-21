@@ -22,26 +22,32 @@ Future<void> main() async {
   Get.put(VpnController(), permanent: true);
   final auth = WalletAuthController();
   Get.put(auth, permanent: true);
+  await auth.detectDevice();
   await auth.loadPersistedSession();
   Get.put(GatewayController(), permanent: true);
-  debugPrint('[Erebrus] started — session restored, gateway registered');
-  runApp(const ErebrusVpnApp());
+  debugPrint(
+    '[Erebrus] started — solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
+  );
+  runApp(ErebrusVpnApp(usesReown: auth.usesReown));
 }
 
 class ErebrusVpnApp extends StatelessWidget {
-  const ErebrusVpnApp({super.key});
+  const ErebrusVpnApp({super.key, required this.usesReown});
+
+  final bool usesReown;
 
   @override
   Widget build(BuildContext context) {
-    return ReownAppKitModalTheme(
-      isDarkMode: true,
-      child: GetMaterialApp(
-        title: 'Erebrus VPN',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
-        themeMode: ThemeMode.dark,
-        home: const ReownHost(child: MainShell()),
-      ),
+    final app = GetMaterialApp(
+      title: 'Erebrus VPN',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.dark(),
+      themeMode: ThemeMode.dark,
+      home: usesReown ? const ReownHost(child: MainShell()) : const MainShell(),
     );
+
+    if (!usesReown) return app;
+
+    return ReownAppKitModalTheme(isDarkMode: true, child: app);
   }
 }
