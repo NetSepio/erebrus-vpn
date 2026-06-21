@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 
+import 'gateway_client.dart';
+import 'gateway_errors.dart';
 import 'singbox_engine.dart';
 import 'vpn_models.dart';
 
@@ -118,10 +120,13 @@ class VpnController extends GetxController {
         }
         await _engine.stop().catchError((_) {});
       }
-      error.value = 'Could not connect on this network';
+      error.value = 'Could not connect on this network — try Stealth mode or another server';
+      stage.value = VpnStage.error;
+    } on GatewayException catch (e) {
+      error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
     } catch (e) {
-      error.value = e.toString();
+      error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
     }
   }
