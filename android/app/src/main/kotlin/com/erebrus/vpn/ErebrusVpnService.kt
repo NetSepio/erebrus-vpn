@@ -55,6 +55,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     }
 
     private var box: BoxService? = null
+    private var tunInterface: ParcelFileDescriptor? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -68,10 +69,16 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 startTunnel(config, name)
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
+    }
+
+    override fun onRevoke() {
+        stopTunnel()
+        super.onRevoke()
     }
 
     private fun startTunnel(config: String, name: String) {
+        releaseTunnelResources()
         SingboxBridge.emitStage("connecting")
         startForeground(NOTIF_ID, buildNotification(name))
         try {
@@ -93,21 +100,29 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         }
     }
 
-    private fun stopTunnel() {
-        SingboxBridge.emitStage("disconnecting")
+    private fun releaseTunnelResources() {
         try {
             box?.close()
         } catch (_: Exception) {
-        } finally {
-            box = null
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            SingboxBridge.emitStage("disconnected")
         }
+        box = null
+        try {
+            tunInterface?.close()
+        } catch (_: Exception) {
+        }
+        tunInterface = null
+    }
+
+    private fun stopTunnel() {
+        SingboxBridge.emitStage("disconnecting")
+        releaseTunnelResources()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        SingboxBridge.emitStage("disconnected")
     }
 
     override fun onDestroy() {
-        stopTunnel()
+        releaseTunnelResources()
         super.onDestroy()
     }
 
@@ -118,21 +133,76 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             .setSession("Erebrus")
             .setMtu(options.mtu)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setMetered(false)
+        }
+
         addAddresses(builder, options.inet4Address)
         addAddresses(builder, options.inet6Address)
 
         if (options.autoRoute) {
-            builder.addRoute("0.0.0.0", 0)
-            builder.addRoute("::", 0)
+            addRoutes(builder, options)
             val dns = options.dnsServerAddress?.value.orEmpty()
-            if (dns.isNotEmpty()) builder.addDnsServer(dns)
+            if (dns.isNotEmpty()) {
+                builder.addDnsServer(dns)
+            } else {
+                builder.addDnsServer("1.1.1.1")
+                builder.addDnsServer("8.8.8.8")
+            }
         }
 
         runCatching { builder.addDisallowedApplication(packageName) }
 
         val pfd: ParcelFileDescriptor = builder.establish()
             ?: throw IllegalStateException("VpnService.Builder.establish() returned null")
-        return pfd.detachFd()
+        tunInterface?.close()
+        tunInterface = pfd
+        return pfd.fd
+    }
+
+    private fun addRoutes(builder: Builder, options: TunOptions) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val inet4Route = options.inet4RouteAddress
+            if (inet4Route.hasNext()) {
+                while (inet4Route.hasNext()) {
+                    val p = inet4Route.next()
+                    builder.addRoute(p.address(), p.prefix())
+                }
+            } else if (options.inet4Address.hasNext()) {
+                builder.addRoute("0.0.0.0", 0)
+            }
+
+            val inet6Route = options.inet6RouteAddress
+            if (inet6Route.hasNext()) {
+                while (inet6Route.hasNext()) {
+                    val p = inet6Route.next()
+                    builder.addRoute(p.address(), p.prefix())
+                }
+            } else if (options.inet6Address.hasNext()) {
+                builder.addRoute("::", 0)
+            }
+            return
+        }
+
+        val inet4Range = options.inet4RouteRange
+        if (inet4Range.hasNext()) {
+            while (inet4Range.hasNext()) {
+                val p = inet4Range.next()
+                builder.addRoute(p.address(), p.prefix())
+            }
+        } else {
+            builder.addRoute("0.0.0.0", 0)
+        }
+
+        val inet6Range = options.inet6RouteRange
+        if (inet6Range.hasNext()) {
+            while (inet6Range.hasNext()) {
+                val p = inet6Range.next()
+                builder.addRoute(p.address(), p.prefix())
+            }
+        } else {
+            builder.addRoute("::", 0)
+        }
     }
 
     private fun addAddresses(builder: Builder, prefixes: RoutePrefixIterator) {

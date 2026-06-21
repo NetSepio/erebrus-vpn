@@ -57,6 +57,9 @@ void main() {
     expect(peer['address'], '203.0.113.10');
     expect(peer['port'], 51820);
     expect((cfg['inbounds'] as List).first['type'], 'tun');
+    expect((cfg['inbounds'] as List).first['stack'], 'gvisor');
+    expect((cfg['dns'] as Map)['final'], 'dns-remote');
+    expect((cfg['route'] as Map)['auto_detect_interface'], isFalse);
   });
 
   test('Stealth transport detours WG through the VLESS carrier (loopback peer)', () {

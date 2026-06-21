@@ -151,9 +151,22 @@ class SingboxConfigBuilder {
         break;
     }
 
+    final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
+
     // A tun inbound captures device traffic; route everything to the WG endpoint.
     return {
       'log': {'level': 'warn'},
+      'dns': {
+        'servers': [
+          {
+            'tag': 'dns-remote',
+            'address': dnsServer,
+            'detour': wgEndpointTag,
+          },
+        ],
+        'final': 'dns-remote',
+        'strategy': 'prefer_ipv4',
+      },
       'inbounds': [
         {
           'type': 'tun',
@@ -161,15 +174,19 @@ class SingboxConfigBuilder {
           'address': ['172.19.0.1/30', 'fdfe:dcba:9876::1/126'],
           'auto_route': true,
           'strict_route': true,
-          'stack': 'system',
+          'stack': 'gvisor',
           'sniff': true,
+          'sniff_override_destination': true,
         }
       ],
       'endpoints': endpoints,
       'outbounds': profile['outbounds'] ?? [
         {'type': 'direct', 'tag': 'direct'}
       ],
-      'route': {'final': wgEndpointTag, 'auto_detect_interface': true},
+      'route': {
+        'final': wgEndpointTag,
+        'auto_detect_interface': false,
+      },
     };
   }
 

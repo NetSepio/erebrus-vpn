@@ -128,7 +128,14 @@ class VpnController extends GetxController {
 
   Future<void> disconnect() async {
     stage.value = VpnStage.disconnecting;
-    await _engine.stop().catchError((_) {});
+    try {
+      await _engine.stop();
+      stage.value = await _engine.stage();
+    } catch (_) {
+      stage.value = VpnStage.disconnected;
+    }
+    activeTransport.value = null;
+    error.value = null;
   }
 
   Future<void> toggle() => isConnected ? disconnect() : connect();
