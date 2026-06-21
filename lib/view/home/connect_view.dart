@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../auth/wallet_auth_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/singbox_engine.dart';
@@ -9,14 +10,18 @@ import '../../vpn/vpn_models.dart';
 
 /// The premium home / connect screen for Erebrus v2.
 class ConnectView extends StatelessWidget {
-  const ConnectView({super.key, this.onChooseNode});
+  const ConnectView({super.key, this.onChooseNode, this.onRequireAuth});
 
   /// Invoked when the user taps the node card to pick a server.
   final VoidCallback? onChooseNode;
+  final VoidCallback? onRequireAuth;
 
   @override
   Widget build(BuildContext context) {
     final c = Get.isRegistered<VpnController>() ? Get.find<VpnController>() : Get.put(VpnController());
+    final auth = Get.isRegistered<WalletAuthController>()
+        ? Get.find<WalletAuthController>()
+        : null;
 
     return Scaffold(
       body: Stack(
@@ -32,7 +37,17 @@ class ConnectView extends StatelessWidget {
                   Obx(() => ConnectOrb(
                         stage: c.stage.value,
                         transport: c.activeTransport.value,
-                        onTap: c.isBusy ? null : c.toggle,
+                        onTap: c.isBusy
+                            ? null
+                            : () {
+                                if (auth != null && !auth.isAuthenticated) {
+                                  c.error.value =
+                                      'Connect your Solana wallet in Account first';
+                                  onRequireAuth?.call();
+                                  return;
+                                }
+                                c.toggle();
+                              },
                       )),
                   const SizedBox(height: AppSpace.xl),
                   Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),

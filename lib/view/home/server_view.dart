@@ -9,9 +9,25 @@ import '../../vpn/vpn_models.dart';
 /// Premium server picker. Bind [nodes] to the gateway discovery list
 /// (`GET /api/v2/nodes`); selecting one updates the shared [VpnController].
 class ServerView extends StatelessWidget {
-  const ServerView({super.key, required this.nodes, this.onSelected});
+  const ServerView({
+    super.key,
+    required this.nodes,
+    this.gatewayUrl,
+    this.loading = false,
+    this.error,
+    this.warning,
+    this.nodeCount,
+    this.onRefresh,
+    this.onSelected,
+  });
 
   final List<VpnNode> nodes;
+  final String? gatewayUrl;
+  final bool loading;
+  final String? error;
+  final String? warning;
+  final int? nodeCount;
+  final Future<void> Function()? onRefresh;
   final VoidCallback? onSelected;
 
   @override
@@ -20,32 +36,86 @@ class ServerView extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Servers')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
-        children: [
-          _SmartPick(onTap: () {
-            c.selectedNode.value = null; // smart pick = let the app choose
-            onSelected?.call();
-          }),
-          const SizedBox(height: AppSpace.xl),
-          const SectionLabel('All locations'),
-          const SizedBox(height: AppSpace.md),
-          if (nodes.isEmpty)
-            const _EmptyState()
-          else
-            ...nodes.map((n) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: Obx(() => _NodeTile(
-                        node: n,
-                        selected: c.selectedNode.value?.id == n.id,
-                        onTap: () {
-                          c.selectNode(n);
-                          onSelected?.call();
-                        },
-                      )),
-                )),
-        ],
+      body: RefreshIndicator(
+        onRefresh: onRefresh ?? () async {},
+        color: AppColors.cyan,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
+          children: [
+            if (error != null && error!.isNotEmpty) ...[
+              _ErrorBanner(message: error!),
+              const SizedBox(height: AppSpace.md),
+            ],
+            if (warning != null && warning!.isNotEmpty) ...[
+              _WarningBanner(message: warning!),
+              const SizedBox(height: AppSpace.md),
+            ],
+            _SmartPick(onTap: () {
+              c.selectedNode.value = null;
+              onSelected?.call();
+            }),
+            const SizedBox(height: AppSpace.xl),
+            const SectionLabel('All locations'),
+            const SizedBox(height: AppSpace.md),
+            if (loading && nodes.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpace.xxl),
+                child: Center(child: CircularProgressIndicator(color: AppColors.cyan)),
+              )
+            else if (nodes.isEmpty)
+              _EmptyState(gatewayUrl: gatewayUrl, registryEmpty: nodeCount == 0)
+            else
+              ...nodes.map((n) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpace.md),
+                    child: Obx(() => _NodeTile(
+                          node: n,
+                          selected: c.selectedNode.value?.id == n.id,
+                          onTap: () {
+                            c.selectNode(n);
+                            onSelected?.call();
+                          },
+                        )),
+                  )),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+      ),
+      child: Text(message, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+    );
+  }
+}
+
+class _WarningBanner extends StatelessWidget {
+  const _WarningBanner({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: AppColors.connecting.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.connecting.withValues(alpha: 0.35)),
+      ),
+      child: Text(message, style: const TextStyle(color: AppColors.connecting, fontSize: 13)),
     );
   }
 }
@@ -177,7 +247,9 @@ class _LoadDot extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({this.gatewayUrl, this.registryEmpty = false});
+  final String? gatewayUrl;
+  final bool registryEmpty;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -188,7 +260,18 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: AppSpace.md),
           Text('No servers yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('Pull to refresh once you’re signed in', style: Theme.of(context).textTheme.bodyMedium, textAlign: TextAlign.center),
+          Text(
+            registryEmpty
+                ? 'Gateway is reachable but its node registry is empty. '
+                    'The erebrus-nexus node may need to re-register.'
+                : 'Pull to refresh — nodes load from the gateway',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          if (gatewayUrl != null && gatewayUrl!.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(gatewayUrl!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted), textAlign: TextAlign.center),
+          ],
         ],
       ),
     );

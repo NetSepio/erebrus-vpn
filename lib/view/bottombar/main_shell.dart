@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
+import '../../auth/wallet_auth_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../vpn/gateway_controller.dart';
 import '../../vpn/vpn_models.dart';
 import '../home/connect_view.dart';
 import '../home/server_view.dart';
 import '../profile/profile_view.dart';
 import '../settings/settings_view.dart';
 
-/// The v2 app shell: a premium bottom-nav hosting Connect / Servers / Account.
-/// Wire [nodes] to the gateway discovery list when available.
+/// The v2 app shell: Connect / Servers / Account.
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, this.nodes = const []});
-  final List<VpnNode> nodes;
+  const MainShell({super.key});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -24,14 +25,39 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final gateway = Get.find<GatewayController>();
     final tabs = [
-      ConnectView(onChooseNode: () => _go(1)),
-      ServerView(nodes: widget.nodes, onSelected: () => _go(0)),
-      ProfileView(
-        onOpenSettings: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SettingsView()),
-        ),
-      ),
+      ConnectView(onChooseNode: () => _go(1), onRequireAuth: () => _go(2)),
+      Obx(() {
+        final count = gateway.nodes.length;
+        return ServerView(
+          nodes: List<VpnNode>.from(gateway.nodes),
+          gatewayUrl: gateway.gatewayUrl.value,
+          loading: gateway.loading.value,
+          error: gateway.error.value,
+          warning: gateway.warning.value,
+          nodeCount: count,
+          onRefresh: gateway.refreshNodes,
+          onSelected: () => _go(0),
+        );
+      }),
+      Obx(() {
+        final auth = Get.find<WalletAuthController>();
+        return ProfileView(
+          walletAddress: auth.walletAddress.value,
+          planLabel: auth.isAuthenticated ? 'Member' : 'Free',
+          entitlementSource: auth.isAuthenticated ? 'trial' : null,
+          onManagePlan: auth.isAuthenticated ? null : auth.openWalletModal,
+          onOpenSettings: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SettingsView()),
+          ),
+          onSignOut: auth.isAuthenticated ? auth.signOut : auth.openWalletModal,
+          signInLabel: auth.isAuthenticated
+              ? 'Sign out'
+              : (auth.isAuthenticating.value ? 'Signing in…' : 'Connect Solana wallet'),
+          authError: auth.authError.value,
+        );
+      }),
     ];
 
     return Scaffold(

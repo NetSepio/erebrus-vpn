@@ -18,6 +18,8 @@ class ProfileView extends StatelessWidget {
     this.onOpenOrgs,
     this.onOpenSettings,
     this.onSignOut,
+    this.signInLabel = 'Sign out',
+    this.authError,
   });
 
   final String walletAddress;
@@ -29,6 +31,8 @@ class ProfileView extends StatelessWidget {
   final VoidCallback? onOpenOrgs;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onSignOut;
+  final String signInLabel;
+  final String? authError;
 
   String get _shortWallet {
     if (walletAddress.length < 10) return walletAddress.isEmpty ? 'Not connected' : walletAddress;
@@ -43,6 +47,10 @@ class ProfileView extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
         children: [
           _Header(shortWallet: _shortWallet),
+          if (authError != null && authError!.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.md),
+            _AuthError(message: authError!),
+          ],
           const SizedBox(height: AppSpace.xl),
           _EntitlementCard(plan: planLabel, source: entitlementSource, daysLeft: daysLeft, onManage: onManagePlan),
           const SizedBox(height: AppSpace.lg),
@@ -57,8 +65,8 @@ class ProfileView extends StatelessWidget {
           _NavRow(icon: Icons.tune, title: 'Settings', subtitle: 'Protocol, kill switch, auto-connect', onTap: onOpenSettings),
           const SizedBox(height: AppSpace.xl),
           GradientButton(
-            label: 'Sign out',
-            icon: Icons.logout,
+            label: signInLabel,
+            icon: walletAddress.isEmpty ? Icons.account_balance_wallet_outlined : Icons.logout,
             gradient: const LinearGradient(colors: [AppColors.surfaceHi, AppColors.surface]),
             onPressed: onSignOut,
           ),
@@ -91,6 +99,24 @@ class _Header extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _AuthError extends StatelessWidget {
+  const _AuthError({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpace.md),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+      ),
+      child: Text(message, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
     );
   }
 }
