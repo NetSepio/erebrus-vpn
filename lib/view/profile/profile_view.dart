@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 
@@ -83,7 +84,11 @@ class ProfileView extends StatelessWidget {
           const SizedBox(height: AppSpace.xl),
           GradientButton(
             label: signInLabel,
-            icon: walletAddress.isEmpty ? Icons.account_balance_wallet_outlined : Icons.logout,
+            icon: walletAddress.isEmpty
+                ? (PlatformCapabilities.isDesktop
+                    ? Icons.login
+                    : Icons.account_balance_wallet_outlined)
+                : Icons.logout,
             gradient: const LinearGradient(colors: [AppColors.surfaceHi, AppColors.surface]),
             onPressed: onSignOut,
           ),

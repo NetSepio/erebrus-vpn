@@ -11,8 +11,12 @@ import 'deep_link_handler.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
 import '../platform/platform_capabilities.dart';
+import '../view/auth/desktop_social_sign_in_page.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
+
+/// Sentinel ID so Reown's explorer returns no wallets on desktop.
+const _desktopBlockedWalletIds = {'erebrus-desktop-no-wallets'};
 
 /// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
 class WalletAuthController extends GetxController {
@@ -124,6 +128,7 @@ class WalletAuthController extends GetxController {
             ),
           };
 
+    final isDesktop = PlatformCapabilities.isDesktop;
     appKitModal = ReownAppKitModal(
       context: context,
       projectId: kReownProjectId,
@@ -140,15 +145,23 @@ class WalletAuthController extends GetxController {
         ),
       ),
       optionalNamespaces: solanaNamespaces,
+      // Desktop: social/email only — no Phantom/Solflare/WalletConnect chips.
       featuresConfig: FeaturesConfig(
-        showMainWallets: true,
-        socials: const [
-          AppKitSocialOption.Google,
-          AppKitSocialOption.Apple,
-          AppKitSocialOption.Email,
-          AppKitSocialOption.X,
-        ],
+        showMainWallets: !isDesktop,
+        socials: isDesktop
+            ? const [
+                AppKitSocialOption.Google,
+                AppKitSocialOption.Apple,
+                AppKitSocialOption.Email,
+              ]
+            : const [
+                AppKitSocialOption.Google,
+                AppKitSocialOption.Apple,
+                AppKitSocialOption.Email,
+                AppKitSocialOption.X,
+              ],
       ),
+      includedWalletIds: isDesktop ? _desktopBlockedWalletIds : null,
       disconnectOnDispose: false,
     );
 
@@ -162,7 +175,11 @@ class WalletAuthController extends GetxController {
       DeepLinkHandler.bind(this);
       DeepLinkHandler.checkInitialLink();
       reownReady.value = true;
-      debugPrint('[Reown] ready — wallets + social login available');
+      debugPrint(
+        isDesktop
+            ? '[Reown] ready — social/email sign-in (desktop, no wallets)'
+            : '[Reown] ready — wallets + social login available',
+      );
 
       if (appKitModal!.isConnected && !isAuthenticated) {
         await _authenticateConnectedWallet();
@@ -187,10 +204,16 @@ class WalletAuthController extends GetxController {
   Future<void> openWalletModal() async {
     authError.value = null;
     if (appKitModal == null || !reownReady.value) {
-      authError.value = 'Wallet connect is still starting — try again in a moment';
+      authError.value = PlatformCapabilities.isDesktop
+          ? 'Sign-in is still starting — try again in a moment'
+          : 'Wallet connect is still starting — try again in a moment';
       return;
     }
-    await appKitModal!.openModalView();
+    await appKitModal!.openModalView(
+      PlatformCapabilities.isDesktop
+          ? const DesktopSocialSignInPage()
+          : null,
+    );
   }
 
   /// Mobile Wallet Adapter path — opens the native wallet selector on Seeker/Saga.

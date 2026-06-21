@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../auth/wallet_auth_controller.dart';
+import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/singbox_engine.dart';
@@ -44,8 +45,9 @@ class ConnectView extends StatelessWidget {
                           ? null
                           : () {
                               if (auth != null && !authed) {
-                                c.error.value =
-                                    'Connect your Solana wallet in Account first';
+                                c.error.value = PlatformCapabilities.isDesktop
+                                    ? 'Sign in from Account first'
+                                    : 'Connect your Solana wallet in Account first';
                                 onRequireAuth?.call();
                                 return;
                               }
