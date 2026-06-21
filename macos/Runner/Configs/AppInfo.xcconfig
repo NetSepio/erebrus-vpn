@@ -8,7 +8,7 @@
 PRODUCT_NAME = erebrus_vpn
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.erebrusVpn
+PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.vpn
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.erebrus. All rights reserved.

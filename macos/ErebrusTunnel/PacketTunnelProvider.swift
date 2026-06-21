@@ -7,7 +7,7 @@ import os.log
 /// and wire Libbox service startup here. Until then this provider acknowledges
 /// the tunnel lifecycle so NETunnelProviderManager integration can be tested.
 final class PacketTunnelProvider: NEPacketTunnelProvider {
-    private let log = Logger(subsystem: "com.erebrus.erebrusVpn.ErebrusTunnel", category: "tunnel")
+    private let log = Logger(subsystem: "com.erebrus.vpn.ErebrusTunnel", category: "tunnel")
 
     override func startTunnel(options: [String: NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         guard let config = protocolConfiguration.providerConfiguration?[TunnelConstants.configKey] as? String,
