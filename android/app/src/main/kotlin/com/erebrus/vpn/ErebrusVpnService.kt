@@ -12,7 +12,6 @@ import android.os.ParcelFileDescriptor
 import io.nekohasekai.libbox.libbox.BoxService
 import io.nekohasekai.libbox.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.libbox.Libbox
-import io.nekohasekai.libbox.libbox.NetworkInterface
 import io.nekohasekai.libbox.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.libbox.Notification as LibboxNotification
 import io.nekohasekai.libbox.libbox.PlatformInterface
@@ -227,11 +226,15 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     override fun clearDNSCache() {}
 
-    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {}
+    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
+        AndroidNetworkPlatform.startMonitor(this, listener)
+    }
 
-    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {}
+    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
+        AndroidNetworkPlatform.stopMonitor()
+    }
 
-    override fun getInterfaces(): NetworkInterfaceIterator = EmptyNetworkInterfaceIterator
+    override fun getInterfaces(): NetworkInterfaceIterator = AndroidNetworkPlatform.getInterfaces(this)
 
     override fun findConnectionOwner(
         ipProtocol: Int,
@@ -251,13 +254,6 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     override fun writeLog(message: String) {
         android.util.Log.i("erebrus-singbox", message)
-    }
-
-    private object EmptyNetworkInterfaceIterator : NetworkInterfaceIterator {
-        override fun hasNext(): Boolean = false
-        override fun next(): NetworkInterface {
-            throw NoSuchElementException()
-        }
     }
 
     private fun buildNotification(name: String): Notification {
