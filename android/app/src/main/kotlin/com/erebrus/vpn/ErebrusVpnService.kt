@@ -55,6 +55,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     private var box: BoxService? = null
     private var tunInterface: ParcelFileDescriptor? = null
+    private val statsMonitor = LibboxStatsMonitor()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -92,6 +93,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             val service = Libbox.newService(config, this)
             service.start()
             box = service
+            statsMonitor.start(service)
             SingboxBridge.emitStage("connected")
         } catch (e: Exception) {
             android.util.Log.e("erebrus-singbox", "startTunnel failed", e)
@@ -101,6 +103,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     }
 
     private fun releaseTunnelResources() {
+        statsMonitor.stop()
         try {
             box?.close()
         } catch (_: Exception) {

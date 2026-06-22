@@ -21,6 +21,7 @@ object SingboxBridge {
 
     private var statusSink: EventChannel.EventSink? = null
     private var statsSink: EventChannel.EventSink? = null
+    private var lastStats: Map<String, Long>? = null
 
     fun setStatusSink(sink: EventChannel.EventSink?) {
         statusSink = sink
@@ -29,6 +30,10 @@ object SingboxBridge {
 
     fun setStatsSink(sink: EventChannel.EventSink?) {
         statsSink = sink
+        val cached = lastStats
+        if (sink != null && cached != null) {
+            main.post { statsSink?.success(cached) }
+        }
     }
 
     fun emitStage(newStage: String) {
@@ -37,15 +42,12 @@ object SingboxBridge {
     }
 
     fun emitStats(rx: Long, tx: Long, uplinkBps: Long, downlinkBps: Long) {
-        main.post {
-            statsSink?.success(
-                mapOf(
-                    "rx_bytes" to rx,
-                    "tx_bytes" to tx,
-                    "uplink_bps" to uplinkBps,
-                    "downlink_bps" to downlinkBps,
-                )
-            )
-        }
+        lastStats = mapOf(
+            "rx_bytes" to rx,
+            "tx_bytes" to tx,
+            "uplink_bps" to uplinkBps,
+            "downlink_bps" to downlinkBps,
+        )
+        main.post { statsSink?.success(lastStats) }
     }
 }

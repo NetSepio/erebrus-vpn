@@ -129,6 +129,20 @@ class SingboxConfigBuilder {
   static const String carrierVlessTag = 'carrier-vless';
   static const String carrierHy2Tag = 'carrier-hysteria2';
 
+  /// Enables the local Clash API so the app can read live traffic stats.
+  static Map<String, dynamic> _withClashApi(Map<String, dynamic> config) {
+    final out = Map<String, dynamic>.from(config);
+    final experimental = Map<String, dynamic>.from(
+      (out['experimental'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    experimental['clash_api'] = {
+      'external_controller': '127.0.0.1:9090',
+      'secret': '',
+    };
+    out['experimental'] = experimental;
+    return out;
+  }
+
   /// Returns a complete sing-box config map for [transport]. [clientPrivateKey]
   /// is the base64 WireGuard private key generated and stored on-device.
   static Map<String, dynamic> build({
@@ -155,7 +169,7 @@ class SingboxConfigBuilder {
         bundle.address.contains('/') ? bundle.address : '${bundle.address}/32';
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
 
-    return {
+    return _withClashApi({
       'log': {'level': 'info'},
       'dns': {
         'servers': [
@@ -200,7 +214,7 @@ class SingboxConfigBuilder {
         'final': wgEndpointTag,
         'auto_detect_interface': true,
       },
-    };
+    });
   }
 
   /// Stealth carriers reuse the node-provided sing-box profile (loopback WG peer).
@@ -245,7 +259,7 @@ class SingboxConfigBuilder {
     route['final'] = wgEndpointTag;
     route['auto_detect_interface'] = true;
 
-    return {
+    return _withClashApi({
       'log': {'level': 'info'},
       'dns': {
         'servers': [
@@ -270,7 +284,7 @@ class SingboxConfigBuilder {
         {'type': 'direct', 'tag': 'direct'},
       ],
       'route': route,
-    };
+    });
   }
 
   static (String, int) _splitHostPort(String hostPort) {

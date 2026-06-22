@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../platform/platform_capabilities.dart';
+import 'clash_stats_poller.dart';
 import 'singbox_engine.dart';
 
 /// Runs the bundled sing-box CLI as a subprocess on macOS / Windows / Linux.
@@ -17,12 +18,12 @@ class SingboxDesktopRunner {
   Process? _process;
   String _stage = 'disconnected';
   final _stageCtrl = StreamController<VpnStage>.broadcast();
-  final _statsCtrl = StreamController<VpnStats>.broadcast();
-  Timer? _statsTimer;
+  final _statsPoller = ClashStatsPoller();
+  StreamSubscription<VpnStats>? _statsSub;
   String? _lastError;
 
   Stream<VpnStage> get onStage => _stageCtrl.stream;
-  Stream<VpnStats> get onStats => _statsCtrl.stream;
+  Stream<VpnStats> get onStats => _statsPoller.stream;
   String get stage => _stage;
   String? get lastError => _lastError;
 
@@ -93,7 +94,7 @@ class SingboxDesktopRunner {
       if (line.contains('sing-box started')) {
         sawStarted = true;
         _setStage('connected');
-        _startStatsTimer();
+        _startStats();
       }
       if (line.contains('FATAL') || line.contains('ERROR')) {
         _lastError = line;
@@ -110,7 +111,7 @@ class SingboxDesktopRunner {
         .listen(handleLine);
 
     _process!.exitCode.then((code) {
-      _stopStatsTimer();
+      _stopStats();
       if (_stage == 'disconnecting') {
         _setStage('disconnected');
       } else if (code != 0) {
@@ -126,7 +127,7 @@ class SingboxDesktopRunner {
     await Future<void>.delayed(const Duration(seconds: 3));
     if (_process != null && _stage == 'connecting') {
       _setStage('connected');
-      _startStatsTimer();
+      _startStats();
     }
   }
 
@@ -136,7 +137,7 @@ class SingboxDesktopRunner {
       return;
     }
     _setStage('disconnecting');
-    _stopStatsTimer();
+    _stopStats();
     _process!.kill(ProcessSignal.sigterm);
     try {
       await _process!.exitCode.timeout(const Duration(seconds: 5));
@@ -160,23 +161,20 @@ class SingboxDesktopRunner {
     }
   }
 
-  void _startStatsTimer() {
-    _stopStatsTimer();
-    _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_statsCtrl.isClosed) {
-        _statsCtrl.add(const VpnStats());
-      }
-    });
+  void _startStats() {
+    _stopStats();
+    unawaited(_statsPoller.start());
   }
 
-  void _stopStatsTimer() {
-    _statsTimer?.cancel();
-    _statsTimer = null;
+  void _stopStats() {
+    unawaited(_statsPoller.stop());
+    _statsSub?.cancel();
+    _statsSub = null;
   }
 
   void dispose() {
-    _stopStatsTimer();
+    _stopStats();
+    _statsPoller.dispose();
     _stageCtrl.close();
-    _statsCtrl.close();
   }
 }
