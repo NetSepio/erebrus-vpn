@@ -7,6 +7,9 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Base64
+import androidx.webkit.ProxyConfig
+import androidx.webkit.ProxyController
+import androidx.webkit.WebViewFeature
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -90,6 +93,12 @@ class MainActivity : FlutterActivity() {
                     result.success(stage)
                 }
                 "genWgKeys" -> result.success(generateWireGuardKeyPair())
+                "setAppProxy" -> {
+                    val host = call.argument<String>("host") ?: "127.0.0.1"
+                    val port = call.argument<Int>("port") ?: 10808
+                    setAppProxy(host, port, result)
+                }
+                "clearAppProxy" -> clearAppProxy(result)
                 else -> result.notImplemented()
             }
         }
@@ -144,6 +153,30 @@ class MainActivity : FlutterActivity() {
         if (requestCode == vpnRequestCode) {
             pendingPrepare?.success(resultCode == Activity.RESULT_OK)
             pendingPrepare = null
+        }
+    }
+
+    private fun setAppProxy(host: String, port: Int, result: MethodChannel.Result) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            result.success(null)
+            return
+        }
+        val config = ProxyConfig.Builder()
+            .addProxyRule("$host:$port")
+            .addDirect()
+            .build()
+        ProxyController.getInstance().setProxyOverride(config, Runnable::run) {
+            result.success(null)
+        }
+    }
+
+    private fun clearAppProxy(result: MethodChannel.Result) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            result.success(null)
+            return
+        }
+        ProxyController.getInstance().clearProxyOverride(Runnable::run) {
+            result.success(null)
         }
     }
 

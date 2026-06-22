@@ -86,12 +86,38 @@ class SingboxEngine {
       return;
     }
     await _method.invokeMethod('stop');
+    // stop() is async via startService — wait until the TUN is actually torn down.
+    for (var i = 0; i < 40; i++) {
+      final s = await _method.invokeMethod<String>('stage');
+      if (s == 'disconnected') return;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    debugPrint('[SingboxEngine] stop: timed out waiting for disconnected');
   }
 
   Future<VpnStage> stage() async {
     if (_useDesktopRunner) return _stageFrom(_desktop.stage);
     final s = await _method.invokeMethod<String>('stage');
     return _stageFrom(s);
+  }
+
+  /// Routes in-app HTTP/WebView through the local sing-box mixed inbound.
+  Future<void> setAppProxy({required String host, required int port}) async {
+    if (_useDesktopRunner) return;
+    try {
+      await _method.invokeMethod('setAppProxy', {'host': host, 'port': port});
+    } on PlatformException catch (e) {
+      debugPrint('[SingboxEngine] setAppProxy failed: $e');
+    }
+  }
+
+  Future<void> clearAppProxy() async {
+    if (_useDesktopRunner) return;
+    try {
+      await _method.invokeMethod('clearAppProxy');
+    } on PlatformException catch (e) {
+      debugPrint('[SingboxEngine] clearAppProxy failed: $e');
+    }
   }
 
   Future<({String private, String public})> generateWireGuardKeyPair() async {

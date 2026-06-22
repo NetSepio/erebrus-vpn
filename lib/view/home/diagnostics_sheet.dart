@@ -52,7 +52,11 @@ class _DiagnosticsSheet extends StatelessWidget {
             final stats = vpn.stats.value;
             final mode = vpn.mode.value;
             final transport = vpn.activeTransport.value;
-            final protocolLabel = mode == ConnectMode.stealth ? 'Stealth (obfuscated)' : 'WireGuard';
+            final protocolLabel = switch (mode) {
+              ConnectMode.auto => 'Auto',
+              ConnectMode.stealth => 'Stealth',
+              ConnectMode.wireguard => 'WireGuard',
+            };
 
             final rows = connected
                 ? <_Row>[

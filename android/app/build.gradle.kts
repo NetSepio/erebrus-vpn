@@ -50,6 +50,8 @@ dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     // WireGuard (x25519) keypair generation.
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    // WebView proxy override for in-app browser over the local sing-box mixed inbound.
+    implementation("androidx.webkit:webkit:1.12.1")
 }
 
 flutter {

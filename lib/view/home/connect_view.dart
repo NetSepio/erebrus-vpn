@@ -124,9 +124,8 @@ class _ConnectViewState extends State<ConnectView> {
               const SizedBox(height: 8),
               Obx(() => Center(
                     child: Text(
-                      _c.mode.value == ConnectMode.stealth
-                          ? 'Obfuscated traffic · bypasses DPI & censorship'
-                          : 'Fast modern tunnel · best for everyday use',
+                      _c.mode.value.blurb,
+                      textAlign: TextAlign.center,
                       style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted),
                     ),
                   )),
@@ -148,7 +147,13 @@ class _ConnectViewState extends State<ConnectView> {
               Obx(() => _DataReadout(stats: _c.stats.value, connected: _c.isConnected)),
               const SizedBox(height: 14),
               // server card
-              Obx(() => _ServerCard(node: _c.selectedNode.value, onTap: widget.onOpenServers)),
+              Obx(() => _ServerCard(
+                    node: _c.selectedNode.value,
+                    egressIp: _c.egressIp.value,
+                    egressLoading: _c.egressIpLoading.value,
+                    connected: _c.isConnected,
+                    onTap: widget.onOpenServers,
+                  )),
             ],
           ),
         ),
@@ -236,9 +241,6 @@ class _ProtocolSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Two visible segments map onto the three real modes: "auto" (the default)
-    // leads with WireGuard, so it highlights the WireGuard segment.
-    final wgActive = mode == ConnectMode.wireguard || mode == ConnectMode.auto;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -248,7 +250,9 @@ class _ProtocolSegment extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _seg('WIREGUARD', wgActive, () => onSelect(ConnectMode.wireguard)),
+          _seg('AUTO', mode == ConnectMode.auto, () => onSelect(ConnectMode.auto)),
+          const SizedBox(width: 4),
+          _seg('WIREGUARD', mode == ConnectMode.wireguard, () => onSelect(ConnectMode.wireguard)),
           const SizedBox(width: 4),
           _seg('STEALTH', mode == ConnectMode.stealth, () => onSelect(ConnectMode.stealth)),
         ],
@@ -517,8 +521,17 @@ class _DataReadout extends StatelessWidget {
 }
 
 class _ServerCard extends StatelessWidget {
-  const _ServerCard({required this.node, this.onTap});
+  const _ServerCard({
+    required this.node,
+    this.egressIp,
+    this.egressLoading = false,
+    this.connected = false,
+    this.onTap,
+  });
   final VpnNode? node;
+  final String? egressIp;
+  final bool egressLoading;
+  final bool connected;
   final VoidCallback? onTap;
 
   @override
@@ -551,6 +564,19 @@ class _ServerCard extends StatelessWidget {
                     Text(d.network, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary)),
                   ],
                 ),
+                if (connected) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    egressLoading
+                        ? 'Egress IP · checking…'
+                        : (egressIp != null ? 'Egress IP · $egressIp' : 'Egress IP · unavailable'),
+                    style: mono(
+                      size: 11,
+                      weight: FontWeight.w500,
+                      color: egressIp != null ? AppColors.success : AppColors.textMuted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

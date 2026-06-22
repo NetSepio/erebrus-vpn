@@ -9,6 +9,7 @@ import '../settings/app_settings_controller.dart';
 import 'gateway_client.dart';
 import 'gateway_controller.dart';
 import 'gateway_errors.dart';
+import 'egress_ip_probe.dart';
 import 'singbox_engine.dart';
 import 'vpn_models.dart';
 import 'vpn_session_store.dart';
@@ -42,12 +43,15 @@ class VpnController extends GetxController {
   final stats = const VpnStats().obs;
   final error = RxnString();
   final killSwitchBlocking = false.obs;
+  final egressIp = RxnString();
+  final egressIpLoading = false.obs;
 
   StreamSubscription<VpnStage>? _stageSub;
   StreamSubscription<VpnStats>? _statsSub;
   bool _wasConnected = false;
   bool _userDisconnecting = false;
   bool _syncingNative = false;
+  bool _connectInProgress = false;
 
   static const _kWgPrivate = 'erebrus_wg_private';
   static const _kWgPublic = 'erebrus_wg_public';
@@ -70,10 +74,19 @@ class VpnController extends GetxController {
       if (s == VpnStage.connected) {
         _wasConnected = true;
         killSwitchBlocking.value = false;
+        unawaited(_syncAppProxy(enabled: true));
+        unawaited(_probeEgressIp());
       }
       if (s == VpnStage.disconnected || s == VpnStage.error) {
+        unawaited(_syncAppProxy(enabled: false));
+        egressIp.value = null;
+        egressIpLoading.value = false;
         activeTransport.value = null;
-        if (_wasConnected && !_userDisconnecting && !_syncingNative && _killSwitchEnabled) {
+        if (_wasConnected &&
+            !_userDisconnecting &&
+            !_syncingNative &&
+            !_connectInProgress &&
+            _killSwitchEnabled) {
           unawaited(_engageKillSwitch());
         } else if (_userDisconnecting) {
           _wasConnected = false;
@@ -96,16 +109,16 @@ class VpnController extends GetxController {
       if (native == VpnStage.connected) {
         _wasConnected = true;
         _userDisconnecting = false;
+        killSwitchBlocking.value = false;
+        stage.value = VpnStage.connected;
+        error.value = null;
         if (session?.killSwitchActive == true) {
-          killSwitchBlocking.value = true;
-          stage.value = VpnStage.error;
-          error.value = 'Kill switch active — traffic blocked until you reconnect';
-        } else {
-          killSwitchBlocking.value = false;
-          stage.value = VpnStage.connected;
-          error.value = null;
+          await VpnSessionStore.clear();
+          debugPrint('[VPN] sync: cleared stale kill-switch session (tunnel is up)');
         }
         _applySession(session);
+        unawaited(_syncAppProxy(enabled: true));
+        unawaited(_probeEgressIp());
         debugPrint(
           '[VPN] sync: native connected'
           '${session != null ? ' · ${session.nodeName} (${session.transport.label})' : ''}',
@@ -186,9 +199,12 @@ class VpnController extends GetxController {
       return;
     }
     _userDisconnecting = false;
+    _connectInProgress = true;
+    _wasConnected = false;
     if (killSwitchBlocking.value) {
       await _engine.stop().catchError((_) {});
       killSwitchBlocking.value = false;
+      await VpnSessionStore.clear();
     }
     selectedNode.value = target;
     error.value = null;
@@ -214,6 +230,11 @@ class VpnController extends GetxController {
         return;
       }
 
+      debugPrint(
+        '[VPN] mode=${mode.value.label} · try order: '
+        '${candidates.map((t) => t.label).join(' → ')}',
+      );
+
       for (final t in candidates) {
         try {
           final config = SingboxConfigBuilder.build(
@@ -231,6 +252,10 @@ class VpnController extends GetxController {
           debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
           if (ok) {
             _wasConnected = true;
+            debugPrint(
+              '[VPN] connected · mode=${mode.value.label} · transport=${t.label} · '
+              'config=${t == Transport.wireguard ? "direct-wg" : "stealth-singbox"}',
+            );
             await VpnSessionStore.save(
               node: target,
               transport: t,
@@ -242,16 +267,22 @@ class VpnController extends GetxController {
         } catch (e, st) {
           debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
         }
+        _wasConnected = false;
         await _engine.stop().catchError((_) {});
       }
+      _wasConnected = false;
       error.value = 'Could not connect on this network — try Stealth mode or another server';
       stage.value = VpnStage.error;
     } on GatewayException catch (e) {
+      _wasConnected = false;
       error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
     } catch (e) {
+      _wasConnected = false;
       error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
+    } finally {
+      _connectInProgress = false;
     }
   }
 
@@ -259,6 +290,7 @@ class VpnController extends GetxController {
     _userDisconnecting = true;
     killSwitchBlocking.value = false;
     stage.value = VpnStage.disconnecting;
+    await _syncAppProxy(enabled: false);
     try {
       await _engine.stop();
       stage.value = await _engine.stage();
@@ -268,6 +300,8 @@ class VpnController extends GetxController {
     _wasConnected = false;
     activeTransport.value = null;
     error.value = null;
+    egressIp.value = null;
+    egressIpLoading.value = false;
     await VpnSessionStore.clear();
   }
 
@@ -278,7 +312,32 @@ class VpnController extends GetxController {
     await _engine.stop().catchError((_) {});
     stage.value = VpnStage.disconnected;
     error.value = null;
+    egressIp.value = null;
+    egressIpLoading.value = false;
     await VpnSessionStore.clear();
+  }
+
+  Future<void> _syncAppProxy({required bool enabled}) async {
+    if (enabled) {
+      await _engine.setAppProxy(
+        host: SingboxConfigBuilder.localProxyHost,
+        port: SingboxConfigBuilder.localProxyPort,
+      );
+      return;
+    }
+    await _engine.clearAppProxy();
+  }
+
+  Future<void> _probeEgressIp() async {
+    if (!isConnected || killSwitchBlocking.value) return;
+    egressIpLoading.value = true;
+    try {
+      final ip = await EgressIpProbe.fetch(useTunnelProxy: true);
+      if (isConnected) egressIp.value = ip;
+      debugPrint('[VPN] egress IP probe → ${ip ?? "failed"}');
+    } finally {
+      egressIpLoading.value = false;
+    }
   }
 
   bool get _killSwitchEnabled =>
@@ -307,7 +366,7 @@ class VpnController extends GetxController {
           killSwitchActive: true,
         );
       }
-      debugPrint('[VPN] kill switch engaged — all traffic blocked');
+      debugPrint('[VPN] kill switch engaged — replaced tunnel with block config');
     } catch (e) {
       debugPrint('[VPN] kill switch engage failed: $e');
       killSwitchBlocking.value = false;

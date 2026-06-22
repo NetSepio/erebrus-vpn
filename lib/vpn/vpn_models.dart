@@ -129,6 +129,16 @@ class SingboxConfigBuilder {
   static const String carrierVlessTag = 'carrier-vless';
   static const String carrierHy2Tag = 'carrier-hysteria2';
 
+  /// sing-box TUN address; DNS hijack lands on [.tunDnsAddress] inside this /30.
+  static const String tunAddress = '172.19.0.1/30';
+  static const String tunDnsAddress = '172.19.0.2';
+
+  /// Local mixed inbound so the app UID (excluded from system TUN) can still
+  /// reach the tunnel via 127.0.0.1.
+  static const String localProxyHost = '127.0.0.1';
+  static const int localProxyPort = 10808;
+  static const String localMixedInboundTag = 'mixed-in';
+
   /// Enables the local Clash API so the app can read live traffic stats.
   static Map<String, dynamic> _withClashApi(Map<String, dynamic> config) {
     final out = Map<String, dynamic>.from(config);
@@ -178,17 +188,7 @@ class SingboxConfigBuilder {
         'final': 'dns-remote',
         'strategy': 'prefer_ipv4',
       },
-      'inbounds': [
-        {
-          'type': 'tun',
-          'tag': 'tun-in',
-          'address': ['172.19.0.1/30'],
-          'auto_route': true,
-          'strict_route': true,
-          'stack': 'gvisor',
-          'sniff': true,
-        },
-      ],
+      'inbounds': _tunInbounds(),
       'outbounds': [
         {'type': 'direct', 'tag': 'direct'},
       ],
@@ -210,10 +210,7 @@ class SingboxConfigBuilder {
           ],
         },
       ],
-      'route': {
-        'final': wgEndpointTag,
-        'auto_detect_interface': true,
-      },
+      'route': _route(finalTag: wgEndpointTag, wgServerHost: host),
     });
   }
 
@@ -253,11 +250,9 @@ class SingboxConfigBuilder {
     }
 
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
-    final route = Map<String, dynamic>.from(
-      (profile['route'] as Map?)?.cast<String, dynamic>() ?? const {'final': wgEndpointTag},
-    );
-    route['final'] = wgEndpointTag;
-    route['auto_detect_interface'] = true;
+    final profileRoute = (profile['route'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final extraRules =
+        (profileRoute['rules'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
 
     return _withClashApi({
       'log': {'level': 'info'},
@@ -268,24 +263,65 @@ class SingboxConfigBuilder {
         'final': 'dns-remote',
         'strategy': 'prefer_ipv4',
       },
-      'inbounds': [
+      'inbounds': _tunInbounds(),
+      'endpoints': endpoints,
+      'outbounds': profile['outbounds'] ?? [
+        {'type': 'direct', 'tag': 'direct'},
+      ],
+      'route': _route(
+        finalTag: wgEndpointTag,
+        extraRules: extraRules,
+      ),
+    });
+  }
+
+  static List<Map<String, dynamic>> _tunInbounds() => [
         {
           'type': 'tun',
           'tag': 'tun-in',
-          'address': ['172.19.0.1/30'],
+          'address': [tunAddress],
           'auto_route': true,
           'strict_route': true,
           'stack': 'gvisor',
           'sniff': true,
         },
-      ],
-      'endpoints': endpoints,
-      'outbounds': profile['outbounds'] ?? [
-        {'type': 'direct', 'tag': 'direct'},
-      ],
-      'route': route,
-    });
+        {
+          'type': 'mixed',
+          'tag': localMixedInboundTag,
+          'listen': localProxyHost,
+          'listen_port': localProxyPort,
+          'sniff': true,
+        },
+      ];
+
+  /// Local/bypass rules that must run before [final]. DNS hijack comes first so
+  /// queries to [tunDnsAddress] are not caught by a broad CIDR → direct rule.
+  static List<Map<String, dynamic>> _localRouteRules({String? wgServerHost}) {
+    final rules = <Map<String, dynamic>>[
+      {'protocol': 'dns', 'action': 'hijack-dns'},
+      {'ip_cidr': ['127.0.0.0/8'], 'outbound': 'direct'},
+    ];
+    if (wgServerHost != null &&
+        wgServerHost.isNotEmpty &&
+        wgServerHost != '127.0.0.1') {
+      rules.insert(0, {
+        'ip_cidr': ['$wgServerHost/32'],
+        'outbound': 'direct',
+      });
+    }
+    return rules;
   }
+
+  static Map<String, dynamic> _route({
+    required String finalTag,
+    String? wgServerHost,
+    List<Map<String, dynamic>> extraRules = const [],
+  }) =>
+      {
+        'rules': [..._localRouteRules(wgServerHost: wgServerHost), ...extraRules],
+        'final': finalTag,
+        'auto_detect_interface': true,
+      };
 
   static (String, int) _splitHostPort(String hostPort) {
     final i = hostPort.lastIndexOf(':');
@@ -302,7 +338,7 @@ class SingboxConfigBuilder {
           {
             'type': 'tun',
             'tag': 'tun-in',
-            'address': ['172.19.0.1/30'],
+            'address': [tunAddress],
             'auto_route': true,
             'strict_route': true,
             'stack': 'gvisor',

@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import io.nekohasekai.libbox.libbox.BoxService
 import io.nekohasekai.libbox.libbox.InterfaceUpdateListener
@@ -34,6 +36,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         private const val EXTRA_NAME = "name"
         private const val NOTIF_CHANNEL = "erebrus_vpn"
         private const val NOTIF_ID = 0x5713
+        /** Must match SingboxConfigBuilder.tunDnsAddress in Dart (172.19.0.2). */
+        private const val TUN_DNS = "172.19.0.2"
 
         /** True while libbox holds an open TUN — survives Flutter engine restarts. */
         @Volatile
@@ -61,6 +65,9 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private var box: BoxService? = null
     private var tunInterface: ParcelFileDescriptor? = null
     private val statsMonitor = LibboxStatsMonitor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var stopping = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -83,9 +90,9 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     }
 
     private fun startTunnel(config: String, name: String) {
+        stopping = false
         releaseTunnelResources()
         SingboxBridge.emitStage("connecting")
-        tunnelActive = true
         startForeground(NOTIF_ID, buildNotification(name))
         android.util.Log.i("erebrus-singbox", "startTunnel name=$name bytes=${config.length}")
         try {
@@ -100,6 +107,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             service.start()
             box = service
             statsMonitor.start(service)
+            tunnelActive = true
             SingboxBridge.emitStage("connected")
         } catch (e: Exception) {
             android.util.Log.e("erebrus-singbox", "startTunnel failed", e)
@@ -110,26 +118,52 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     private fun releaseTunnelResources() {
         statsMonitor.stop()
-        try {
-            box?.close()
-        } catch (_: Exception) {
-        }
-        box = null
-        try {
-            tunInterface?.close()
-        } catch (_: Exception) {
-        }
+        AndroidNetworkPlatform.stopMonitor()
+
+        // Close the OS VPN interface first — this drops the status-bar key icon.
+        // libbox dups the tun fd internally; our PFD from establish() must be closed explicitly.
+        val tun = tunInterface
         tunInterface = null
+        if (tun != null) {
+            try {
+                tun.close()
+                android.util.Log.i("erebrus-singbox", "TUN interface closed")
+            } catch (e: Exception) {
+                android.util.Log.e("erebrus-singbox", "TUN close failed", e)
+            }
+        }
+
+        val service = box
+        box = null
+        if (service != null) {
+            try {
+                service.close()
+                android.util.Log.i("erebrus-singbox", "libbox service closed")
+            } catch (e: Exception) {
+                android.util.Log.e("erebrus-singbox", "libbox close failed", e)
+            }
+        }
+
         tunnelActive = false
     }
 
     private fun stopTunnel() {
-        SingboxBridge.emitStage("disconnecting")
-        releaseTunnelResources()
-        tunnelActive = false
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-        SingboxBridge.emitStage("disconnected")
+        if (stopping) return
+        stopping = true
+        val run = {
+            SingboxBridge.emitStage("disconnecting")
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            releaseTunnelResources()
+            stopping = false
+            stopSelf()
+            SingboxBridge.emitStage("disconnected")
+            android.util.Log.i("erebrus-singbox", "tunnel stopped")
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            run()
+        } else {
+            mainHandler.post(run)
+        }
     }
 
     override fun onDestroy() {
@@ -153,15 +187,12 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
         if (options.autoRoute) {
             addRoutes(builder, options)
-            val dns = options.dnsServerAddress?.value.orEmpty()
-            if (dns.isNotEmpty()) {
-                builder.addDnsServer(dns)
-            } else {
-                builder.addDnsServer("1.1.1.1")
-                builder.addDnsServer("8.8.8.8")
-            }
+            val dns = options.dnsServerAddress?.value.orEmpty().ifEmpty { TUN_DNS }
+            builder.addDnsServer(dns)
         }
 
+        // Exclude this app UID from the system TUN. libbox WireGuard UDP must not
+        // loop back into the tunnel (protect() alone fails on some OEM devices).
         runCatching { builder.addDisallowedApplication(packageName) }
 
         val pfd: ParcelFileDescriptor = builder.establish()
@@ -233,7 +264,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
     override fun underNetworkExtension(): Boolean = false
 
-    override fun includeAllNetworks(): Boolean = false
+    /** Route all apps (incl. Chrome) through the VPN on Android 12+. */
+    override fun includeAllNetworks(): Boolean = true
 
     override fun clearDNSCache() {}
 

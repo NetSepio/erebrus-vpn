@@ -74,7 +74,7 @@ class SettingsView extends StatelessWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(settings.defaultProtocol.value.name.toUpperCase(),
+                        Text(settings.defaultProtocol.value.label.toUpperCase(),
                             style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary)),
                         const SizedBox(width: 8),
                         const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),

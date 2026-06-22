@@ -1,6 +1,10 @@
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../vpn/singbox_engine.dart';
+import '../../vpn/vpn_controller.dart';
+import '../../vpn/vpn_models.dart';
+
 /// The private start page (the "Sovereign web." service grid). New tabs open
 /// here; navigating to a real URL hands off to the WebView.
 const kStartPage = 'erebrus://home';
@@ -42,6 +46,22 @@ class BrowserController extends GetxController {
   void onInit() {
     super.onInit();
     if (tabs.isEmpty) addTab();
+    if (Get.isRegistered<VpnController>()) {
+      final vpn = Get.find<VpnController>();
+      ever(vpn.stage, (_) => _syncTunnelProxy(vpn));
+      _syncTunnelProxy(vpn);
+    }
+  }
+
+  Future<void> _syncTunnelProxy(VpnController vpn) async {
+    if (vpn.isConnected) {
+      await SingboxEngine.instance.setAppProxy(
+        host: SingboxConfigBuilder.localProxyHost,
+        port: SingboxConfigBuilder.localProxyPort,
+      );
+      return;
+    }
+    await SingboxEngine.instance.clearAppProxy();
   }
 
   void addTab([String? url]) {

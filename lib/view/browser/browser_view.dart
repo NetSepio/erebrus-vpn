@@ -206,8 +206,12 @@ class _StartPage extends StatelessWidget {
   const _StartPage();
 
   String get _protocol {
-    if (!Get.isRegistered<VpnController>()) return 'WIREGUARD';
-    return Get.find<VpnController>().mode.value == ConnectMode.stealth ? 'STEALTH' : 'WIREGUARD';
+    if (!Get.isRegistered<VpnController>()) return 'AUTO';
+    final vpn = Get.find<VpnController>();
+    if (vpn.isConnected && vpn.activeTransport.value != null) {
+      return vpn.activeTransport.value!.label.toUpperCase();
+    }
+    return vpn.mode.value.label.toUpperCase();
   }
 
   @override
@@ -263,7 +267,7 @@ class _StartPage extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.5,
+          childAspectRatio: 2.1,
           children: [for (final s in services) _ServiceCard(service: s)],
         ),
       ],
@@ -294,26 +298,42 @@ class _ServiceCard extends StatelessWidget {
         ),
       ),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.stroke),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: service.chip, borderRadius: BorderRadius.circular(12)),
-              child: Icon(service.icon, size: 20, color: service.color),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: service.chip, borderRadius: BorderRadius.circular(10)),
+              child: Icon(service.icon, size: 16, color: service.color),
             ),
-            const SizedBox(height: 12),
-            Text(service.title, style: grotesk(size: 14, weight: FontWeight.w600)),
-            const SizedBox(height: 3),
-            Text(service.sub, style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textTertiary)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    service.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 13, weight: FontWeight.w600),
+                  ),
+                  Text(
+                    service.sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
