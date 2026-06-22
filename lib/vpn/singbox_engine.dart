@@ -1,5 +1,11 @@
 import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../platform/platform_capabilities.dart';
+import 'singbox_desktop_runner.dart';
+import 'wg_keygen.dart';
 
 /// Lifecycle stages reported by the native tunnel.
 enum VpnStage { disconnected, connecting, connected, disconnecting, error }
@@ -30,17 +36,8 @@ class VpnStats {
 
 /// Dart facade over the native sing-box (libbox) tunnel.
 ///
-/// This is the single integration seam: the Android `VpnService` +
-/// `libbox.so`/AAR and the iOS `NEPacketTunnelProvider` + `Libbox.framework`
-/// implement these channels. The same engine drives WireGuard *and* the stealth
-/// carriers — WireGuard is just an endpoint inside the sing-box config we hand
-/// it (see [SingboxConfigBuilder]). The legacy `wireguard_flutter` path is
-/// retired in favor of this unified engine.
-///
-/// Channel contract (see docs/STEALTH_CLIENT.md):
-///   method  dev.erebrus/singbox          start(configJson) / stop() / stage() / prepare()
-///   event   dev.erebrus/singbox/status   String stage
-///   event   dev.erebrus/singbox/stats    Map stats (1s cadence)
+/// On mobile: Android `VpnService` + libbox AAR, iOS Network Extension.
+/// On desktop: bundled sing-box CLI subprocess ([SingboxDesktopRunner]).
 class SingboxEngine {
   SingboxEngine._();
   static final SingboxEngine instance = SingboxEngine._();
@@ -49,20 +46,25 @@ class SingboxEngine {
   static const EventChannel _statusChannel = EventChannel('dev.erebrus/singbox/status');
   static const EventChannel _statsChannel = EventChannel('dev.erebrus/singbox/stats');
 
+  final _desktop = SingboxDesktopRunner.instance;
+
   Stream<VpnStage>? _stage;
   Stream<VpnStats>? _stats;
 
+  bool get _useDesktopRunner => PlatformCapabilities.isDesktop;
+
   /// Stream of lifecycle stages.
-  Stream<VpnStage> get onStage =>
-      _stage ??= _statusChannel.receiveBroadcastStream().map((e) => _stageFrom(e as String?));
+  Stream<VpnStage> get onStage => _stage ??= _useDesktopRunner
+      ? _desktop.onStage
+      : _statusChannel.receiveBroadcastStream().map((e) => _stageFrom(e as String?));
 
   /// Stream of byte counters (~1s cadence while connected).
-  Stream<VpnStats> get onStats => _stats ??=
-      _statsChannel.receiveBroadcastStream().map((e) => VpnStats.fromMap((e as Map?) ?? const {}));
+  Stream<VpnStats> get onStats => _stats ??= _useDesktopRunner
+      ? _desktop.onStats
+      : _statsChannel.receiveBroadcastStream().map((e) => VpnStats.fromMap((e as Map?) ?? const {}));
 
-  /// Requests the OS VPN permission (Android `VpnService.prepare`; no-op on iOS
-  /// where the system prompts on first start). Returns true if granted.
   Future<bool> prepare() async {
+    if (_useDesktopRunner) return _desktop.prepare();
     try {
       return (await _method.invokeMethod<bool>('prepare')) ?? false;
     } on PlatformException {
@@ -70,27 +72,38 @@ class SingboxEngine {
     }
   }
 
-  /// Starts the tunnel with a sing-box config (JSON-encoded). [profileName] is
-  /// shown in the OS VPN/notification UI.
   Future<void> start(String configJson, {String profileName = 'Erebrus'}) async {
+    if (_useDesktopRunner) {
+      await _desktop.start(configJson, profileName: profileName);
+      return;
+    }
     await _method.invokeMethod('start', {'config': configJson, 'name': profileName});
   }
 
-  /// Stops the tunnel.
   Future<void> stop() async {
+    if (_useDesktopRunner) {
+      await _desktop.stop();
+      return;
+    }
     await _method.invokeMethod('stop');
   }
 
-  /// Polls the current stage (used to resync state on app resume).
   Future<VpnStage> stage() async {
+    if (_useDesktopRunner) return _stageFrom(_desktop.stage);
     final s = await _method.invokeMethod<String>('stage');
     return _stageFrom(s);
   }
 
-  /// Generates a WireGuard (x25519) keypair natively via libbox. Returns
-  /// base64-encoded {private, public}. The private key never leaves the device.
   Future<({String private, String public})> generateWireGuardKeyPair() async {
-    final m = await _method.invokeMapMethod<String, String>('genWgKeys');
-    return (private: m?['private'] ?? '', public: m?['public'] ?? '');
+    if (_useDesktopRunner) return WgKeygen.generate();
+    try {
+      final m = await _method.invokeMapMethod<String, String>('genWgKeys');
+      final priv = m?['private'] ?? '';
+      final pub = m?['public'] ?? '';
+      if (priv.isNotEmpty && pub.isNotEmpty) return (private: priv, public: pub);
+    } catch (e) {
+      debugPrint('[SingboxEngine] native genWgKeys failed: $e');
+    }
+    return WgKeygen.generate();
   }
 }

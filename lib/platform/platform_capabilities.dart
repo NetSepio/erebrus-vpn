@@ -27,6 +27,15 @@ class PlatformCapabilities {
   /// Reown AppKit — every platform except Solana Mobile hardware.
   static bool get usesReown => !isSolanaMobileDevice;
 
+  /// Short hint for the connect orb when the user is not signed in.
+  static String get walletSignInHint {
+    if (isSolanaMobileDevice) {
+      return 'Sign in with Seed Vault in Account first';
+    }
+    if (isDesktop) return 'Sign in from Account first';
+    return 'Connect your Solana wallet in Account first';
+  }
+
   static String get platformLabel {
     if (kIsWeb) return 'web';
     if (Platform.isMacOS) return 'macos';

@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# sing-box CLI binaries (fetch via scripts/fetch-singbox-cli.sh)
+/bin/sing-box/
+
 # sing-box libbox binaries (build via scripts/build-libbox*.sh)
 /android/app/libs/libbox.aar
 /macos/Frameworks/Libbox.xcframework/

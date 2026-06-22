@@ -41,6 +41,8 @@ dependencies:
   device_info_plus: ^12.4.0
   tray_manager: ^0.5.3
   window_manager: ^0.5.1
+  x25519: ^0.1.1
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

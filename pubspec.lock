@@ -585,7 +585,7 @@ packages:
     source: hosted
     version: "3.2.1"
   path:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
@@ -1214,7 +1214,7 @@ packages:
     source: hosted
     version: "0.5.1"
   x25519:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: x25519
       sha256: cec3c125f0d934dccba6c4cab48f3fbf866dc78895dcc5a1584d35b0a845005b

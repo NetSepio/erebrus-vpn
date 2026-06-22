@@ -42,12 +42,17 @@ Future<bool> detectSolanaMobileDevice() async {
 bool _isSolanaMobileAndroid(AndroidDeviceInfo info) {
   final brand = info.brand.toLowerCase();
   final manufacturer = info.manufacturer.toLowerCase();
-  final model = info.model;
+  final model = info.model.toLowerCase();
+  final device = info.device.toLowerCase();
+  final product = info.product.toLowerCase();
 
-  if (brand == 'solanamobile') return true;
-  if (manufacturer.contains('solana mobile')) return true;
-  if (model == 'Seeker' || model == 'Saga' || model.startsWith('Saga')) {
+  if (brand == 'solanamobile' || brand.contains('solana')) return true;
+  if (manufacturer.contains('solana mobile') || manufacturer.contains('solanamobile')) {
     return true;
+  }
+  const markers = ['seeker', 'saga', 'solana mobile'];
+  for (final m in markers) {
+    if (model.contains(m) || device.contains(m) || product.contains(m)) return true;
   }
   return false;
 }
@@ -135,7 +140,8 @@ Future<String?> signSolanaMobileMessage({
     if (result.signedMessages.isEmpty) return null;
     final sigs = result.signedMessages.first.signatures;
     if (sigs.isEmpty) return null;
-    return base64Encode(sigs.first);
+    // Gateway CheckSignSol expects hex-encoded ed25519 signatures.
+    return sigs.first.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   } catch (e) {
     debugPrint('[MWA] sign failed: $e');
     return null;

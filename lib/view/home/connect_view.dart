@@ -56,9 +56,8 @@ class ConnectView extends StatelessWidget {
                                         ? null
                                         : () {
                                             if (auth != null && !authed) {
-                                              c.error.value = PlatformCapabilities.isDesktop
-                                                  ? 'Sign in from Account first'
-                                                  : 'Connect your Solana wallet in Account first';
+                                              c.error.value =
+                                                  PlatformCapabilities.walletSignInHint;
                                               onRequireAuth?.call();
                                               return;
                                             }

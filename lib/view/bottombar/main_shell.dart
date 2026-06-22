@@ -52,7 +52,9 @@ class _MainShellState extends State<MainShell> {
         String unlockLabel = 'Unlock access';
         if (!authed) {
           onUnlock = auth.openSignIn;
-          unlockLabel = 'Sign in';
+          unlockLabel = auth.isSolanaMobileDevice.value
+              ? 'Sign in with Seed Vault'
+              : 'Sign in';
         } else if (!entitled) {
           onUnlock = trialBusy ? null : auth.startFreeTrial;
           unlockLabel = trialBusy ? 'Starting trial…' : 'Start free trial';
@@ -74,7 +76,11 @@ class _MainShellState extends State<MainShell> {
           onSignOut: authed ? auth.signOut : auth.openSignIn,
           signInLabel: authed
               ? 'Sign out'
-              : (auth.isAuthenticating.value ? 'Signing in…' : 'Sign in'),
+              : (auth.isAuthenticating.value
+                  ? 'Signing in…'
+                  : (auth.isSolanaMobileDevice.value
+                      ? 'Sign in with Seed Vault'
+                      : 'Sign in')),
           authError: auth.authError.value,
         );
       }),
