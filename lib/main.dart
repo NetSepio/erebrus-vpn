@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -13,7 +12,7 @@ import 'platform/platform_capabilities.dart';
 import 'settings/app_settings_controller.dart';
 import 'theme/app_theme.dart';
 import 'view/auth/reown_host.dart';
-import 'view/bottombar/main_shell.dart';
+import 'view/root_view.dart';
 import 'view/browser/browser_controller.dart';
 import 'vpn/gateway_controller.dart';
 import 'vpn/vpn_controller.dart';
@@ -67,7 +66,7 @@ class ErebrusVpnApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shell = usesReown ? const ReownHost(child: MainShell()) : const MainShell();
+    final shell = usesReown ? const ReownHost(child: RootView()) : const RootView();
     final home = useDesktopShell ? DesktopShell(child: shell) : shell;
 
     final app = GetMaterialApp(

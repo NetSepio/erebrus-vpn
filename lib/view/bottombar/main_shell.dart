@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -6,16 +7,15 @@ import 'package:get/get.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../vpn/gateway_controller.dart';
 import '../../vpn/vpn_controller.dart';
-import '../../vpn/vpn_models.dart';
 import '../browser/browser_view.dart';
 import '../home/connect_view.dart';
-import '../home/server_view.dart';
-import '../profile/profile_view.dart';
+import '../home/diagnostics_sheet.dart';
+import '../home/server_sheet.dart';
 import '../settings/settings_view.dart';
 
-/// The v2 app shell: Connect / Browse / Servers / Account.
+/// The authenticated app shell: VPN / BROWSER / SETTINGS, with the design's
+/// frosted bottom tab bar. The server picker and diagnostics open as sheets.
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -83,70 +83,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final gateway = Get.find<GatewayController>();
     final tabs = [
-      ConnectView(onChooseNode: () => _go(2), onRequireAuth: () => _go(3)),
+      ConnectView(
+        onOpenServers: () => showServerSheet(context),
+        onOpenDiagnostics: () => showDiagnosticsSheet(context),
+        onGoSettings: () => _go(2),
+      ),
       const BrowserView(),
-      Obx(() {
-        final count = gateway.nodes.length;
-        return ServerView(
-          nodes: List<VpnNode>.from(gateway.nodes),
-          gatewayUrl: gateway.gatewayUrl.value,
-          loading: gateway.loading.value,
-          error: gateway.error.value,
-          warning: gateway.warning.value,
-          nodeCount: count,
-          onRefresh: gateway.refreshNodes,
-          onSelected: () => _go(0),
-        );
-      }),
-      Obx(() {
-        final auth = Get.find<WalletAuthController>();
-        final ent = auth.entitlement.value;
-        final authed = auth.isAuthenticated;
-        final entitled = auth.isEntitled;
-        final trialBusy = auth.isStartingTrial.value;
-
-        VoidCallback? onUnlock;
-        String unlockLabel = 'Unlock access';
-        if (!authed) {
-          onUnlock = auth.openSignIn;
-          unlockLabel = auth.isSolanaMobileDevice.value
-              ? 'Sign in with Seed Vault'
-              : 'Sign in';
-        } else if (!entitled) {
-          onUnlock = trialBusy ? null : auth.startFreeTrial;
-          unlockLabel = trialBusy ? 'Starting trial…' : 'Start free trial';
-        }
-
-        return ProfileView(
-          walletAddress: auth.walletAddress.value,
-          planLabel: authed ? ent.planLabel : 'Free',
-          entitlementSource: entitled ? ent.source : null,
-          daysLeft: entitled ? ent.daysRemaining : null,
-          onManagePlan: onUnlock,
-          unlockLabel: unlockLabel,
-          isLoadingEntitlement: auth.isLoadingEntitlement.value,
-          isStartingTrial: trialBusy,
-          entitlementError: auth.entitlementError.value,
-          onOpenSettings: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SettingsView()),
-          ),
-          onSignOut: authed ? auth.signOut : auth.openSignIn,
-          signInLabel: authed
-              ? 'Sign out'
-              : (auth.isAuthenticating.value
-                  ? 'Signing in…'
-                  : (auth.isSolanaMobileDevice.value
-                      ? 'Sign in with Seed Vault'
-                      : 'Sign in')),
-          authError: auth.authError.value,
-        );
-      }),
+      const SettingsView(),
     ];
 
     return Scaffold(
-      extendBody: true,
+      // Reserve space for the bottom tab bar (per the design's 80pt tab area) so
+      // tab content — e.g. the dVPN server card that opens the node picker — is
+      // not occluded behind the bar. (extendBody:true hid it behind the nav.)
+      extendBody: false,
+      backgroundColor: AppColors.bg,
       body: IndexedStack(index: _index, children: tabs),
       bottomNavigationBar: _NavBar(index: _index, onTap: _go),
     );
@@ -159,54 +111,47 @@ class _NavBar extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _items = [
-    (icon: Icons.shield_outlined, active: Icons.shield, label: 'Connect'),
-    (icon: Icons.language_outlined, active: Icons.language, label: 'Browse'),
-    (icon: Icons.public_outlined, active: Icons.public, label: 'Servers'),
-    (icon: Icons.person_outline, active: Icons.person, label: 'Account'),
+    (icon: Icons.shield, label: 'VPN'),
+    (icon: Icons.explore, label: 'BROWSER'),
+    (icon: Icons.tune, label: 'SETTINGS'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, AppSpace.lg),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.stroke),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 10))],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(_items.length, (i) {
-          final it = _items[i];
-          final active = i == index;
-          return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onTap(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  gradient: active ? AppGradients.aurora : null,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(active ? it.active : it.icon, size: 20, color: active ? Colors.white : AppColors.textMuted),
-                    if (active) ...[
-                      const SizedBox(width: 6),
-                      Text(it.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: EdgeInsets.only(top: 12, bottom: bottomInset > 0 ? bottomInset : 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A0C).withValues(alpha: 0.94),
+            border: const Border(top: BorderSide(color: AppColors.stroke)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(_items.length, (i) {
+              final it = _items[i];
+              final active = i == index;
+              final color = active ? AppColors.accent : AppColors.textDim;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onTap(i),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(it.icon, size: 22, color: color),
+                      const SizedBox(height: 5),
+                      Text(it.label, style: mono(size: 10, weight: FontWeight.w500, color: color, letterSpacing: 10 * 0.05)),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        }),
+              );
+            }),
+          ),
+        ),
       ),
     );
   }

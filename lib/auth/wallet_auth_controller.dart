@@ -222,37 +222,34 @@ class WalletAuthController extends GetxController {
       authError.value = 'Solana Mobile sign-in is only available on Seeker and Saga';
       return;
     }
+    // Guard against a double-tap opening two wallet associations at once.
+    if (isAuthenticating.value) return;
 
     isAuthenticating.value = true;
     authError.value = null;
     try {
-      final mwa = await connectSolanaMobile(storedAuthToken: _mwaAuthToken);
-      if (mwa == null) {
-        authError.value = 'Wallet sign-in was cancelled or failed';
-        return;
-      }
-
-      _mwaAuthToken = mwa.authToken;
-
-      final challenge = await _authClient.fetchFlowId(walletAddress: mwa.address);
-      final signature = await signSolanaMobileMessage(
-        mwaAuthToken: mwa.authToken,
-        publicKey: mwa.publicKey,
-        message: challenge.message,
+      // One MWA association: authorize → fetch the challenge → sign it.
+      var flowId = '';
+      final result = await mwaSignIn(
+        storedAuthToken: _mwaAuthToken,
+        challengeBuilder: (address, publicKey) async {
+          final challenge = await _authClient.fetchFlowId(walletAddress: address);
+          flowId = challenge.flowId;
+          return challenge.message;
+        },
       );
-      if (signature == null || signature.isEmpty) {
-        authError.value = 'Seed Vault did not sign the login challenge';
-        return;
-      }
+      _mwaAuthToken = result.authToken;
 
       final session = await _authClient.authenticate(
-        flowId: challenge.flowId,
-        signature: signature,
-        publicKey: mwa.address,
+        flowId: flowId,
+        signature: result.signature,
+        publicKey: result.address,
       );
-      await _persistSession(session, method: 'solana_mobile', mwaToken: mwa.authToken);
+      await _persistSession(session, method: 'solana_mobile', mwaToken: result.authToken);
       await refreshEntitlement();
-      debugPrint('[MWA] gateway auth OK for ${mwa.address}');
+      debugPrint('[MWA] gateway auth OK for ${result.address}');
+    } on MwaException catch (e) {
+      authError.value = e.message;
     } on AuthException catch (e) {
       authError.value = e.message;
     } catch (e) {

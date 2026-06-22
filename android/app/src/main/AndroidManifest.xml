@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- flutter_secure_storage probes BiometricManager.canAuthenticate() during
+         cipher init (to gracefully degrade when biometrics are unavailable);
+         without these it throws SecurityException, breaking secure storage. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
 
     <application
         android:label="Erebrus VPN"

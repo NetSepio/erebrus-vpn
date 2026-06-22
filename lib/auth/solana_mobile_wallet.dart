@@ -68,9 +68,22 @@ Future<({LocalAssociationScenario scenario, MobileWalletAdapterClient client})> 
   return (scenario: scenario, client: client);
 }
 
-/// Authorize or reauthorize via Mobile Wallet Adapter (native wallet selector).
-Future<SolanaMobileAuthResult?> connectSolanaMobile({String? storedAuthToken}) async {
-  if (!isSolanaMobileDevice) return null;
+/// Fetches the gateway login challenge for [address] mid-MWA-session.
+typedef MwaChallengeBuilder = Future<String> Function(String address, Uint8List publicKey);
+
+/// Full Seed Vault / Mobile Wallet Adapter sign-in in a **single association**:
+/// authorize (or reauthorize) → fetch the login challenge → sign it → return the
+/// hex signature. Doing authorize and sign in one session avoids the
+/// double-prompt (two wallet choosers) that made the previous two-session flow
+/// fail intermittently. Throws [MwaException] with a specific reason on failure
+/// so the UI can show *why* instead of a generic "cancelled".
+Future<MwaSignInResult> mwaSignIn({
+  String? storedAuthToken,
+  required MwaChallengeBuilder challengeBuilder,
+}) async {
+  if (!isSolanaMobileDevice) {
+    throw MwaException('Solana Mobile sign-in is only available on Seeker and Saga');
+  }
 
   LocalAssociationScenario? scenario;
   try {
@@ -78,101 +91,97 @@ Future<SolanaMobileAuthResult?> connectSolanaMobile({String? storedAuthToken}) a
     scenario = session.scenario;
     final client = session.client;
 
+    // Reuse a stored authorization when we have one; otherwise authorize fresh.
+    // NB: iconUri MUST be relative to identityUri (MWA spec) — an absolute icon
+    // URL makes the wallet reject the authorization.
+    final identityUri = Uri.parse(kErebrusSiteUrl);
+    final iconUri = Uri.parse(kErebrusMwaIconRelative);
     AuthorizationResult? auth;
     if (storedAuthToken != null && storedAuthToken.isNotEmpty) {
       auth = await client.reauthorize(
-        identityUri: Uri.parse(kErebrusSiteUrl),
-        iconUri: Uri.parse(kErebrusSiteIcon),
+        identityUri: identityUri,
+        iconUri: iconUri,
         identityName: 'Erebrus VPN',
         authToken: storedAuthToken,
       );
     }
     auth ??= await client.authorize(
-      identityUri: Uri.parse(kErebrusSiteUrl),
-      iconUri: Uri.parse(kErebrusSiteIcon),
+      identityUri: identityUri,
+      iconUri: iconUri,
       identityName: 'Erebrus VPN',
       cluster: 'mainnet-beta',
     );
     if (auth == null) {
-      debugPrint('[MWA] authorize returned null (cancelled or wallet error)');
-      return null;
+      // authorize/reauthorize swallow PlatformException → null (decline/error).
+      throw MwaException('Wallet authorization was declined or failed');
     }
 
-    return SolanaMobileAuthResult(
-      authToken: auth.authToken,
-      publicKey: auth.publicKey,
-      address: base58.encode(auth.publicKey),
-    );
-  } catch (e) {
-    debugPrint('[MWA] connect failed: $e');
-    return null;
-  } finally {
-    await scenario?.close();
-  }
-}
+    final address = base58.encode(auth.publicKey);
+    debugPrint('[MWA] authorized $address — requesting login challenge');
 
-/// Signs a UTF-8 challenge with the authorized MWA session.
-Future<String?> signSolanaMobileMessage({
-  required String mwaAuthToken,
-  required Uint8List publicKey,
-  required String message,
-}) async {
-  if (!isSolanaMobileDevice) return null;
+    // Fetch the challenge while the association is still open, then sign in the
+    // same session so the wallet is only associated once.
+    final message = await challengeBuilder(address, auth.publicKey);
+    if (message.isEmpty) {
+      throw MwaException('Gateway did not return a login challenge');
+    }
 
-  LocalAssociationScenario? scenario;
-  try {
-    final session = await _openMwaSession();
-    scenario = session.scenario;
-    final client = session.client;
-
-    final reauth = await client.reauthorize(
-      identityUri: Uri.parse(kErebrusSiteUrl),
-      iconUri: Uri.parse(kErebrusSiteIcon),
-      identityName: 'Erebrus VPN',
-      authToken: mwaAuthToken,
-    );
-    if (reauth == null) return null;
-
-    final result = await client.signMessages(
+    final signed = await client.signMessages(
       messages: [Uint8List.fromList(utf8.encode(message))],
-      addresses: [publicKey],
+      addresses: [auth.publicKey],
     );
-    if (result.signedMessages.isEmpty) return null;
-    final sigs = result.signedMessages.first.signatures;
-    if (sigs.isEmpty) return null;
+    if (signed.signedMessages.isEmpty || signed.signedMessages.first.signatures.isEmpty) {
+      throw MwaException('Seed Vault did not sign the login challenge');
+    }
+
     // Gateway CheckSignSol expects hex-encoded ed25519 signatures.
-    return sigs.first.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final sigBytes = signed.signedMessages.first.signatures.first;
+    final signature = sigBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    debugPrint('[MWA] signed challenge for $address');
+
+    return MwaSignInResult(
+      authToken: auth.authToken,
+      address: address,
+      publicKey: auth.publicKey,
+      signature: signature,
+    );
+  } on MwaException {
+    rethrow;
   } catch (e) {
-    debugPrint('[MWA] sign failed: $e');
-    return null;
+    debugPrint('[MWA] sign-in failed: $e');
+    throw MwaException('Wallet sign-in failed: $e');
   } finally {
     await scenario?.close();
   }
 }
 
+/// Clears the local MWA authorization. We intentionally do **not** open a wallet
+/// association just to deauthorize on sign-out (that would pop the wallet
+/// chooser); dropping the local token is enough — the next sign-in re-authorizes.
 Future<void> disconnectSolanaMobile(String? mwaAuthToken) async {
-  if (!isSolanaMobileDevice || mwaAuthToken == null || mwaAuthToken.isEmpty) {
-    return;
-  }
-  LocalAssociationScenario? scenario;
-  try {
-    final session = await _openMwaSession();
-    scenario = session.scenario;
-    await session.client.deauthorize(authToken: mwaAuthToken);
-  } catch (_) {
-  } finally {
-    await scenario?.close();
-  }
+  if (mwaAuthToken == null || mwaAuthToken.isEmpty) return;
+  debugPrint('[MWA] cleared local authorization');
 }
 
-class SolanaMobileAuthResult {
-  const SolanaMobileAuthResult({
+/// The result of a successful Seed Vault / MWA sign-in.
+class MwaSignInResult {
+  const MwaSignInResult({
     required this.authToken,
-    required this.publicKey,
     required this.address,
+    required this.publicKey,
+    required this.signature,
   });
 
   final String authToken;
-  final Uint8List publicKey;
   final String address;
+  final Uint8List publicKey;
+  final String signature; // hex-encoded ed25519 signature
+}
+
+/// A Mobile Wallet Adapter failure with a user-facing reason.
+class MwaException implements Exception {
+  MwaException(this.message);
+  final String message;
+  @override
+  String toString() => message;
 }

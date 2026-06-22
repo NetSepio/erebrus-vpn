@@ -74,6 +74,20 @@ flutter:
   assets:
     - assets/icons/tray_icon.png
 
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        # Variable font — Flutter maps TextStyle.fontWeight onto the `wght` axis.
+        - asset: assets/fonts/SpaceGrotesk-Variable.ttf
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

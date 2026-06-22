@@ -1,235 +1,155 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../auth/wallet_auth_controller.dart';
-import '../../platform/platform_capabilities.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
+import 'node_display.dart';
 
-/// The premium home / connect screen for Erebrus v2.
-class ConnectView extends StatelessWidget {
-  const ConnectView({super.key, this.onChooseNode, this.onRequireAuth});
-
-  /// Invoked when the user taps the node card to pick a server.
-  final VoidCallback? onChooseNode;
-  final VoidCallback? onRequireAuth;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Get.isRegistered<VpnController>() ? Get.find<VpnController>() : Get.put(VpnController());
-    final auth = Get.isRegistered<WalletAuthController>()
-        ? Get.find<WalletAuthController>()
-        : null;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          const _AuroraBackdrop(),
-          SafeArea(
-            child: Padding(
-              // Clearance for the floating bottom nav in [MainShell].
-              padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, 88),
-              child: Column(
-                children: [
-                  const _TopBar(),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        return FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.center,
-                          child: SizedBox(
-                            width: constraints.maxWidth,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Obx(() {
-                                  final authed = auth?.isAuthenticated ?? false;
-                                  final entitled = auth?.isEntitled ?? false;
-                                  return ConnectOrb(
-                                    stage: c.stage.value,
-                                    transport: c.activeTransport.value,
-                                    onTap: c.isBusy
-                                        ? null
-                                        : () {
-                                            if (auth != null && !authed) {
-                                              c.error.value =
-                                                  PlatformCapabilities.walletSignInHint;
-                                              onRequireAuth?.call();
-                                              return;
-                                            }
-                                            if (auth != null && !entitled) {
-                                              c.error.value =
-                                                  'Start a free trial in Account to connect';
-                                              onRequireAuth?.call();
-                                              return;
-                                            }
-                                            c.toggle();
-                                          },
-                                  );
-                                }),
-                                const SizedBox(height: AppSpace.xl),
-                                Obx(() {
-                                  if (c.killSwitchBlocking.value) {
-                                    return const _StatusText(
-                                      stage: VpnStage.error,
-                                      error: 'Kill switch active — tap to reconnect',
-                                    );
-                                  }
-                                  return _StatusText(stage: c.stage.value, error: c.error.value);
-                                }),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Obx(() => _ModeSelector(
-                        selected: c.mode.value,
-                        onSelect: (m) {
-                          c.setMode(m);
-                          if (Get.isRegistered<AppSettingsController>()) {
-                            Get.find<AppSettingsController>().setDefaultProtocol(m);
-                          }
-                        },
-                        enabled: !c.isConnected && !c.killSwitchBlocking.value,
-                      )),
-                  const SizedBox(height: AppSpace.lg),
-                  Obx(() => _NodeCard(node: c.selectedNode.value, onTap: onChooseNode)),
-                  const SizedBox(height: AppSpace.lg),
-                  Obx(() => _StatsBar(stats: c.stats.value, connected: c.isConnected)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar();
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.sm),
-      child: Row(
-        children: [
-          ShaderMask(
-            shaderCallback: (r) => AppGradients.aurora.createShader(r),
-            child: Text('Erebrus',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
-          ),
-          const Spacer(),
-          Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: const Icon(Icons.person_outline, color: AppColors.textSecondary, size: 20),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The big animated power orb. Pulses while connecting, glows while protected.
-class ConnectOrb extends StatefulWidget {
-  const ConnectOrb({
+/// The dVPN tab — connect/disconnect the tunnel, pick protocol, watch live
+/// stats, and open diagnostics / the server picker. Binds to [VpnController];
+/// the dial reflects the real tunnel stage and the readout shows real
+/// throughput. Sheets are hosted by the shell via the callbacks.
+class ConnectView extends StatefulWidget {
+  const ConnectView({
     super.key,
-    this.size = 232,
-    required this.stage,
-    required this.onTap,
-    this.transport,
+    this.onOpenServers,
+    this.onOpenDiagnostics,
+    this.onGoSettings,
   });
-  final double size;
-  final VpnStage stage;
-  final VoidCallback? onTap;
-  final Transport? transport;
+
+  final VoidCallback? onOpenServers;
+  final VoidCallback? onOpenDiagnostics;
+  final VoidCallback? onGoSettings;
 
   @override
-  State<ConnectOrb> createState() => _ConnectOrbState();
+  State<ConnectView> createState() => _ConnectViewState();
 }
 
-class _ConnectOrbState extends State<ConnectOrb> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-      AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+class _ConnectViewState extends State<ConnectView> {
+  VpnController get _c => Get.find<VpnController>();
+  WalletAuthController? get _auth =>
+      Get.isRegistered<WalletAuthController>() ? Get.find<WalletAuthController>() : null;
+
+  Timer? _ticker;
+  DateTime? _connectedAt;
+  Duration _elapsed = Duration.zero;
+  Worker? _stageWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    _stageWorker = ever<VpnStage>(_c.stage, _onStage);
+    if (_c.isConnected) _startTimer();
+  }
+
+  void _onStage(VpnStage s) {
+    if (s == VpnStage.connected) {
+      _startTimer();
+    } else {
+      _stopTimer();
+    }
+  }
+
+  void _startTimer() {
+    _connectedAt ??= DateTime.now();
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsed = DateTime.now().difference(_connectedAt!));
+    });
+  }
+
+  void _stopTimer() {
+    _ticker?.cancel();
+    _ticker = null;
+    _connectedAt = null;
+    if (mounted) setState(() => _elapsed = Duration.zero);
+  }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _stageWorker?.dispose();
+    _ticker?.cancel();
     super.dispose();
   }
 
-  Gradient get _gradient => switch (widget.stage) {
-        VpnStage.connected => AppGradients.protected,
-        VpnStage.connecting || VpnStage.disconnecting => const LinearGradient(colors: [AppColors.connecting, AppColors.violet]),
-        _ => widget.transport == Transport.wireguard ? AppGradients.aurora : AppGradients.stealth,
-      };
+  void _onDialTap() {
+    final auth = _auth;
+    if (auth != null && !auth.isEntitled) {
+      _c.error.value = 'Start your free trial in Settings to connect';
+      widget.onGoSettings?.call();
+      return;
+    }
+    _c.toggle();
+  }
 
-  Color get _glow => switch (widget.stage) {
-        VpnStage.connected => AppColors.connected,
-        VpnStage.connecting => AppColors.connecting,
-        VpnStage.error => AppColors.danger,
-        _ => AppColors.indigo,
-      };
+  void _setProtocol(ConnectMode m) {
+    _c.setMode(m);
+    if (Get.isRegistered<AppSettingsController>()) {
+      Get.find<AppSettingsController>().setDefaultProtocol(m);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final busy = widget.stage == VpnStage.connecting || widget.stage == VpnStage.disconnecting;
-    final s = widget.size;
-    final iconSize = s * 0.33;
-    final spinnerSize = s * 0.21;
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, child) {
-          final t = busy ? _ctrl.value : (widget.stage == VpnStage.connected ? 0.6 + _ctrl.value * 0.4 : 0.5);
-          return Container(
-            width: s,
-            height: s,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: _glow.withValues(alpha: 0.10 + t * 0.30),
-                  blurRadius: s * 0.26 + t * s * 0.22,
-                  spreadRadius: 4 + t * s * 0.07,
-                ),
-              ],
-            ),
-            child: child,
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(shape: BoxShape.circle, gradient: _gradient),
-          padding: EdgeInsets.all(s * 0.017),
-          child: Container(
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.bgElevated),
-            child: Center(
-              child: busy
-                  ? SizedBox(
-                      width: spinnerSize,
-                      height: spinnerSize,
-                      child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
-                    )
-                  : Icon(
-                      Icons.power_settings_new_rounded,
-                      size: iconSize,
-                      color: widget.stage == VpnStage.connected ? AppColors.connected : Colors.white,
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // header
+              Obx(() => _StatusHeader(
+                    stage: _c.stage.value,
+                    blocking: _c.killSwitchBlocking.value,
+                    onDiagnostics: widget.onOpenDiagnostics,
+                  )),
+              const SizedBox(height: 16),
+              // protocol segmented
+              Obx(() => _ProtocolSegment(
+                    mode: _c.mode.value,
+                    enabled: !_c.isConnected && !_c.killSwitchBlocking.value,
+                    onSelect: _setProtocol,
+                  )),
+              const SizedBox(height: 8),
+              Obx(() => Center(
+                    child: Text(
+                      _c.mode.value == ConnectMode.stealth
+                          ? 'Obfuscated traffic · bypasses DPI & censorship'
+                          : 'Fast modern tunnel · best for everyday use',
+                      style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted),
                     ),
-            ),
+                  )),
+              // dial
+              Expanded(
+                child: Center(
+                  child: Obx(() {
+                    final stage = _c.stage.value;
+                    final blocking = _c.killSwitchBlocking.value;
+                    return ConnectDial(
+                      stage: blocking ? VpnStage.error : stage,
+                      durationLabel: _fmtDur(_elapsed),
+                      onTap: _c.isBusy ? null : _onDialTap,
+                    );
+                  }),
+                ),
+              ),
+              // data readout
+              Obx(() => _DataReadout(stats: _c.stats.value, connected: _c.isConnected)),
+              const SizedBox(height: 14),
+              // server card
+              Obx(() => _ServerCard(node: _c.selectedNode.value, onTap: widget.onOpenServers)),
+            ],
           ),
         ),
       ),
@@ -237,187 +157,413 @@ class _ConnectOrbState extends State<ConnectOrb> with SingleTickerProviderStateM
   }
 }
 
-class _StatusText extends StatelessWidget {
-  const _StatusText({required this.stage, this.error});
+String _fmtDur(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  final s = d.inSeconds % 60;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
+}
+
+/// Formats a byte count using the spec's KB/MB/GB scale.
+String fmtData(int bytes) {
+  final kb = bytes ~/ 1024;
+  if (kb < 1024) return '$kb KB';
+  final mb = bytes / (1024 * 1024);
+  if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
+  return '${(mb / 1024).toStringAsFixed(2)} GB';
+}
+
+class _StatusHeader extends StatelessWidget {
+  const _StatusHeader({required this.stage, required this.blocking, this.onDiagnostics});
   final VpnStage stage;
-  final String? error;
+  final bool blocking;
+  final VoidCallback? onDiagnostics;
 
   @override
   Widget build(BuildContext context) {
-    final (title, sub, color) = switch (stage) {
-      VpnStage.connected => ('Protected', 'Your traffic is encrypted', AppColors.connected),
-      VpnStage.connecting => ('Connecting…', 'Negotiating a secure path', AppColors.connecting),
-      VpnStage.disconnecting => ('Disconnecting…', '', AppColors.connecting),
-      VpnStage.error => ('Not protected', error ?? 'Something went wrong', AppColors.danger),
-      _ => ('Not protected', 'Tap to connect', AppColors.textSecondary),
-    };
-    return Column(
+    final label = blocking
+        ? 'TRAFFIC BLOCKED'
+        : switch (stage) {
+            VpnStage.connected => 'PROTECTED',
+            VpnStage.connecting => 'SECURING TUNNEL',
+            VpnStage.disconnecting => 'SECURING TUNNEL',
+            VpnStage.error => 'NOT CONNECTED',
+            _ => 'NOT CONNECTED',
+          };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(color: AppColors.textPrimary),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('STATUS', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.16)),
+            const SizedBox(height: 2),
+            Text(label, style: grotesk(size: 18, weight: FontWeight.w600, letterSpacing: -0.18)),
+          ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          sub,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: color),
+        const Spacer(),
+        GestureDetector(
+          onTap: onDiagnostics,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.show_chart, size: 16, color: AppColors.textSecondary),
+                const SizedBox(width: 7),
+                Text('DIAGNOSTICS',
+                    style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textSecondary, letterSpacing: 11 * 0.06)),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-class _ModeSelector extends StatelessWidget {
-  const _ModeSelector({required this.selected, required this.onSelect, required this.enabled});
-  final ConnectMode selected;
-  final ValueChanged<ConnectMode> onSelect;
+class _ProtocolSegment extends StatelessWidget {
+  const _ProtocolSegment({required this.mode, required this.enabled, required this.onSelect});
+  final ConnectMode mode;
   final bool enabled;
+  final ValueChanged<ConnectMode> onSelect;
 
   @override
   Widget build(BuildContext context) {
+    // Two visible segments map onto the three real modes: "auto" (the default)
+    // leads with WireGuard, so it highlights the WireGuard segment.
+    final wgActive = mode == ConnectMode.wireguard || mode == ConnectMode.auto;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(13),
         border: Border.all(color: AppColors.stroke),
       ),
       child: Row(
-        children: ConnectMode.values.map((m) {
-          final active = m == selected;
-          return Expanded(
-            child: GestureDetector(
-              onTap: enabled ? () => onSelect(m) : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: active ? AppGradients.aurora : null,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Text(m.label,
-                    style: TextStyle(
-                      color: active ? Colors.white : AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                    )),
-              ),
+        children: [
+          _seg('WIREGUARD', wgActive, () => onSelect(ConnectMode.wireguard)),
+          const SizedBox(width: 4),
+          _seg('STEALTH', mode == ConnectMode.stealth, () => onSelect(ConnectMode.stealth)),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(String label, bool active, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? AppColors.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            label,
+            style: mono(
+              size: 12,
+              weight: FontWeight.w600,
+              color: active ? AppColors.onAccent : AppColors.textTertiary,
+              letterSpacing: 12 * 0.05,
             ),
-          );
-        }).toList(),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _NodeCard extends StatelessWidget {
-  const _NodeCard({required this.node, this.onTap});
+/// The 240×240 connect dial with offline / connecting / connected states.
+class ConnectDial extends StatefulWidget {
+  const ConnectDial({super.key, required this.stage, required this.durationLabel, this.onTap});
+  final VpnStage stage;
+  final String durationLabel;
+  final VoidCallback? onTap;
+
+  @override
+  State<ConnectDial> createState() => _ConnectDialState();
+}
+
+class _ConnectDialState extends State<ConnectDial> with TickerProviderStateMixin {
+  late final AnimationController _spin =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
+  late final AnimationController _pulse =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat();
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  bool get _connecting => widget.stage == VpnStage.connecting || widget.stage == VpnStage.disconnecting;
+  bool get _connected => widget.stage == VpnStage.connected;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 240.0;
+    return GestureDetector(
+      onTap: widget.onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // base ring
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 1.5),
+              ),
+            ),
+            // connecting arc
+            if (_connecting)
+              AnimatedBuilder(
+                animation: _spin,
+                builder: (_, _) => Transform.rotate(
+                  angle: _spin.value * 2 * math.pi,
+                  child: CustomPaint(size: const Size(size, size), painter: _ArcRingPainter()),
+                ),
+              ),
+            // connected pulse rings + solid glow ring
+            if (_connected) ...[
+              _PulseRing(controller: _pulse, phase: 0.0),
+              _PulseRing(controller: _pulse, phase: 0.5),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.accent, width: 2),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.accent.withValues(alpha: 0.7), blurRadius: 50, spreadRadius: -6),
+                  ],
+                ),
+              ),
+            ],
+            // center disk
+            _CenterDisk(stage: widget.stage, durationLabel: widget.durationLabel),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CenterDisk extends StatelessWidget {
+  const _CenterDisk({required this.stage, required this.durationLabel});
+  final VpnStage stage;
+  final String durationLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final connected = stage == VpnStage.connected;
+    final connecting = stage == VpnStage.connecting || stage == VpnStage.disconnecting;
+
+    final gradient = connected
+        ? const RadialGradient(center: Alignment(0, -0.3), colors: [Color(0xFF2A1709), Color(0xFF140D08)])
+        : connecting
+            ? const RadialGradient(center: Alignment(0, -0.3), colors: [Color(0xFF1D150F), Color(0xFF0D0D11)])
+            : const RadialGradient(center: Alignment(0, -0.3), colors: [Color(0xFF18181E), Color(0xFF0D0D11)]);
+
+    Widget content;
+    if (connected) {
+      content = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.verified_user, size: 38, color: AppColors.accent),
+          const SizedBox(height: 4),
+          Text(durationLabel, style: mono(size: 25, weight: FontWeight.w600, color: AppColors.textPrimary, letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text('PROTECTED', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 11 * 0.12)),
+        ],
+      );
+    } else if (connecting) {
+      content = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.power_settings_new, size: 40, color: AppColors.accent),
+          const SizedBox(height: 9),
+          Text('SECURING…', style: mono(size: 12, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 12 * 0.05)),
+        ],
+      );
+    } else {
+      content = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.power_settings_new, size: 40, color: AppColors.textDim),
+          const SizedBox(height: 9),
+          Text('TAP TO CONNECT', style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary, letterSpacing: 12 * 0.05)),
+        ],
+      );
+    }
+
+    return Container(
+      width: 172,
+      height: 172,
+      decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
+      child: content,
+    );
+  }
+}
+
+class _PulseRing extends StatelessWidget {
+  const _PulseRing({required this.controller, required this.phase});
+  final AnimationController controller;
+  final double phase;
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, _) {
+        final t = (controller.value + phase) % 1.0;
+        final scale = 0.8 + (1.75 - 0.8) * t;
+        final opacity = t < 0.8 ? 0.55 * (1 - t / 0.8) : 0.0;
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.accent.withValues(alpha: opacity), width: 2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ArcRingPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.width / 2 - 1.5;
+    // top arc, bright
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2 - 0.5,
+      1.0,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..color = AppColors.accent,
+    );
+    // right arc, dim
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0.2,
+      0.9,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..color = AppColors.accent.withValues(alpha: 0.4),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _DataReadout extends StatelessWidget {
+  const _DataReadout({required this.stats, required this.connected});
+  final VpnStats stats;
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: AppColors.strokeSoft),
+          bottom: BorderSide(color: AppColors.strokeSoft),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _col('↓ DOWNLOAD', connected ? fmtData(stats.rxBytes) : '0 KB')),
+          Container(width: 1, height: 34, color: AppColors.strokeSoft),
+          Expanded(child: _col('↑ UPLOAD', connected ? fmtData(stats.txBytes) : '0 KB')),
+        ],
+      ),
+    );
+  }
+
+  Widget _col(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.08)),
+        const SizedBox(height: 3),
+        Text(value, style: mono(size: 15, weight: FontWeight.w600, color: AppColors.textPrimary)),
+      ],
+    );
+  }
+}
+
+class _ServerCard extends StatelessWidget {
+  const _ServerCard({required this.node, this.onTap});
   final VpnNode? node;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    final d = NodeDisplay.of(node);
+    return SurfaceCard(
       onTap: onTap,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Container(
-            height: 44,
-            width: 44,
-            decoration: BoxDecoration(
-              gradient: AppGradients.aurora,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: const Icon(Icons.public, color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: AppSpace.md),
+          Text(d.flag, style: const TextStyle(fontSize: 26, height: 1)),
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(node?.name ?? 'Choose a server',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: AppColors.textPrimary)),
-                const SizedBox(height: 2),
-                Text(
-                  node == null
-                      ? 'Smart pick by latency'
-                      : '${node!.region}  ·  ${node!.supportsStealth ? "Stealth ready" : "WireGuard"}',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                Text(d.name, style: mono(size: 14, weight: FontWeight.w600, color: AppColors.textPrimary)),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(d.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(width: 5, height: 5, decoration: BoxDecoration(color: d.networkColor, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(d.network, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                  ],
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppColors.textMuted),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsBar extends StatelessWidget {
-  const _StatsBar({required this.stats, required this.connected});
-  final VpnStats stats;
-  final bool connected;
-
-  String _rate(int bps) {
-    if (!connected) return '—';
-    if (bps >= 1000000) return '${(bps / 1000000).toStringAsFixed(1)} MB/s';
-    if (bps >= 1000) return '${(bps / 1000).toStringAsFixed(0)} KB/s';
-    return '$bps B/s';
-  }
-
-  String _total(int bytes) {
-    if (!connected) return '—';
-    if (bytes >= 1000000000) return '${(bytes / 1000000000).toStringAsFixed(2)} GB';
-    if (bytes >= 1000000) return '${(bytes / 1000000).toStringAsFixed(1)} MB';
-    if (bytes >= 1000) return '${(bytes / 1000).toStringAsFixed(0)} KB';
-    return '$bytes B';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl, vertical: AppSpace.lg),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          StatTile(label: 'Download', value: _rate(stats.downlinkBps), icon: Icons.south_rounded, color: AppColors.connected),
-          StatTile(label: 'Upload', value: _rate(stats.uplinkBps), icon: Icons.north_rounded, color: AppColors.cyan),
-          StatTile(label: 'Session', value: _total(stats.rxBytes + stats.txBytes), icon: Icons.data_usage_rounded),
-        ],
-      ),
-    );
-  }
-}
-
-/// A soft aurora glow behind the orb.
-class _AuroraBackdrop extends StatelessWidget {
-  const _AuroraBackdrop();
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: DecoratedBox(
-        decoration: const BoxDecoration(color: AppColors.bg),
-        child: Align(
-          alignment: const Alignment(0, -0.35),
-          child: Container(
-            width: 360,
-            height: 360,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [
-                AppColors.indigo.withValues(alpha: 0.25),
-                AppColors.bg.withValues(alpha: 0.0),
-              ]),
-            ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(d.loadLabel, style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor)),
+              const SizedBox(height: 2),
+              Text('CHANGE ›', style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted)),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }

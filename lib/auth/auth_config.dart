@@ -8,6 +8,12 @@ const kSolanaChain = 'sol';
 const kErebrusSiteUrl = 'https://erebrus.io/';
 const kErebrusSiteIcon = 'https://erebrus.io/favicon.ico';
 
+/// Mobile Wallet Adapter requires the identity icon to be a **relative** path
+/// (relative to the identity URI) — wallets reject an absolute icon URL and the
+/// authorization fails. Reown/WalletConnect, by contrast, wants the absolute
+/// [kErebrusSiteIcon]. Keep these separate.
+const kErebrusMwaIconRelative = 'favicon.ico';
+
 /// Native deep link — wallets return here after connect/sign (`erebrusvpn://…`).
 const kErebrusNativeRedirect = 'erebrusvpn://';
 

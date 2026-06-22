@@ -5,15 +5,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// WG client keys are still generated as Curve25519 (x25519) via libbox
 /// `genWgKeys` in `SingboxEngine.generateWireGuardKeyPair`.
 ///
-/// AES-GCM here only wraps the Android Keystore blob that encrypts key-value
-/// entries on disk, avoiding the legacy RSA KeyStore path (code-7 warnings).
+/// Uses the plugin's default cipher (RSA-OAEP key wrapping + AES-GCM data), which
+/// is explicitly **non-biometric** — secrets read/write silently. We must NOT use
+/// the `AES_GCM_NoPadding` *key* cipher: on biometric-capable hardware (e.g. the
+/// Solana Seeker) that combo binds the KeyStore key to biometric auth, so every
+/// read pops a fingerprint prompt and fails with "Authentication canceled" during
+/// silent restore — which broke session/WG-key persistence and wallet sign-in.
 class ErebrusSecureStorage {
   const ErebrusSecureStorage._();
 
   static const FlutterSecureStorage instance = FlutterSecureStorage(
     aOptions: AndroidOptions(
-      keyCipherAlgorithm: KeyCipherAlgorithm.AES_GCM_NoPadding,
-      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
       resetOnError: true,
       migrateOnAlgorithmChange: true,
     ),

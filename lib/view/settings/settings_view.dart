@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../auth/wallet_auth_controller.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
@@ -8,82 +11,127 @@ import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'about_view.dart';
 
-/// Premium settings screen with persisted preferences.
+/// The settings tab — account, subscription, VPN & security, about, log out.
+/// All values are bound to the real controllers; the upgrade CTA is disabled
+/// (trial-only for now) per product.
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final auth = Get.find<WalletAuthController>();
     final settings = Get.find<AppSettingsController>();
     final vpn = Get.find<VpnController>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: Obx(
-        () => ListView(
-          padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 26),
           children: [
-            const SectionLabel('Connection'),
-            const SizedBox(height: AppSpace.md),
-            GlassCard(
-              padding: const EdgeInsets.all(AppSpace.sm),
-              child: Column(
-                children: [
-                  _SettingRow(
-                    icon: Icons.shield_moon_outlined,
+            Text('Settings', style: grotesk(size: 24, weight: FontWeight.w600, letterSpacing: -0.48)),
+            const SizedBox(height: 18),
+
+            // profile
+            Obx(() => _ProfileCard(walletAddress: auth.walletAddress.value, authMethod: auth.authMethod.value)),
+            const SizedBox(height: 14),
+
+            // subscription
+            _SubscriptionCard(auth: auth),
+            const SizedBox(height: 22),
+
+            // account
+            const SectionLabel('ACCOUNT'),
+            const SizedBox(height: 9),
+            Obx(() => _GroupCard(children: [
+                  _EmailRow(auth: auth),
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Wallet',
+                    subtitle: _walletSubtitle(auth.walletAddress.value),
+                    subtitleMono: true,
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                  ),
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.edit_outlined,
+                    title: 'Edit profile',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                  ),
+                ])),
+            const SizedBox(height: 18),
+
+            // vpn & security
+            const SectionLabel('VPN & SECURITY'),
+            const SizedBox(height: 9),
+            Obx(() => _GroupCard(children: [
+                  _GroupRow(
+                    icon: Icons.shield_outlined,
                     title: 'Default protocol',
-                    trailing: Text(
-                      settings.defaultProtocol.value.label,
-                      style: const TextStyle(color: AppColors.cyan, fontWeight: FontWeight.w700),
-                    ),
                     onTap: () => _pickProtocol(context, settings, vpn),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(settings.defaultProtocol.value.name.toUpperCase(),
+                            style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary)),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                      ],
+                    ),
                   ),
-                  const _Divider(),
-                  _SwitchRow(
-                    icon: Icons.flash_on_outlined,
-                    title: 'Auto-connect on launch',
-                    subtitle: 'Connect after sign-in when entitled',
-                    value: settings.autoConnectOnLaunch.value,
-                    onChanged: settings.setAutoConnect,
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.power_settings_new,
+                    title: 'Auto-connect',
+                    trailing: EreToggle(value: settings.autoConnectOnLaunch.value, onChanged: settings.setAutoConnect),
                   ),
-                  const _Divider(),
-                  _SwitchRow(
-                    icon: Icons.block_outlined,
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.lock_outline,
                     title: 'Kill switch',
-                    subtitle: settings.killSwitchEnabled.value
-                        ? 'Blocks traffic if the tunnel drops'
-                        : 'Traffic may leak if the tunnel drops',
-                    value: settings.killSwitchEnabled.value,
-                    onChanged: settings.setKillSwitch,
+                    trailing: EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch),
                   ),
-                ],
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.alt_route,
+                    title: 'Split tunneling',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                  ),
+                ])),
+            const SizedBox(height: 18),
+
+            // about
+            const SectionLabel('ABOUT'),
+            const SizedBox(height: 9),
+            _GroupCard(children: [
+              _GroupRow(
+                title: 'Version',
+                trailing: const _VersionLabel(),
               ),
-            ),
-            const SizedBox(height: AppSpace.xl),
-            const SectionLabel('Privacy'),
-            const SizedBox(height: AppSpace.md),
-            GlassCard(
-              padding: const EdgeInsets.all(AppSpace.sm),
-              child: _SwitchRow(
-                icon: Icons.insights_outlined,
-                title: 'Anonymous diagnostics',
-                subtitle: settings.anonymousDiagnostics.value
-                    ? (settings.diagnosticsStatus.value ?? 'Mock health beacons enabled')
-                    : 'Off by default — no logs sent',
-                value: settings.anonymousDiagnostics.value,
-                onChanged: settings.setAnonymousDiagnostics,
-              ),
-            ),
-            const SizedBox(height: AppSpace.xl),
-            const SectionLabel('About'),
-            const SizedBox(height: AppSpace.md),
-            GlassCard(
-              padding: const EdgeInsets.all(AppSpace.sm),
-              child: _SettingRow(
-                icon: Icons.info_outline,
-                title: 'About Erebrus',
-                subtitle: 'Version, ethos, privacy & terms',
+              _RowDivider(),
+              _GroupRow(
+                title: 'Help & support',
                 onTap: () => Get.to(() => const AboutView()),
+                trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+              ),
+            ]),
+            const SizedBox(height: 22),
+
+            // log out
+            GestureDetector(
+              onTap: auth.signOut,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.danger.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                ),
+                child: Text('Log out', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.danger)),
               ),
             ),
           ],
@@ -92,32 +140,37 @@ class SettingsView extends StatelessWidget {
     );
   }
 
+  static String _walletSubtitle(String address) {
+    if (address.isEmpty) return 'Not connected';
+    return 'Solana · ${_short(address)}';
+  }
+
+  static String _short(String a) =>
+      a.length < 10 ? a : '${a.substring(0, 4)}…${a.substring(a.length - 4)}';
+
   void _pickProtocol(BuildContext context, AppSettingsController settings, VpnController vpn) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.bgElevated,
+      backgroundColor: AppColors.raised,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
       ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: ConnectMode.values.map((m) {
-            return ListTile(
-              title: Text(
-                m.label,
-                style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(m.blurb, style: const TextStyle(color: AppColors.textMuted)),
-              trailing: settings.defaultProtocol.value == m
-                  ? const Icon(Icons.check, color: AppColors.connected)
-                  : null,
-              onTap: () {
-                settings.setDefaultProtocol(m);
-                vpn.setMode(m);
-                Navigator.pop(context);
-              },
-            );
+            return Obx(() => ListTile(
+                  title: Text(m.label, style: grotesk(size: 15, weight: FontWeight.w600)),
+                  subtitle: Text(m.blurb, style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted)),
+                  trailing: settings.defaultProtocol.value == m
+                      ? const Icon(Icons.check, color: AppColors.accent)
+                      : null,
+                  onTap: () {
+                    settings.setDefaultProtocol(m);
+                    vpn.setMode(m);
+                    Navigator.pop(context);
+                  },
+                ));
           }).toList(),
         ),
       ),
@@ -125,70 +178,294 @@ class SettingsView extends StatelessWidget {
   }
 }
 
-class _SettingRow extends StatelessWidget {
-  const _SettingRow({
-    required this.icon,
+class _ProfileCard extends StatefulWidget {
+  const _ProfileCard({required this.walletAddress, required this.authMethod});
+  final String walletAddress;
+  final String authMethod;
+  @override
+  State<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends State<_ProfileCard> {
+  bool _copied = false;
+
+  String get _short {
+    final a = widget.walletAddress;
+    if (a.isEmpty) return 'Not connected';
+    return a.length < 10 ? a : '${a.substring(0, 4)}…${a.substring(a.length - 4)}';
+  }
+
+  String get _initials {
+    final a = widget.walletAddress;
+    if (a.length < 2) return 'ER';
+    return a.substring(0, 2);
+  }
+
+  void _copy() {
+    if (widget.walletAddress.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: widget.walletAddress));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(14)),
+            child: Text(_initials, style: mono(size: 16, weight: FontWeight.w600, color: AppColors.onAccent)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_short, style: grotesk(size: 16, weight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(widget.authMethod.isEmpty ? 'Solana wallet' : 'Signed in · ${widget.authMethod}',
+                    style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _copy,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+              child: Icon(_copied ? Icons.check : Icons.copy_outlined,
+                  size: 16, color: _copied ? AppColors.success : AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubscriptionCard extends StatelessWidget {
+  const _SubscriptionCard({required this.auth});
+  final WalletAuthController auth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() => _buildCard(context));
+  }
+
+  Widget _buildCard(BuildContext context) {
+    final ent = auth.entitlement.value;
+    final entitled = ent.entitled;
+    final source = ent.source;
+    final days = ent.daysRemaining;
+    final busy = auth.isLoadingEntitlement.value || auth.isStartingTrial.value;
+
+    final badge = switch (source) {
+      'trial' => 'TRIAL',
+      'nft' => 'NFT',
+      'crypto' => 'PRO',
+      'admin' => 'ADMIN',
+      _ => entitled ? 'ACTIVE' : 'FREE',
+    };
+    final title = entitled ? 'Erebrus Pro' : 'Erebrus Free';
+    final sub = busy
+        ? 'Checking subscription…'
+        : entitled
+            ? (days != null ? '$days of 14 days remaining' : 'Active')
+            : 'Start a free 14-day trial to connect';
+    final progress = entitled && days != null ? (days / 14).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.accent.withValues(alpha: 0.14), AppColors.accent.withValues(alpha: 0.04)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(title, style: grotesk(size: 15, weight: FontWeight.w600)),
+              const Spacer(),
+              MonoChip(label: badge, color: AppColors.accent, background: AppColors.accent.withValues(alpha: 0.16)),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(sub, style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textSecondary)),
+          if (entitled) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.1),
+                valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _DisabledButton(label: 'UPGRADE · COMING SOON'),
+          ] else ...[
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: busy ? null : auth.startFreeTrial,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(11)),
+                child: Text(busy ? 'STARTING…' : 'START FREE TRIAL',
+                    style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+              ),
+            ),
+          ],
+          if (auth.entitlementError.value != null && auth.entitlementError.value!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(auth.entitlementError.value!, style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.danger)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DisabledButton extends StatelessWidget {
+  const _DisabledButton({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(11)),
+      child: Text(label, style: mono(size: 13, weight: FontWeight.w600, color: AppColors.textMuted, letterSpacing: 13 * 0.05)),
+    );
+  }
+}
+
+class _GroupCard extends StatelessWidget {
+  const _GroupCard({required this.children});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) {
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      clip: true,
+      child: Column(children: children),
+    );
+  }
+}
+
+class _RowDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(height: 1, color: AppColors.strokeSoft);
+}
+
+class _GroupRow extends StatelessWidget {
+  const _GroupRow({
+    this.icon,
     required this.title,
     this.subtitle,
+    this.subtitleMono = false,
     this.trailing,
     this.onTap,
   });
-  final IconData icon;
+  final IconData? icon;
   final String title;
   final String? subtitle;
+  final bool subtitleMono;
   final Widget? trailing;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      leading: Icon(icon, color: AppColors.textSecondary, size: 22),
-      title: Text(
-        title,
-        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+        child: Row(
+          children: [
+            if (icon != null) ...[Icon(icon, size: 20, color: AppColors.textSecondary), const SizedBox(width: 13)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: grotesk(size: 14.5, weight: FontWeight.w500)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!,
+                        style: subtitleMono
+                            ? mono(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)
+                            : grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)),
+                  ],
+                ],
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
       ),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
-      trailing: trailing ?? (onTap != null ? const Icon(Icons.chevron_right, color: AppColors.textMuted) : null),
     );
   }
 }
 
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
+class _EmailRow extends StatelessWidget {
+  const _EmailRow({required this.auth});
+  final WalletAuthController auth;
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.textSecondary, size: 22),
-      title: Text(
-        title,
-        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+    // The app does not yet track a linked recovery email; offer to connect one
+    // through the existing sign-in/social flow.
+    return Obx(() => _row());
+  }
+
+  Widget _row() {
+    final linked = auth.authMethod.value.toLowerCase().contains('email');
+    return _GroupRow(
+      icon: Icons.mail_outline,
+      title: 'Email',
+      subtitle: linked ? 'Recovery email linked' : 'Add a recovery email',
+      trailing: GestureDetector(
+        onTap: linked ? null : auth.openSignIn,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: (linked ? AppColors.success : AppColors.accent).withValues(alpha: linked ? 0.14 : 0.16),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(linked ? 'LINKED' : 'CONNECT',
+              style: mono(size: 11, weight: FontWeight.w500, color: linked ? AppColors.success : AppColors.accent, letterSpacing: 11 * 0.06)),
+        ),
       ),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
-      trailing: Switch(value: value, onChanged: onChanged, activeThumbColor: AppColors.connected),
     );
   }
 }
 
-class _Divider extends StatelessWidget {
-  const _Divider();
+class _VersionLabel extends StatelessWidget {
+  const _VersionLabel();
   @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: AppColors.stroke, indent: AppSpace.lg, endIndent: AppSpace.lg);
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (_, snap) {
+        final v = snap.data?.version ?? '1.0.0';
+        return Text('$v · agentic', style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textMuted));
+      },
+    );
+  }
 }

@@ -12,11 +12,15 @@ class AppSettingsController extends GetxController {
   static const _kAutoConnect = 'settings.auto_connect';
   static const _kKillSwitch = 'settings.kill_switch';
   static const _kDiagnostics = 'settings.anonymous_diagnostics';
+  static const _kOnboardingSeen = 'settings.onboarding_seen';
 
   final defaultProtocol = ConnectMode.auto.obs;
   final autoConnectOnLaunch = false.obs;
   final killSwitchEnabled = true.obs;
   final anonymousDiagnostics = false.obs;
+
+  /// Whether first-launch onboarding has been completed (persisted).
+  final onboardingSeen = false.obs;
 
   final diagnosticsStatus = RxnString();
 
@@ -32,6 +36,7 @@ class AppSettingsController extends GetxController {
     autoConnectOnLaunch.value = prefs.getBool(_kAutoConnect) ?? false;
     killSwitchEnabled.value = prefs.getBool(_kKillSwitch) ?? true;
     anonymousDiagnostics.value = prefs.getBool(_kDiagnostics) ?? false;
+    onboardingSeen.value = prefs.getBool(_kOnboardingSeen) ?? false;
 
     if (Get.isRegistered<VpnController>()) {
       Get.find<VpnController>().setMode(defaultProtocol.value);
@@ -46,6 +51,13 @@ class AppSettingsController extends GetxController {
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kDefaultProtocol, mode.name);
+  }
+
+  Future<void> markOnboardingSeen() async {
+    if (onboardingSeen.value) return;
+    onboardingSeen.value = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kOnboardingSeen, true);
   }
 
   Future<void> setAutoConnect(bool value) async {
