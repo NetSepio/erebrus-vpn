@@ -36,38 +36,45 @@ class ConnectView extends StatelessWidget {
                 children: [
                   const _TopBar(),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Obx(() {
-                          final authed = auth?.isAuthenticated ?? false;
-                          final entitled = auth?.isEntitled ?? false;
-                          return ConnectOrb(
-                            stage: c.stage.value,
-                            transport: c.activeTransport.value,
-                            onTap: c.isBusy
-                                ? null
-                                : () {
-                                    if (auth != null && !authed) {
-                                      c.error.value = PlatformCapabilities.isDesktop
-                                          ? 'Sign in from Account first'
-                                          : 'Connect your Solana wallet in Account first';
-                                      onRequireAuth?.call();
-                                      return;
-                                    }
-                                    if (auth != null && !entitled) {
-                                      c.error.value =
-                                          'Start a free trial in Account to connect';
-                                      onRequireAuth?.call();
-                                      return;
-                                    }
-                                    c.toggle();
-                                  },
-                          );
-                        }),
-                        const SizedBox(height: AppSpace.xl),
-                        Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
-                      ],
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Orb (232) + gap + status must fit in the flex slot on short screens.
+                        final orbSize = (constraints.maxHeight - 72).clamp(148.0, 232.0);
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Obx(() {
+                              final authed = auth?.isAuthenticated ?? false;
+                              final entitled = auth?.isEntitled ?? false;
+                              return ConnectOrb(
+                                size: orbSize,
+                                stage: c.stage.value,
+                                transport: c.activeTransport.value,
+                                onTap: c.isBusy
+                                    ? null
+                                    : () {
+                                        if (auth != null && !authed) {
+                                          c.error.value = PlatformCapabilities.isDesktop
+                                              ? 'Sign in from Account first'
+                                              : 'Connect your Solana wallet in Account first';
+                                          onRequireAuth?.call();
+                                          return;
+                                        }
+                                        if (auth != null && !entitled) {
+                                          c.error.value =
+                                              'Start a free trial in Account to connect';
+                                          onRequireAuth?.call();
+                                          return;
+                                        }
+                                        c.toggle();
+                                      },
+                              );
+                            }),
+                            SizedBox(height: orbSize < 200 ? AppSpace.md : AppSpace.xl),
+                            Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   Obx(() => _ModeSelector(selected: c.mode.value, onSelect: c.setMode, enabled: !c.isConnected)),
@@ -117,7 +124,14 @@ class _TopBar extends StatelessWidget {
 
 /// The big animated power orb. Pulses while connecting, glows while protected.
 class ConnectOrb extends StatefulWidget {
-  const ConnectOrb({super.key, required this.stage, required this.onTap, this.transport});
+  const ConnectOrb({
+    super.key,
+    this.size = 232,
+    required this.stage,
+    required this.onTap,
+    this.transport,
+  });
+  final double size;
   final VpnStage stage;
   final VoidCallback? onTap;
   final Transport? transport;
@@ -152,6 +166,9 @@ class _ConnectOrbState extends State<ConnectOrb> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final busy = widget.stage == VpnStage.connecting || widget.stage == VpnStage.disconnecting;
+    final s = widget.size;
+    final iconSize = s * 0.33;
+    final spinnerSize = s * 0.21;
     return GestureDetector(
       onTap: widget.onTap,
       child: AnimatedBuilder(
@@ -159,12 +176,16 @@ class _ConnectOrbState extends State<ConnectOrb> with SingleTickerProviderStateM
         builder: (context, child) {
           final t = busy ? _ctrl.value : (widget.stage == VpnStage.connected ? 0.6 + _ctrl.value * 0.4 : 0.5);
           return Container(
-            width: 232,
-            height: 232,
+            width: s,
+            height: s,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(color: _glow.withValues(alpha: 0.10 + t * 0.30), blurRadius: 60 + t * 50, spreadRadius: 4 + t * 16),
+                BoxShadow(
+                  color: _glow.withValues(alpha: 0.10 + t * 0.30),
+                  blurRadius: s * 0.26 + t * s * 0.22,
+                  spreadRadius: 4 + t * s * 0.07,
+                ),
               ],
             ),
             child: child,
@@ -172,15 +193,21 @@ class _ConnectOrbState extends State<ConnectOrb> with SingleTickerProviderStateM
         },
         child: Container(
           decoration: BoxDecoration(shape: BoxShape.circle, gradient: _gradient),
-          padding: const EdgeInsets.all(4),
+          padding: EdgeInsets.all(s * 0.017),
           child: Container(
             decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.bgElevated),
             child: Center(
               child: busy
-                  ? const SizedBox(
-                      width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
-                  : Icon(Icons.power_settings_new_rounded,
-                      size: 76, color: widget.stage == VpnStage.connected ? AppColors.connected : Colors.white),
+                  ? SizedBox(
+                      width: spinnerSize,
+                      height: spinnerSize,
+                      child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                    )
+                  : Icon(
+                      Icons.power_settings_new_rounded,
+                      size: iconSize,
+                      color: widget.stage == VpnStage.connected ? AppColors.connected : Colors.white,
+                    ),
             ),
           ),
         ),

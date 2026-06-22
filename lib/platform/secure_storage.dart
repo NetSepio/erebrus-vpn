@@ -1,8 +1,12 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// App-wide secure storage. Uses AES-GCM key wrapping on Android so we never
-/// touch the legacy RSA KeyStore path (avoids KeyStore code-7 warnings on
-/// reinstall / OEM builds). Existing RSA-encrypted data is migrated once.
+/// Encrypts **persisted app secrets at rest** (gateway session token, stored WG
+/// private key string, etc.). This is unrelated to WireGuard cryptography —
+/// WG client keys are still generated as Curve25519 (x25519) via libbox
+/// `genWgKeys` in `SingboxEngine.generateWireGuardKeyPair`.
+///
+/// AES-GCM here only wraps the Android Keystore blob that encrypts key-value
+/// entries on disk, avoiding the legacy RSA KeyStore path (code-7 warnings).
 class ErebrusSecureStorage {
   const ErebrusSecureStorage._();
 
