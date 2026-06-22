@@ -63,6 +63,9 @@ class SingboxEngine {
       ? _desktop.onStats
       : _statsChannel.receiveBroadcastStream().map((e) => VpnStats.fromMap((e as Map?) ?? const {}));
 
+  /// Desktop-only hint when [prepare] returns false (e.g. missing sing-box CLI).
+  String? get desktopPrepareError => _useDesktopRunner ? _desktop.lastError : null;
+
   Future<bool> prepare() async {
     if (_useDesktopRunner) return _desktop.prepare();
     try {

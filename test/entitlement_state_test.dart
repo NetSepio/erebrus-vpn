@@ -11,7 +11,20 @@ void main() {
     expect(ent.entitled, isFalse);
     expect(ent.status, 'none');
     expect(ent.nftGatingEnabled, isTrue);
+    expect(ent.trialConsumed, isFalse);
     expect(ent.planLabel, 'Free');
+  });
+
+  test('EntitlementState.fromJson parses expired trial', () {
+    final ent = EntitlementState.fromJson({
+      'status': 'expired',
+      'entitled': false,
+      'source': 'trial',
+      'trial_consumed': true,
+    });
+    expect(ent.trialConsumed, isTrue);
+    expect(ent.entitled, isFalse);
+    expect(ent.status, 'expired');
   });
 
   test('EntitlementState.fromJson parses active trial', () {

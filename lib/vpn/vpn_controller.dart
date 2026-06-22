@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
+import '../platform/desktop_prefs_storage.dart';
+import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 import '../settings/app_settings_controller.dart';
 import 'gateway_client.dart';
 import 'gateway_controller.dart';
 import 'gateway_errors.dart';
 import 'egress_ip_probe.dart';
+import 'singbox_desktop_runner.dart';
 import 'singbox_engine.dart';
 import 'vpn_models.dart';
 import 'vpn_session_store.dart';
@@ -212,7 +216,10 @@ class VpnController extends GetxController {
 
     try {
       if (!await _engine.prepare()) {
-        error.value = 'VPN permission denied';
+        error.value = _engine.desktopPrepareError ??
+            (PlatformCapabilities.isDesktop
+                ? 'sing-box missing — run ./scripts/fetch-singbox-cli.sh macos from the repo root'
+                : 'VPN permission denied');
         stage.value = VpnStage.error;
         return;
       }
@@ -238,7 +245,14 @@ class VpnController extends GetxController {
       for (final t in candidates) {
         try {
           final config = SingboxConfigBuilder.build(
-            bundle: bundle, transport: t, clientPrivateKey: keys.private);
+            bundle: bundle,
+            transport: t,
+            clientPrivateKey: keys.private,
+            // Desktop CLI: local mixed proxy + system HTTP/SOCKS (no TUN). TUN on
+            // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
+            // egress probe (explicit 127.0.0.1:10808) works.
+            useSystemTunnel: !PlatformCapabilities.isDesktop,
+          );
           activeTransport.value = t;
           final srv = bundle.serverPublicKey;
           final srvShort = srv.length > 8 ? '${srv.substring(0, 8)}…' : srv;
@@ -271,7 +285,9 @@ class VpnController extends GetxController {
         await _engine.stop().catchError((_) {});
       }
       _wasConnected = false;
-      error.value = 'Could not connect on this network — try Stealth mode or another server';
+      error.value = _engine.desktopPrepareError ??
+          SingboxDesktopRunner.instance.lastError ??
+          'Could not connect — run ./scripts/setup-macos-dev.sh, then try Stealth or another server';
       stage.value = VpnStage.error;
     } on GatewayException catch (e) {
       _wasConnected = false;
@@ -402,15 +418,29 @@ class VpnController extends GetxController {
   }
 
   Future<({String private, String public})> _ensureWgKeys() async {
-    final priv = await _storage.read(key: _kWgPrivate);
-    final pub = await _storage.read(key: _kWgPublic);
+    final priv = await _readStoredSecret(_kWgPrivate);
+    final pub = await _readStoredSecret(_kWgPublic);
     if (priv != null && priv.isNotEmpty && pub != null && pub.isNotEmpty) {
       return (private: priv, public: pub);
     }
     final keys = await _engine.generateWireGuardKeyPair();
-    await _storage.write(key: _kWgPrivate, value: keys.private);
-    await _storage.write(key: _kWgPublic, value: keys.public);
+    await _writeStoredSecret(_kWgPrivate, keys.private);
+    await _writeStoredSecret(_kWgPublic, keys.public);
     return keys;
+  }
+
+  Future<String?> _readStoredSecret(String key) {
+    if (PlatformCapabilities.isDesktop) {
+      return DesktopPrefsStorage.read(key);
+    }
+    return _storage.read(key: key);
+  }
+
+  Future<void> _writeStoredSecret(String key, String value) {
+    if (PlatformCapabilities.isDesktop) {
+      return DesktopPrefsStorage.write(key, value);
+    }
+    return _storage.write(key: key, value: value);
   }
 
   String _clientName() {

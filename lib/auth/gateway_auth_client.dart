@@ -12,8 +12,8 @@ class GatewayAuthClient {
 
   final String _base;
 
-  /// Start wallet login — `GET /api/v2/auth` (replaces deprecated `/auth/flowid`).
-  Future<AuthChallenge> fetchFlowId({
+  /// Start wallet login — `GET /api/v2/auth`.
+  Future<AuthChallenge> fetchAuthChallenge({
     required String walletAddress,
     String chain = kSolanaChain,
   }) async {
@@ -25,21 +25,21 @@ class GatewayAuthClient {
     );
     final map = await _getJson(uri);
     return AuthChallenge(
-      flowId: (map['flow_id'] ?? '').toString(),
+      challengeId: (map['flow_id'] ?? '').toString(),
       message: (map['message'] ?? '').toString(),
     );
   }
 
-  /// Complete wallet login — `POST /api/v2/auth` (replaces `/auth/authenticate`).
+  /// Complete wallet login — `POST /api/v2/auth`.
   Future<AuthSession> authenticate({
-    required String flowId,
+    required String challengeId,
     required String signature,
     required String publicKey,
   }) async {
     final map = await _postJson(
       Uri.parse('$_base/api/v2/auth'),
       {
-        'flow_id': flowId,
+        'flow_id': challengeId,
         'signature': signature,
         'public_key': publicKey,
       },
@@ -143,8 +143,8 @@ class GatewayAuthClient {
 }
 
 class AuthChallenge {
-  const AuthChallenge({required this.flowId, required this.message});
-  final String flowId;
+  const AuthChallenge({required this.challengeId, required this.message});
+  final String challengeId;
   final String message;
 }
 

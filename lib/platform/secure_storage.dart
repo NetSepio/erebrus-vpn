@@ -19,5 +19,10 @@ class ErebrusSecureStorage {
       resetOnError: true,
       migrateOnAlgorithmChange: true,
     ),
+    // macOS Keychain requires keychain-access-groups in Runner entitlements.
+    // usesDataProtectionKeychain:false works for unsigned flutter run debug builds.
+    mOptions: MacOsOptions(
+      usesDataProtectionKeychain: false,
+    ),
   );
 }

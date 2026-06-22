@@ -28,7 +28,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   bool _autoConnectAttempted = false;
   Worker? _autoConnectWorker;
 
-  void _go(int i) => setState(() => _index = i);
+  void _go(int i) {
+    if (_index == i) return;
+    // Defer tab switch so in-flight scroll-end notifications don't hit Material
+    // on a tab that IndexedStack is about to deactivate (inactive element crash).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _index = i);
+    });
+  }
 
   @override
   void initState() {

@@ -1,3 +1,6 @@
+# Local Xcode signing (Team ID — copy from Signing.xcconfig.example)
+macos/Runner/Configs/Signing.xcconfig
+
 # Miscellaneous
 *.class
 *.log

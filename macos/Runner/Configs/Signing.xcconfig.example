@@ -1,0 +1,14 @@
+// Personal Apple Development signing (enables macOS Keychain for flutter_secure_storage).
+//
+// Setup:
+//   1. Xcode → Settings → Accounts → add your Apple ID (free account is fine)
+//   2. Copy this file:  cp Signing.xcconfig.example Signing.xcconfig
+//   3. Set DEVELOPMENT_TEAM to your 10-character Team ID (Accounts → Team → Details)
+//   4. flutter run -d macos
+//
+// Without Signing.xcconfig the app builds unsigned and uses SharedPreferences
+// for session persistence (desktop fallback in auth_session_store.dart).
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.Keychain.entitlements

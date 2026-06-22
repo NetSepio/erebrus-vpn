@@ -7,6 +7,7 @@ class EntitlementState {
     this.source,
     this.periodEnd,
     this.nftGatingEnabled = false,
+    this.trialConsumed = false,
   });
 
   final bool entitled;
@@ -16,6 +17,8 @@ class EntitlementState {
   final String? source;
   final DateTime? periodEnd;
   final bool nftGatingEnabled;
+  /// True when the wallet has already used its one-time v2 trial.
+  final bool trialConsumed;
 
   static const none = EntitlementState(entitled: false);
 
@@ -35,6 +38,7 @@ class EntitlementState {
       source: j['source']?.toString(),
       periodEnd: periodEnd,
       nftGatingEnabled: j['nft_gating'] == true,
+      trialConsumed: j['trial_consumed'] == true,
     );
   }
 

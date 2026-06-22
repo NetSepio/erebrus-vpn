@@ -51,7 +51,8 @@ class WalletAuthController extends GetxController {
   final isSolanaMobileDevice = false.obs;
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
-  bool get isEntitled => entitlement.value.entitled;
+  bool get isEntitled =>
+      entitlement.value.entitled || role.value == 'admin';
   bool get usesReown => PlatformCapabilities.usesReown;
   bool get usesWebLogin => PlatformCapabilities.usesWebLogin;
   String? get bearerToken => _token;
@@ -352,19 +353,20 @@ class WalletAuthController extends GetxController {
     authError.value = null;
     try {
       // One MWA association: authorize → fetch the challenge → sign it.
-      var flowId = '';
+      var challengeId = '';
       final result = await mwaSignIn(
         storedAuthToken: _mwaAuthToken,
         challengeBuilder: (address, publicKey) async {
-          final challenge = await _authClient.fetchFlowId(walletAddress: address);
-          flowId = challenge.flowId;
+          final challenge =
+              await _authClient.fetchAuthChallenge(walletAddress: address);
+          challengeId = challenge.challengeId;
           return challenge.message;
         },
       );
       _mwaAuthToken = result.authToken;
 
       final session = await _authClient.authenticate(
-        flowId: flowId,
+        challengeId: challengeId,
         signature: result.signature,
         publicKey: result.address,
       );
@@ -393,7 +395,11 @@ class WalletAuthController extends GetxController {
     userId.value = '';
     role.value = '';
     authMethod.value = '';
-    await _store.clear();
+    try {
+      await _store.clear();
+    } catch (e) {
+      debugPrint('[Auth] signOut: secure storage clear failed (session cleared in memory): $e');
+    }
     if (appKitModal?.isConnected == true) {
       await appKitModal?.disconnect();
     }
@@ -412,7 +418,12 @@ class WalletAuthController extends GetxController {
     isLoadingEntitlement.value = true;
     entitlementError.value = null;
     try {
-      entitlement.value = await _authClient.fetchSubscription(token);
+      final ent = await _authClient.fetchSubscription(token);
+      entitlement.value = ent;
+      debugPrint(
+        '[Auth] entitlement entitled=${ent.entitled} status=${ent.status} '
+        'trialConsumed=${ent.trialConsumed} source=${ent.source}',
+      );
     } on AuthException catch (e) {
       entitlementError.value = e.message;
       entitlement.value = EntitlementState.none;
@@ -426,15 +437,21 @@ class WalletAuthController extends GetxController {
 
   Future<void> startFreeTrial() async {
     if (!isAuthenticated) {
-      entitlementError.value = 'Connect your Solana wallet first';
+      entitlementError.value = 'Sign in first to start a trial';
       return;
     }
     if (isEntitled) return;
+    if (entitlement.value.trialConsumed) {
+      entitlementError.value =
+          'Your free trial has ended. Use the same wallet on erebrus.io to renew, or hold the gating NFT.';
+      return;
+    }
 
     isStartingTrial.value = true;
     entitlementError.value = null;
     try {
-      entitlement.value = await _authClient.startTrial(_token!);
+      await _authClient.startTrial(_token!);
+      await refreshEntitlement();
     } on AuthException catch (e) {
       entitlementError.value = e.message;
     } catch (e) {
@@ -455,14 +472,18 @@ class WalletAuthController extends GetxController {
     role.value = session.role;
     authMethod.value = method;
     if (mwaToken != null) _mwaAuthToken = mwaToken;
-    await _store.write(
-      token: session.token,
-      walletAddress: session.walletAddress,
-      userId: session.userId,
-      role: session.role,
-      authMethod: method,
-      mwaAuthToken: mwaToken ?? _mwaAuthToken,
-    );
+    try {
+      await _store.write(
+        token: session.token,
+        walletAddress: session.walletAddress,
+        userId: session.userId,
+        role: session.role,
+        authMethod: method,
+        mwaAuthToken: mwaToken ?? _mwaAuthToken,
+      );
+    } catch (e) {
+      debugPrint('[Auth] session persist failed (in-memory session active): $e');
+    }
     _syncGatewayToken();
   }
 
@@ -501,10 +522,11 @@ class WalletAuthController extends GetxController {
     isAuthenticating.value = true;
     authError.value = null;
     try {
-      final challenge = await _authClient.fetchFlowId(walletAddress: address);
+      final challenge =
+          await _authClient.fetchAuthChallenge(walletAddress: address);
       final signature = await _signChallenge(modal, address, challenge.message);
       final session = await _authClient.authenticate(
-        flowId: challenge.flowId,
+        challengeId: challenge.challengeId,
         signature: signature,
         publicKey: address,
       );

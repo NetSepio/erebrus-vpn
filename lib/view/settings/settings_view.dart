@@ -28,6 +28,8 @@ class SettingsView extends StatelessWidget {
       body: SafeArea(
         bottom: false,
         child: ListView(
+          // Avoid Material ink handling scroll notifications after tab deactivation.
+          physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 26),
           children: [
             Text('Settings', style: grotesk(size: 24, weight: FontWeight.w600, letterSpacing: -0.48)),
@@ -279,7 +281,9 @@ class _SubscriptionCard extends StatelessWidget {
         ? 'Checking subscription…'
         : entitled
             ? (days != null ? '$days of 14 days remaining' : 'Active')
-            : 'Start a free 14-day trial to connect';
+            : ent.trialConsumed
+                ? 'Trial ended — renew on erebrus.io with this wallet'
+                : 'Start a free 14-day trial to connect';
     final progress = entitled && days != null ? (days / 14).clamp(0.0, 1.0) : 0.0;
 
     return Container(
@@ -318,7 +322,7 @@ class _SubscriptionCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _DisabledButton(label: 'UPGRADE · COMING SOON'),
-          ] else ...[
+          ] else if (!ent.trialConsumed) ...[
             const SizedBox(height: 14),
             GestureDetector(
               onTap: busy ? null : auth.startFreeTrial,

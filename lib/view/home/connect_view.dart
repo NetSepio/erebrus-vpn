@@ -83,10 +83,14 @@ class _ConnectViewState extends State<ConnectView> {
   void _onDialTap() {
     final auth = _auth;
     if (auth != null && !auth.isEntitled) {
-      _c.error.value = 'Start your free trial in Settings to connect';
+      final ent = auth.entitlement.value;
+      _c.error.value = ent.trialConsumed
+          ? 'Trial ended — renew on erebrus.io with the same wallet'
+          : 'Start your free trial in Settings to connect';
       widget.onGoSettings?.call();
       return;
     }
+    _c.error.value = null;
     _c.toggle();
   }
 
@@ -135,10 +139,27 @@ class _ConnectViewState extends State<ConnectView> {
                   child: Obx(() {
                     final stage = _c.stage.value;
                     final blocking = _c.killSwitchBlocking.value;
-                    return ConnectDial(
-                      stage: blocking ? VpnStage.error : stage,
-                      durationLabel: _fmtDur(_elapsed),
-                      onTap: _c.isBusy ? null : _onDialTap,
+                    final err = _c.error.value;
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ConnectDial(
+                          stage: blocking ? VpnStage.error : stage,
+                          durationLabel: _fmtDur(_elapsed),
+                          onTap: _c.isBusy ? null : _onDialTap,
+                        ),
+                        if (err != null && err.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              err,
+                              textAlign: TextAlign.center,
+                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
+                            ),
+                          ),
+                        ],
+                      ],
                     );
                   }),
                 ),
@@ -569,7 +590,9 @@ class _ServerCard extends StatelessWidget {
                   Text(
                     egressLoading
                         ? 'Egress IP · checking…'
-                        : (egressIp != null ? 'Egress IP · $egressIp' : 'Egress IP · unavailable'),
+                        : (egressIp != null
+                            ? 'Egress IP · $egressIp'
+                            : 'Egress IP · unavailable (see Diagnostics)'),
                     style: mono(
                       size: 11,
                       weight: FontWeight.w500,

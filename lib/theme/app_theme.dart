@@ -200,7 +200,10 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.bg,
       canvasColor: AppColors.bg,
-      splashColor: AppColors.accent.withValues(alpha: 0.10),
+      // Prevents Material ink from calling findRenderObject on deactivated
+      // scrollables during tab/route transitions (inactive element crash).
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,

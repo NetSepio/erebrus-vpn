@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../platform/desktop_prefs_storage.dart';
+import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 import 'vpn_models.dart';
 
@@ -21,7 +23,10 @@ class CredentialCache {
     required String wgPublicKey,
   }) async {
     try {
-      final raw = await _storage.read(key: _key(nodeId, wgPublicKey));
+      final cacheKey = _key(nodeId, wgPublicKey);
+      final raw = PlatformCapabilities.isDesktop
+          ? await DesktopPrefsStorage.read(cacheKey)
+          : await _storage.read(key: cacheKey);
       if (raw == null || raw.isEmpty) return null;
       return CredentialBundle.fromJson(
         jsonDecode(raw) as Map<String, dynamic>,
@@ -49,7 +54,12 @@ class CredentialCache {
         'hysteria2_uri': bundle.hysteria2Uri,
         'singbox_profile': bundle.singboxProfile,
       });
-      await _storage.write(key: _key(nodeId, wgPublicKey), value: json);
+      final cacheKey = _key(nodeId, wgPublicKey);
+      if (PlatformCapabilities.isDesktop) {
+        await DesktopPrefsStorage.write(cacheKey, json);
+      } else {
+        await _storage.write(key: cacheKey, value: json);
+      }
     } catch (e) {
       debugPrint('[VPN] credential cache write failed: $e');
     }

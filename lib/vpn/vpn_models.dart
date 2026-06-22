@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 /// User-facing connection modes shown in the UI.
 enum ConnectMode { auto, stealth, wireguard }
 
@@ -159,20 +161,33 @@ class SingboxConfigBuilder {
     required CredentialBundle bundle,
     required Transport transport,
     required String clientPrivateKey,
+    /// When false (desktop CLI / unsigned macOS), only the local mixed proxy
+    /// inbound is used — no TUN (avoids needing root). Pair with system HTTP proxy.
+    bool useSystemTunnel = true,
   }) {
     if (!bundle.hasWireGuard) {
       throw StateError('credential bundle is missing wireguard fields');
     }
     if (transport == Transport.wireguard) {
-      return _buildDirectWireGuard(bundle: bundle, clientPrivateKey: clientPrivateKey);
+      return _buildDirectWireGuard(
+        bundle: bundle,
+        clientPrivateKey: clientPrivateKey,
+        useSystemTunnel: useSystemTunnel,
+      );
     }
-    return _buildStealth(bundle: bundle, transport: transport, clientPrivateKey: clientPrivateKey);
+    return _buildStealth(
+      bundle: bundle,
+      transport: transport,
+      clientPrivateKey: clientPrivateKey,
+      useSystemTunnel: useSystemTunnel,
+    );
   }
 
   /// Direct UDP WireGuard — mirrors the gateway's `client_conf` / wg-quick layout.
   static Map<String, dynamic> _buildDirectWireGuard({
     required CredentialBundle bundle,
     required String clientPrivateKey,
+    bool useSystemTunnel = true,
   }) {
     final (host, port) = _splitHostPort(bundle.endpoint);
     final clientAddr =
@@ -181,14 +196,12 @@ class SingboxConfigBuilder {
 
     return _withClashApi({
       'log': {'level': 'info'},
-      'dns': {
-        'servers': [
-          {'tag': 'dns-remote', 'address': dnsServer, 'detour': wgEndpointTag},
-        ],
-        'final': 'dns-remote',
-        'strategy': 'prefer_ipv4',
-      },
-      'inbounds': _tunInbounds(),
+      'dns': _dnsConfig(
+        remoteServer: dnsServer,
+        wgTag: wgEndpointTag,
+        tunInbound: useSystemTunnel,
+      ),
+      'inbounds': _inbounds(includeTun: useSystemTunnel),
       'outbounds': [
         {'type': 'direct', 'tag': 'direct'},
       ],
@@ -219,6 +232,7 @@ class SingboxConfigBuilder {
     required CredentialBundle bundle,
     required Transport transport,
     required String clientPrivateKey,
+    bool useSystemTunnel = true,
   }) {
     final profile =
         jsonDecode(jsonEncode(bundle.singboxProfile)) as Map<String, dynamic>;
@@ -256,14 +270,12 @@ class SingboxConfigBuilder {
 
     return _withClashApi({
       'log': {'level': 'info'},
-      'dns': {
-        'servers': [
-          {'tag': 'dns-remote', 'address': dnsServer, 'detour': wgEndpointTag},
-        ],
-        'final': 'dns-remote',
-        'strategy': 'prefer_ipv4',
-      },
-      'inbounds': _tunInbounds(),
+      'dns': _dnsConfig(
+        remoteServer: dnsServer,
+        wgTag: wgEndpointTag,
+        tunInbound: useSystemTunnel,
+      ),
+      'inbounds': _inbounds(includeTun: useSystemTunnel),
       'endpoints': endpoints,
       'outbounds': profile['outbounds'] ?? [
         {'type': 'direct', 'tag': 'direct'},
@@ -275,24 +287,59 @@ class SingboxConfigBuilder {
     });
   }
 
-  static List<Map<String, dynamic>> _tunInbounds() => [
-        {
-          'type': 'tun',
-          'tag': 'tun-in',
-          'address': [tunAddress],
-          'auto_route': true,
-          'strict_route': true,
-          'stack': 'gvisor',
-          'sniff': true,
-        },
-        {
-          'type': 'mixed',
-          'tag': localMixedInboundTag,
-          'listen': localProxyHost,
-          'listen_port': localProxyPort,
-          'sniff': true,
-        },
-      ];
+  static bool get _isMacOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
+  static Map<String, dynamic> _dnsConfig({
+    required String remoteServer,
+    required String wgTag,
+    required bool tunInbound,
+  }) {
+    if (tunInbound && _isMacOS) {
+      return {
+        'servers': [
+          {'tag': 'dns-local', 'address': 'local'},
+          {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
+        ],
+        'rules': [
+          {'inbound': 'tun-in', 'server': 'dns-remote'},
+        ],
+        'final': 'dns-remote',
+        'strategy': 'prefer_ipv4',
+      };
+    }
+    return {
+      'servers': [
+        {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
+      ],
+      'final': 'dns-remote',
+      'strategy': 'prefer_ipv4',
+    };
+  }
+
+  static List<Map<String, dynamic>> _inbounds({required bool includeTun}) {
+    final inbounds = <Map<String, dynamic>>[];
+    if (includeTun) {
+      inbounds.add({
+        'type': 'tun',
+        'tag': 'tun-in',
+        'address': [tunAddress],
+        'auto_route': true,
+        // macOS CLI TUN: strict_route often breaks DNS for system browsers.
+        'strict_route': !_isMacOS,
+        'stack': _isMacOS ? 'system' : 'gvisor',
+        'sniff': true,
+      });
+    }
+    inbounds.add({
+      'type': 'mixed',
+      'tag': localMixedInboundTag,
+      'listen': localProxyHost,
+      'listen_port': localProxyPort,
+      'sniff': true,
+    });
+    return inbounds;
+  }
 
   /// Local/bypass rules that must run before [final]. Tunnel DNS capture comes
   /// first so queries to [tunDnsAddress] reach sing-box's DNS module locally.
