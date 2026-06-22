@@ -62,7 +62,7 @@ void main() {
     expect((cfg['route'] as Map)['auto_detect_interface'], isTrue);
     final rules = (cfg['route'] as Map)['rules'] as List;
     expect(rules.first['ip_cidr'], ['203.0.113.10/32']);
-    expect(rules.any((r) => (r as Map)['action'] == 'hijack-dns'), isTrue);
+    expect(rules.any((r) => (r as Map)['action'] == 'hijack-dns'), isTrue); // tunnel DNS capture
     expect(rules.any((r) => (r as Map)['ip_cidr'] == ['172.19.0.0/30']), isFalse);
     final inbounds = cfg['inbounds'] as List;
     expect(inbounds.any((i) => (i as Map)['type'] == 'mixed'), isTrue);
@@ -81,6 +81,6 @@ void main() {
     expect(peer['address'], '127.0.0.1'); // node de-wraps and forwards locally
     expect(cfg['route']['final'], 'wg-out');
     final rules = cfg['route']['rules'] as List;
-    expect(rules.any((r) => (r as Map)['action'] == 'hijack-dns'), isTrue);
+    expect(rules.any((r) => (r as Map)['action'] == 'hijack-dns'), isTrue); // tunnel DNS capture
   });
 }

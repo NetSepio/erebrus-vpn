@@ -129,7 +129,7 @@ class SingboxConfigBuilder {
   static const String carrierVlessTag = 'carrier-vless';
   static const String carrierHy2Tag = 'carrier-hysteria2';
 
-  /// sing-box TUN address; DNS hijack lands on [.tunDnsAddress] inside this /30.
+  /// sing-box TUN address. [tunDnsAddress] is the tunnel DNS resolver on-device.
   static const String tunAddress = '172.19.0.1/30';
   static const String tunDnsAddress = '172.19.0.2';
 
@@ -294,8 +294,9 @@ class SingboxConfigBuilder {
         },
       ];
 
-  /// Local/bypass rules that must run before [final]. DNS hijack comes first so
-  /// queries to [tunDnsAddress] are not caught by a broad CIDR → direct rule.
+  /// Local/bypass rules that must run before [final]. Tunnel DNS capture comes
+  /// first so queries to [tunDnsAddress] reach sing-box's DNS module locally.
+  /// (sing-box config action name: `hijack-dns`.)
   static List<Map<String, dynamic>> _localRouteRules({String? wgServerHost}) {
     final rules = <Map<String, dynamic>>[
       {'protocol': 'dns', 'action': 'hijack-dns'},

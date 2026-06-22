@@ -66,7 +66,7 @@ class _DiagnosticsSheet extends StatelessWidget {
                     _Row('Network', '${d.network} · ${d.location}', AppColors.textSecondary),
                     _Row('Throughput', '↓ ${fmtData(stats.rxBytes)}   ↑ ${fmtData(stats.txBytes)}', AppColors.textSecondary),
                     _Row('Rate', '↓ ${_rate(stats.downlinkBps)}  ↑ ${_rate(stats.uplinkBps)}', AppColors.textSecondary),
-                    const _Row('DNS', 'Encrypted (DoH)', AppColors.success),
+                    _Row('DNS', 'Tunnel DNS → ${vpn.selectedNode.value != null ? "node resolver" : "upstream"}', AppColors.success),
                     const _Row('MTU', '1280', AppColors.textSecondary),
                     _Row('Kill switch', (settings?.killSwitchEnabled.value ?? true) ? 'On' : 'Off',
                         (settings?.killSwitchEnabled.value ?? true) ? AppColors.success : AppColors.textSecondary),

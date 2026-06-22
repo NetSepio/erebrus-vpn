@@ -61,12 +61,25 @@ embed_singbox_windows() {
   echo "✓ embedded sing-box → ${dir}/sing-box.exe"
 }
 
+dart_define_args() {
+  if [[ -f "${ROOT_DIR}/.env" ]]; then
+    echo "--dart-define-from-file=${ROOT_DIR}/.env"
+  elif [[ -f "${ROOT_DIR}/env.json" ]]; then
+    echo "--dart-define-from-file=${ROOT_DIR}/env.json"
+  else
+    echo "⚠ .env missing — copy example.env to .env and set REOWN_PROJECT_ID" >&2
+  fi
+}
+
 build_one() {
   local p="$1"
+  local define_args
+  define_args="$(dart_define_args)"
   echo "▸ flutter pub get"
   flutter pub get
-  echo "▸ flutter build ${p} --release"
-  flutter build "${p}" --release
+  echo "▸ flutter build ${p} --release ${define_args}"
+  # shellcheck disable=SC2086
+  flutter build "${p}" --release ${define_args}
   case "${p}" in
     macos) embed_singbox_macos ;;
     linux) embed_singbox_linux ;;

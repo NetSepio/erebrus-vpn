@@ -36,7 +36,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         private const val EXTRA_NAME = "name"
         private const val NOTIF_CHANNEL = "erebrus_vpn"
         private const val NOTIF_ID = 0x5713
-        /** Must match SingboxConfigBuilder.tunDnsAddress in Dart (172.19.0.2). */
+        /** Tunnel DNS — must match SingboxConfigBuilder.tunDnsAddress in Dart. */
         private const val TUN_DNS = "172.19.0.2"
 
         /** True while libbox holds an open TUN — survives Flutter engine restarts. */
