@@ -69,6 +69,7 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
       AnimationController(vsync: this, duration: const Duration(seconds: 7))..repeat(reverse: true);
 
   bool get _isLast => _step == _kSteps.length - 1;
+  bool get _canGoBack => _step > 0;
 
   @override
   void dispose() {
@@ -83,6 +84,17 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
     } else {
       setState(() => _step++);
     }
+  }
+
+  void _back() {
+    if (!_canGoBack) return;
+    setState(() => _step--);
+  }
+
+  void _goToStep(int index) {
+    // Dots jump to current or earlier steps only — not ahead.
+    if (index < 0 || index >= _kSteps.length || index > _step) return;
+    setState(() => _step = index);
   }
 
   @override
@@ -106,7 +118,22 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
                 padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
                 child: Row(
                   children: [
-                    const BrandLockup(),
+                    if (_canGoBack)
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _back,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.arrow_back, size: 18, color: AppColors.textSecondary),
+                            const SizedBox(width: 6),
+                            Text('Back',
+                                style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      )
+                    else
+                      const BrandLockup(),
                     const Spacer(),
                     if (!_isLast)
                       GestureDetector(
@@ -199,13 +226,21 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
                         for (var i = 0; i < _kSteps.length; i++)
                           Padding(
                             padding: const EdgeInsets.only(right: 7),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              height: 6,
-                              width: i == _step ? 22 : 6,
-                              decoration: BoxDecoration(
-                                color: i == _step ? AppColors.accent : Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(3),
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _goToStep(i),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                height: 6,
+                                width: i == _step ? 22 : 6,
+                                decoration: BoxDecoration(
+                                  color: i == _step
+                                      ? AppColors.accent
+                                      : i < _step
+                                          ? AppColors.accent.withValues(alpha: 0.45)
+                                          : Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
                               ),
                             ),
                           ),

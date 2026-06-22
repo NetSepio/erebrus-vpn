@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'desktop_web_auth.dart';
 import 'wallet_auth_controller.dart';
 
-/// Forwards `erebrusvpn://` wallet callbacks into Reown AppKit.
+/// Routes `erebrusvpn://` callbacks — desktop PASETO auth and mobile Reown envelopes.
 class DeepLinkHandler {
   static const _methodChannel = MethodChannel('com.erebrus.vpn/methods');
   static const _eventChannel = EventChannel('com.erebrus.vpn/events');
@@ -36,14 +37,25 @@ class DeepLinkHandler {
   static Future<void> _onLink(dynamic link) async {
     if (link == null) return;
     final url = link.toString();
-    final modal = _auth?.appKitModal;
+    final auth = _auth;
+    if (auth == null) {
+      debugPrint('[DeepLinkHandler] auth not bound for $url');
+      return;
+    }
+
+    if (DesktopWebAuth.isAuthCallback(url)) {
+      await auth.handleWebAuthCallback(url);
+      return;
+    }
+
+    final modal = auth.appKitModal;
     if (modal == null) {
-      debugPrint('[DeepLinkHandler] AppKit not ready for $url');
+      debugPrint('[DeepLinkHandler] unhandled link (no Reown session): $url');
       return;
     }
     final handled = await modal.dispatchEnvelope(url);
     if (!handled) {
-      debugPrint('[DeepLinkHandler] not handled: $url');
+      debugPrint('[DeepLinkHandler] Reown did not handle: $url');
     }
   }
 

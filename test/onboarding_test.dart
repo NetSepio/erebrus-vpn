@@ -51,6 +51,19 @@ void main() {
     expect(done, isTrue);
   });
 
+  testWidgets('Back returns to previous onboarding step', (tester) async {
+    await mount(tester, () {});
+
+    await tester.tap(find.text('Continue'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('02 / THE AGENTIC INTERNET'), findsOneWidget);
+
+    await tester.tap(find.text('Back'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('01 / WELCOME'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
+  });
+
   testWidgets('SKIP finishes onboarding immediately', (tester) async {
     var done = false;
     await mount(tester, () => done = true);

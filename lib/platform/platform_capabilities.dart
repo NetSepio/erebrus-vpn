@@ -24,15 +24,18 @@ class PlatformCapabilities {
   /// Solana Mobile Wallet Adapter — set after [detectSolanaMobileDevice].
   static bool isSolanaMobileDevice = false;
 
-  /// Reown AppKit — every platform except Solana Mobile hardware.
-  static bool get usesReown => !isSolanaMobileDevice;
+  /// Reown AppKit — Android / iOS only (not desktop, not Solana Mobile).
+  static bool get usesReown => isMobile && !isSolanaMobileDevice;
+
+  /// Browser sign-in via erebrus.io → PASETO callback (macOS / Windows / Linux).
+  static bool get usesWebLogin => isDesktop;
 
   /// Short hint for the connect orb when the user is not signed in.
   static String get walletSignInHint {
     if (isSolanaMobileDevice) {
       return 'Sign in with Seed Vault in Account first';
     }
-    if (isDesktop) return 'Sign in from Account first';
+    if (isDesktop) return 'Sign in with your browser in Account first';
     return 'Connect your Solana wallet in Account first';
   }
 

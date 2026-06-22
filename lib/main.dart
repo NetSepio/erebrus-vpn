@@ -11,6 +11,7 @@ import 'platform/desktop_shell.dart';
 import 'platform/platform_capabilities.dart';
 import 'settings/app_settings_controller.dart';
 import 'theme/app_theme.dart';
+import 'view/auth/desktop_auth_host.dart';
 import 'view/auth/reown_host.dart';
 import 'view/root_view.dart';
 import 'view/browser/browser_controller.dart';
@@ -50,6 +51,7 @@ Future<void> main() async {
   );
   runApp(ErebrusVpnApp(
     usesReown: auth.usesReown,
+    usesWebLogin: auth.usesWebLogin,
     useDesktopShell: PlatformCapabilities.supportsTray,
   ));
 }
@@ -58,15 +60,19 @@ class ErebrusVpnApp extends StatelessWidget {
   const ErebrusVpnApp({
     super.key,
     required this.usesReown,
+    required this.usesWebLogin,
     required this.useDesktopShell,
   });
 
   final bool usesReown;
+  final bool usesWebLogin;
   final bool useDesktopShell;
 
   @override
   Widget build(BuildContext context) {
-    final shell = usesReown ? const ReownHost(child: RootView()) : const RootView();
+    Widget shell = const RootView();
+    if (usesWebLogin) shell = DesktopAuthHost(child: shell);
+    if (usesReown) shell = ReownHost(child: shell);
     final home = useDesktopShell ? DesktopShell(child: shell) : shell;
 
     final app = GetMaterialApp(

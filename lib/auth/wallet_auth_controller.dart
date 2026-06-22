@@ -2,21 +2,21 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:reown_appkit/reown_appkit.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'auth_config.dart';
 import 'auth_session_store.dart';
 import 'deep_link_handler.dart';
+import 'desktop_web_auth.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
 import '../platform/platform_capabilities.dart';
-import '../view/auth/desktop_social_sign_in_page.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
-
-/// Sentinel ID so Reown's explorer returns no wallets on desktop.
-const _desktopBlockedWalletIds = {'erebrus-desktop-no-wallets'};
 
 /// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
 class WalletAuthController extends GetxController {
@@ -43,6 +43,7 @@ class WalletAuthController extends GetxController {
   final isLoadingEntitlement = false.obs;
   final isStartingTrial = false.obs;
   final entitlementError = RxnString();
+  final awaitingWebCallback = false.obs;
 
   String? _token;
   String? _mwaAuthToken;
@@ -52,6 +53,7 @@ class WalletAuthController extends GetxController {
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled => entitlement.value.entitled;
   bool get usesReown => PlatformCapabilities.usesReown;
+  bool get usesWebLogin => PlatformCapabilities.usesWebLogin;
   String? get bearerToken => _token;
 
   @override
@@ -105,6 +107,12 @@ class WalletAuthController extends GetxController {
       reownReady.value = false;
       return;
     }
+    if (!hasReownProjectId) {
+      authError.value = kReownProjectIdMissingMessage;
+      reownReady.value = false;
+      debugPrint('[Reown] init skipped — REOWN_PROJECT_ID not in build env');
+      return;
+    }
     if (appKitModal != null) {
       reownReady.value = true;
       return;
@@ -128,7 +136,6 @@ class WalletAuthController extends GetxController {
             ),
           };
 
-    final isDesktop = PlatformCapabilities.isDesktop;
     appKitModal = ReownAppKitModal(
       context: context,
       projectId: kReownProjectId,
@@ -145,28 +152,27 @@ class WalletAuthController extends GetxController {
         ),
       ),
       optionalNamespaces: solanaNamespaces,
-      // Desktop: social/email only — no Phantom/Solflare/WalletConnect chips.
       featuresConfig: FeaturesConfig(
-        showMainWallets: !isDesktop,
-        socials: isDesktop
-            ? const [
-                AppKitSocialOption.Google,
-                AppKitSocialOption.Apple,
-                AppKitSocialOption.Email,
-              ]
-            : const [
-                AppKitSocialOption.Google,
-                AppKitSocialOption.Apple,
-                AppKitSocialOption.Email,
-                AppKitSocialOption.X,
-              ],
+        showMainWallets: true,
+        socials: const [
+          AppKitSocialOption.Google,
+          AppKitSocialOption.Apple,
+          AppKitSocialOption.Email,
+          AppKitSocialOption.X,
+        ],
       ),
-      includedWalletIds: isDesktop ? _desktopBlockedWalletIds : null,
       disconnectOnDispose: false,
     );
 
     try {
-      debugPrint('[Reown] initializing AppKit (project $kReownProjectId)');
+      final projectHint = kReownProjectId.length > 8
+          ? '${kReownProjectId.substring(0, 8)}…'
+          : kReownProjectId;
+      final packageInfo = await PackageInfo.fromPlatform();
+      final relayOrigin = packageInfo.packageName;
+      debugPrint(
+        '[Reown] initializing AppKit (project $projectHint, relay origin $relayOrigin)',
+      );
       await appKitModal!.init();
       appKitModal!.onModalConnect.subscribe(_onModalConnect);
       appKitModal!.onModalDisconnect.subscribe(_onModalDisconnect);
@@ -175,11 +181,7 @@ class WalletAuthController extends GetxController {
       DeepLinkHandler.bind(this);
       DeepLinkHandler.checkInitialLink();
       reownReady.value = true;
-      debugPrint(
-        isDesktop
-            ? '[Reown] ready — social/email sign-in (desktop, no wallets)'
-            : '[Reown] ready — wallets + social login available',
-      );
+      debugPrint('[Reown] ready — wallets + social login available');
 
       if (appKitModal!.isConnected && !isAuthenticated) {
         await _authenticateConnectedWallet();
@@ -191,29 +193,150 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  /// Opens MWA wallet selector on Solana Mobile, Reown modal elsewhere.
+  /// Initializes desktop browser auth (deep-link listener only).
+  void initDesktopAuth() {
+    if (!usesWebLogin) return;
+    DeepLinkHandler.bind(this);
+    DeepLinkHandler.checkInitialLink();
+    debugPrint('[Auth] desktop web-login ready — origin $kErebrusWebOrigin');
+  }
+
+  /// Opens MWA on Solana Mobile, browser on desktop, Reown modal on other mobile.
   Future<void> openSignIn() async {
     authError.value = null;
     if (isSolanaMobileDevice.value) {
       await signInWithSolanaMobile();
+    } else if (usesWebLogin) {
+      await openWebSignIn();
     } else {
       await openWalletModal();
+    }
+  }
+
+  /// Opens erebrus.io in the system browser; PASETO returns via [kErebrusAuthCallback].
+  Future<void> openWebSignIn() async {
+    if (!usesWebLogin) return;
+    if (isAuthenticating.value || awaitingWebCallback.value) return;
+
+    authError.value = null;
+    awaitingWebCallback.value = true;
+    try {
+      final url = DesktopWebAuth.buildLoginUrl();
+      debugPrint('[Auth] opening web login: $url');
+      final uri = Uri.parse(url);
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        awaitingWebCallback.value = false;
+        authError.value = 'Could not open the browser — check your default browser';
+      }
+    } catch (e) {
+      awaitingWebCallback.value = false;
+      authError.value = e.toString();
+    }
+  }
+
+  /// Completes sign-in from pasted PASETO / callback URL (Postman-style fallback).
+  Future<void> signInWithPastedCredential(String input) async {
+    isAuthenticating.value = true;
+    awaitingWebCallback.value = false;
+    authError.value = null;
+    try {
+      final callback = DesktopWebAuth.parseManualAuthInput(input);
+      if (callback == null || callback.token.isEmpty) {
+        authError.value = 'Could not read a sign-in token — paste the PASETO or full callback URL';
+        return;
+      }
+
+      var userId = callback.userId;
+      var wallet = callback.walletAddress;
+      final role = callback.role.isNotEmpty ? callback.role : 'user';
+
+      // Validate the token against the gateway; fills in session when URL lacked metadata.
+      await _authClient.fetchSubscription(callback.token);
+      if (userId.isEmpty) userId = 'imported';
+      if (wallet.isEmpty) wallet = 'imported';
+
+      await _persistSession(
+        AuthSession(
+          token: callback.token,
+          userId: userId,
+          role: role,
+          walletAddress: wallet,
+        ),
+        method: 'manual_paste',
+      );
+      DesktopWebAuth.clearPendingState();
+      await refreshEntitlement();
+      if (Get.isRegistered<GatewayController>()) {
+        await Get.find<GatewayController>().refreshNodes();
+      }
+      debugPrint('[Auth] manual paste login OK');
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
+  /// Reads clipboard and attempts [signInWithPastedCredential].
+  Future<void> signInFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      authError.value = 'Clipboard is empty — copy the PASETO from the browser first';
+      return;
+    }
+    await signInWithPastedCredential(text);
+  }
+
+  /// Completes sign-in from `erebrusvpn://auth?token=…` (called by [DeepLinkHandler]).
+  Future<void> handleWebAuthCallback(String url) async {
+    if (!usesWebLogin) return;
+
+    awaitingWebCallback.value = false;
+    isAuthenticating.value = true;
+    authError.value = null;
+    try {
+      final callback = DesktopWebAuth.parseCallback(url);
+      if (callback == null || !callback.isValid) {
+        authError.value = 'Sign-in callback was incomplete — try again';
+        return;
+      }
+      DesktopWebAuth.validateState(callback.state);
+
+      await _persistSession(
+        AuthSession(
+          token: callback.token,
+          userId: callback.userId,
+          role: callback.role,
+          walletAddress: callback.walletAddress,
+        ),
+        method: 'web',
+      );
+      DesktopWebAuth.clearPendingState();
+      await refreshEntitlement();
+      if (Get.isRegistered<GatewayController>()) {
+        await Get.find<GatewayController>().refreshNodes();
+      }
+      debugPrint('[Auth] web login OK for ${callback.walletAddress}');
+    } on DesktopWebAuthException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
     }
   }
 
   Future<void> openWalletModal() async {
     authError.value = null;
     if (appKitModal == null || !reownReady.value) {
-      authError.value = PlatformCapabilities.isDesktop
-          ? 'Sign-in is still starting — try again in a moment'
-          : 'Wallet connect is still starting — try again in a moment';
+      authError.value = 'Wallet connect is still starting — try again in a moment';
       return;
     }
-    await appKitModal!.openModalView(
-      PlatformCapabilities.isDesktop
-          ? const DesktopSocialSignInPage()
-          : null,
-    );
+    await appKitModal!.openModalView();
   }
 
   /// Mobile Wallet Adapter path — opens the native wallet selector on Seeker/Saga.
@@ -275,6 +398,8 @@ class WalletAuthController extends GetxController {
       await appKitModal?.disconnect();
     }
     await disconnectSolanaMobile(mwaToken);
+    awaitingWebCallback.value = false;
+    DesktopWebAuth.clearPendingState();
     _syncGatewayToken();
   }
 
@@ -354,9 +479,13 @@ class WalletAuthController extends GetxController {
   void _onModalDisconnect(ModalDisconnect? event) {}
 
   void _onModalError(ModalError? event) {
-    if (event?.message != null && event!.message.isNotEmpty) {
-      authError.value = event.message;
+    final message = event?.message;
+    if (message == null || message.isEmpty) return;
+    if (message.toLowerCase().contains('origin not allowed')) {
+      authError.value = reownOriginNotAllowedMessage(kErebrusBundleId);
+      return;
     }
+    authError.value = message;
   }
 
   Future<void> _authenticateConnectedWallet() async {

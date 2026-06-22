@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../auth/auth_config.dart';
 import '../../auth/wallet_auth_controller.dart';
+import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 
@@ -16,9 +19,9 @@ class LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = Get.find<WalletAuthController>();
-    // On Solana Mobile (Seeker / Saga) sign-in is wallet-only via Seed Vault /
-    // Mobile Wallet Adapter — no Reown, email, or social providers.
+    // Seeker/Saga: MWA wallet-only. Desktop: browser sign-in at erebrus.io.
     final solanaOnly = auth.isSolanaMobileDevice.value;
+    final webLogin = PlatformCapabilities.usesWebLogin;
 
     return Scaffold(
       body: DecoratedBox(
@@ -69,7 +72,9 @@ class LoginView extends StatelessWidget {
                             child: Text(
                                 solanaOnly
                                     ? 'Sign in with your Solana wallet to spin up your private internet.'
-                                    : 'Sign in to spin up your private internet.',
+                                    : webLogin
+                                        ? 'Sign in through your browser to spin up your private internet.'
+                                        : 'Sign in to spin up your private internet.',
                                 textAlign: TextAlign.center,
                                 style: grotesk(size: 14.5, weight: FontWeight.w400, color: AppColors.textTertiary, height: 1.4)),
                           ),
@@ -106,8 +111,26 @@ class LoginView extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ] else if (webLogin) ...[
+                      _OutlinedAuthButton(
+                        onTap: () => _signIn(auth),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.open_in_browser, size: 20, color: AppColors.accent),
+                            const SizedBox(width: 11),
+                            Text('Sign in with browser', style: grotesk(size: 15, weight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Opens $kErebrusWebOrigin in your browser.\n'
+                        'After you sign in, you\'ll return here automatically.',
+                        textAlign: TextAlign.center,
+                        style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),
+                      ),
                     ] else ...[
-                      // email
                       _OutlinedAuthButton(
                         onTap: () => _signIn(auth),
                         child: Row(
@@ -119,10 +142,7 @@ class LoginView extends StatelessWidget {
                           ],
                         ),
                       ),
-
                       const _AuthDivider(label: 'OR CONTINUE WITH'),
-
-                      // social row
                       Row(
                         children: [
                           Expanded(
@@ -147,10 +167,7 @@ class LoginView extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const _AuthDivider(label: 'CONNECT A WALLET'),
-
-                      // Solana (primary)
                       _WalletButton(
                         onTap: () => _signIn(auth),
                         gradient: AppGradients.solana,
@@ -166,8 +183,6 @@ class LoginView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 11),
-
-                      // Ethereum (secondary)
                       _WalletButton(
                         onTap: () => _signIn(auth),
                         gradient: AppGradients.ethereum,
@@ -177,6 +192,9 @@ class LoginView extends StatelessWidget {
                         background: const Color(0xFF131318),
                       ),
                     ],
+
+                    const SizedBox(height: 22),
+                    const _PasteTokenSection(),
 
                     const SizedBox(height: 26),
                     Obx(() {
@@ -198,8 +216,13 @@ class LoginView extends StatelessWidget {
 
               // connecting overlay
               Obx(() {
-                if (!auth.isAuthenticating.value) return const SizedBox.shrink();
-                return const _ConnectingOverlay();
+                if (!auth.isAuthenticating.value && !auth.awaitingWebCallback.value) {
+                  return const SizedBox.shrink();
+                }
+                return _ConnectingOverlay(
+                  waitingForBrowser: auth.awaitingWebCallback.value && !auth.isAuthenticating.value,
+                  onPasteFromClipboard: () => auth.signInFromClipboard(),
+                );
               }),
             ],
           ),
@@ -333,7 +356,13 @@ class _AuthDivider extends StatelessWidget {
 }
 
 class _ConnectingOverlay extends StatelessWidget {
-  const _ConnectingOverlay();
+  const _ConnectingOverlay({
+    this.waitingForBrowser = false,
+    this.onPasteFromClipboard,
+  });
+  final bool waitingForBrowser;
+  final VoidCallback? onPasteFromClipboard;
+
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
@@ -348,9 +377,189 @@ class _ConnectingOverlay extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
             ),
             const SizedBox(height: 22),
-            Text('Connecting your account', style: grotesk(size: 15, weight: FontWeight.w600)),
+            Text(
+              waitingForBrowser ? 'Waiting for browser sign-in' : 'Connecting your account',
+              style: grotesk(size: 15, weight: FontWeight.w600),
+            ),
             const SizedBox(height: 5),
-            Text('verifying credentials…', style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+            Text(
+              waitingForBrowser
+                  ? 'complete sign-in in your browser…'
+                  : 'verifying credentials…',
+              style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary),
+            ),
+            if (waitingForBrowser && onPasteFromClipboard != null) ...[
+              const SizedBox(height: 28),
+              Text(
+                'Redirect didn\'t work?',
+                style: grotesk(size: 13, weight: FontWeight.w500, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 10),
+              _PasteFromClipboardButton(onTap: onPasteFromClipboard!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PasteTokenSection extends StatefulWidget {
+  const _PasteTokenSection();
+
+  @override
+  State<_PasteTokenSection> createState() => _PasteTokenSectionState();
+}
+
+class _PasteTokenSectionState extends State<_PasteTokenSection> {
+  final _controller = TextEditingController();
+  var _expanded = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pasteFromClipboard(WalletAuthController auth) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isNotEmpty) {
+      _controller.text = text;
+      setState(() => _expanded = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Get.find<WalletAuthController>();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _AuthDivider(label: 'OR PASTE TOKEN'),
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.content_paste_go_outlined, size: 18, color: AppColors.textTertiary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Paste sign-in token from browser',
+                    style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textSecondary),
+                  ),
+                ),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 20,
+                  color: AppColors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Copy the PASETO from the browser sign-in page, then paste here if the app didn\'t open automatically.',
+            style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: TextField(
+              controller: _controller,
+              maxLines: 4,
+              minLines: 2,
+              style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'PASETO token or erebrusvpn://auth?token=…',
+                hintStyle: mono(size: 11, color: AppColors.textDim),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _OutlinedAuthButton(
+                  onTap: () => _pasteFromClipboard(auth),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.content_paste, size: 16, color: AppColors.textTertiary),
+                      const SizedBox(width: 8),
+                      Text('Paste', style: grotesk(size: 14, weight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: () {
+                    final text = _controller.text.trim();
+                    if (text.isEmpty) {
+                      auth.authError.value = 'Paste a PASETO token first';
+                      return;
+                    }
+                    auth.signInWithPastedCredential(text);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.brand,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text('Sign in', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.onAccent)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PasteFromClipboardButton extends StatelessWidget {
+  const _PasteFromClipboardButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.content_paste_go_outlined, size: 16, color: AppColors.accent),
+            const SizedBox(width: 8),
+            Text('Paste token from clipboard', style: grotesk(size: 13, weight: FontWeight.w600)),
           ],
         ),
       ),
