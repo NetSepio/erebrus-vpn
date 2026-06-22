@@ -43,6 +43,9 @@ dependencies:
   window_manager: ^0.5.1
   x25519: ^0.1.1
   path: ^1.9.1
+  package_info_plus: ^8.3.1
+  shared_preferences: ^2.3.3
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:

@@ -4,13 +4,17 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:reown_appkit/reown_appkit.dart';
 
+import 'dart:async';
+
 import 'auth/deep_link_handler.dart';
 import 'auth/wallet_auth_controller.dart';
 import 'platform/desktop_shell.dart';
 import 'platform/platform_capabilities.dart';
+import 'settings/app_settings_controller.dart';
 import 'theme/app_theme.dart';
 import 'view/auth/reown_host.dart';
 import 'view/bottombar/main_shell.dart';
+import 'view/browser/browser_controller.dart';
 import 'vpn/gateway_controller.dart';
 import 'vpn/vpn_controller.dart';
 
@@ -24,11 +28,23 @@ Future<void> main() async {
     ]);
   }
   Get.put(VpnController(), permanent: true);
+  Get.put(AppSettingsController(), permanent: true);
+  await Get.find<AppSettingsController>().load();
+  Get.put(BrowserController(), permanent: true);
   final auth = WalletAuthController();
   Get.put(auth, permanent: true);
   await auth.detectDevice();
   await auth.loadPersistedSession();
   Get.put(GatewayController(), permanent: true);
+  await Get.find<GatewayController>().refreshNodes();
+  await Get.find<VpnController>().syncWithNative();
+  Timer.periodic(const Duration(minutes: 5), (_) {
+    if (Get.isRegistered<AppSettingsController>()) {
+      Get.find<AppSettingsController>().pingDiagnosticsIfEnabled(
+        vpn: Get.isRegistered<VpnController>() ? Get.find<VpnController>() : null,
+      );
+    }
+  });
   debugPrint(
     '[Erebrus] started — platform=${PlatformCapabilities.platformLabel} '
     'solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',

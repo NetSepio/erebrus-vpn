@@ -35,6 +35,11 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         private const val NOTIF_CHANNEL = "erebrus_vpn"
         private const val NOTIF_ID = 0x5713
 
+        /** True while libbox holds an open TUN — survives Flutter engine restarts. */
+        @Volatile
+        var tunnelActive: Boolean = false
+            private set
+
         fun start(ctx: Context, config: String, name: String) {
             val i = Intent(ctx, ErebrusVpnService::class.java).apply {
                 action = ACTION_START
@@ -80,6 +85,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private fun startTunnel(config: String, name: String) {
         releaseTunnelResources()
         SingboxBridge.emitStage("connecting")
+        tunnelActive = true
         startForeground(NOTIF_ID, buildNotification(name))
         android.util.Log.i("erebrus-singbox", "startTunnel name=$name bytes=${config.length}")
         try {
@@ -114,11 +120,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         } catch (_: Exception) {
         }
         tunInterface = null
+        tunnelActive = false
     }
 
     private fun stopTunnel() {
         SingboxBridge.emitStage("disconnecting")
         releaseTunnelResources()
+        tunnelActive = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         SingboxBridge.emitStage("disconnected")

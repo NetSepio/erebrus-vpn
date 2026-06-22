@@ -82,7 +82,13 @@ class MainActivity : FlutterActivity() {
                     ErebrusVpnService.stop(this)
                     result.success(null)
                 }
-                "stage" -> result.success(SingboxBridge.stage)
+                "stage" -> {
+                    val stage = when {
+                        ErebrusVpnService.tunnelActive -> "connected"
+                        else -> SingboxBridge.stage
+                    }
+                    result.success(stage)
+                }
                 "genWgKeys" -> result.success(generateWireGuardKeyPair())
                 else -> result.notImplemented()
             }

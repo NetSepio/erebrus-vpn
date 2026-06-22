@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../auth/wallet_auth_controller.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/singbox_engine.dart';
@@ -72,7 +73,15 @@ class ConnectView extends StatelessWidget {
                                   );
                                 }),
                                 const SizedBox(height: AppSpace.xl),
-                                Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
+                                Obx(() {
+                                  if (c.killSwitchBlocking.value) {
+                                    return const _StatusText(
+                                      stage: VpnStage.error,
+                                      error: 'Kill switch active — tap to reconnect',
+                                    );
+                                  }
+                                  return _StatusText(stage: c.stage.value, error: c.error.value);
+                                }),
                               ],
                             ),
                           ),
@@ -80,7 +89,16 @@ class ConnectView extends StatelessWidget {
                       },
                     ),
                   ),
-                  Obx(() => _ModeSelector(selected: c.mode.value, onSelect: c.setMode, enabled: !c.isConnected)),
+                  Obx(() => _ModeSelector(
+                        selected: c.mode.value,
+                        onSelect: (m) {
+                          c.setMode(m);
+                          if (Get.isRegistered<AppSettingsController>()) {
+                            Get.find<AppSettingsController>().setDefaultProtocol(m);
+                          }
+                        },
+                        enabled: !c.isConnected && !c.killSwitchBlocking.value,
+                      )),
                   const SizedBox(height: AppSpace.lg),
                   Obx(() => _NodeCard(node: c.selectedNode.value, onTap: onChooseNode)),
                   const SizedBox(height: AppSpace.lg),

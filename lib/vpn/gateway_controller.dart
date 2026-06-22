@@ -91,6 +91,7 @@ class GatewayController extends GetxController {
       if (vpn.selectedNode.value == null && list.isNotEmpty) {
         vpn.selectNode(list.first);
       }
+      vpn.reconcileNodeFromGateway();
     } on GatewayException catch (e) {
       debugPrint('[Gateway] error: ${e.message}');
       error.value = e.message;

@@ -294,4 +294,26 @@ class SingboxConfigBuilder {
     final port = int.tryParse(hostPort.substring(i + 1)) ?? 51820;
     return (host, port);
   }
+
+  /// Blocks all traffic through a local TUN when the VPN tunnel drops unexpectedly.
+  static Map<String, dynamic> killSwitchBlockConfig() => {
+        'log': {'level': 'warn'},
+        'inbounds': [
+          {
+            'type': 'tun',
+            'tag': 'tun-in',
+            'address': ['172.19.0.1/30'],
+            'auto_route': true,
+            'strict_route': true,
+            'stack': 'gvisor',
+          },
+        ],
+        'outbounds': [
+          {'type': 'block', 'tag': 'block'},
+        ],
+        'route': {
+          'final': 'block',
+          'auto_detect_interface': true,
+        },
+      };
 }
