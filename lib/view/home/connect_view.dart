@@ -38,41 +38,45 @@ class ConnectView extends StatelessWidget {
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        // Orb (232) + gap + status must fit in the flex slot on short screens.
-                        final orbSize = (constraints.maxHeight - 72).clamp(148.0, 232.0);
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Obx(() {
-                              final authed = auth?.isAuthenticated ?? false;
-                              final entitled = auth?.isEntitled ?? false;
-                              return ConnectOrb(
-                                size: orbSize,
-                                stage: c.stage.value,
-                                transport: c.activeTransport.value,
-                                onTap: c.isBusy
-                                    ? null
-                                    : () {
-                                        if (auth != null && !authed) {
-                                          c.error.value = PlatformCapabilities.isDesktop
-                                              ? 'Sign in from Account first'
-                                              : 'Connect your Solana wallet in Account first';
-                                          onRequireAuth?.call();
-                                          return;
-                                        }
-                                        if (auth != null && !entitled) {
-                                          c.error.value =
-                                              'Start a free trial in Account to connect';
-                                          onRequireAuth?.call();
-                                          return;
-                                        }
-                                        c.toggle();
-                                      },
-                              );
-                            }),
-                            SizedBox(height: orbSize < 200 ? AppSpace.md : AppSpace.xl),
-                            Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
-                          ],
+                        return FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.center,
+                          child: SizedBox(
+                            width: constraints.maxWidth,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Obx(() {
+                                  final authed = auth?.isAuthenticated ?? false;
+                                  final entitled = auth?.isEntitled ?? false;
+                                  return ConnectOrb(
+                                    stage: c.stage.value,
+                                    transport: c.activeTransport.value,
+                                    onTap: c.isBusy
+                                        ? null
+                                        : () {
+                                            if (auth != null && !authed) {
+                                              c.error.value = PlatformCapabilities.isDesktop
+                                                  ? 'Sign in from Account first'
+                                                  : 'Connect your Solana wallet in Account first';
+                                              onRequireAuth?.call();
+                                              return;
+                                            }
+                                            if (auth != null && !entitled) {
+                                              c.error.value =
+                                                  'Start a free trial in Account to connect';
+                                              onRequireAuth?.call();
+                                              return;
+                                            }
+                                            c.toggle();
+                                          },
+                                  );
+                                }),
+                                const SizedBox(height: AppSpace.xl),
+                                Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
+                              ],
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -232,10 +236,19 @@ class _StatusText extends StatelessWidget {
     };
     return Column(
       children: [
-        Text(title,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(color: AppColors.textPrimary)),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(color: AppColors.textPrimary),
+        ),
         const SizedBox(height: 6),
-        Text(sub, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: color)),
+        Text(
+          sub,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: color),
+        ),
       ],
     );
   }
