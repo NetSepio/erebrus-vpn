@@ -55,11 +55,54 @@ class GatewayClient {
     required String wgPublicKey,
     required String name,
   }) async {
-    final decoded = await _postJson('/api/v2/vpn/clients', {
-      'name': name,
-      'node_id': nodeId,
-      'wg_public_key': wgPublicKey,
-    });
+    try {
+      final decoded = await _postJson('/api/v2/vpn/clients', {
+        'name': name,
+        'node_id': nodeId,
+        'wg_public_key': wgPublicKey,
+      });
+      return CredentialBundle.fromJson(_unwrapBundle(decoded));
+    } on GatewayException catch (e) {
+      final lower = e.message.toLowerCase();
+      if (lower.contains('node unreachable') || lower.contains('no reachable api')) {
+        final reused = await _reuseExistingClient(
+          nodeId: nodeId,
+          wgPublicKey: wgPublicKey,
+        );
+        if (reused != null) return reused;
+      }
+      rethrow;
+    }
+  }
+
+  /// If provisioning failed but a prior client row exists, re-fetch its bundle.
+  Future<CredentialBundle?> _reuseExistingClient({
+    required String nodeId,
+    required String wgPublicKey,
+  }) async {
+    try {
+      final clients = await listVpnClients();
+      for (final c in clients) {
+        if (c.nodeId == nodeId && c.wgPublicKey == wgPublicKey) {
+          return fetchClientConfig(c.id);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<List<VpnClientRow>> listVpnClients() async {
+    final decoded = await _getJson('/api/v2/vpn/clients');
+    final list = decoded is List
+        ? decoded
+        : (decoded is Map ? (decoded['clients'] as List?) : null) ?? const [];
+    return list
+        .map((e) => VpnClientRow.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<CredentialBundle> fetchClientConfig(String clientId) async {
+    final decoded = await _getJson('/api/v2/vpn/clients/$clientId/config');
     return CredentialBundle.fromJson(_unwrapBundle(decoded));
   }
 
@@ -136,4 +179,26 @@ class GatewayException implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+/// A gateway-side VPN client row (`GET /api/v2/vpn/clients`).
+class VpnClientRow {
+  VpnClientRow({
+    required this.id,
+    required this.nodeId,
+    required this.wgPublicKey,
+    required this.status,
+  });
+
+  final String id;
+  final String nodeId;
+  final String wgPublicKey;
+  final String status;
+
+  factory VpnClientRow.fromJson(Map<String, dynamic> j) => VpnClientRow(
+        id: (j['id'] ?? '').toString(),
+        nodeId: (j['node_id'] ?? '').toString(),
+        wgPublicKey: (j['wg_public_key'] ?? '').toString(),
+        status: (j['status'] ?? '').toString(),
+      );
 }

@@ -59,7 +59,9 @@ void main() {
     expect((cfg['inbounds'] as List).first['type'], 'tun');
     expect((cfg['inbounds'] as List).first['stack'], 'gvisor');
     expect((cfg['dns'] as Map)['final'], 'dns-remote');
-    expect((cfg['route'] as Map)['auto_detect_interface'], isFalse);
+    expect((cfg['route'] as Map)['auto_detect_interface'], isTrue);
+    expect((cfg['endpoints'] as List).first['peers'][0]['public_key'],
+        '6RfVDGZnJs4BJSzRk+iR8Ta1ftSMSnEC5fGwSbw7RkM=');
   });
 
   test('Stealth transport detours WG through the VLESS carrier (loopback peer)', () {

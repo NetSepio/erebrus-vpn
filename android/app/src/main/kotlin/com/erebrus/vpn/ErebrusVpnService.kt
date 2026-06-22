@@ -81,6 +81,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         releaseTunnelResources()
         SingboxBridge.emitStage("connecting")
         startForeground(NOTIF_ID, buildNotification(name))
+        android.util.Log.i("erebrus-singbox", "startTunnel name=$name bytes=${config.length}")
         try {
             val setup = SetupOptions().apply {
                 basePath = filesDir.absolutePath

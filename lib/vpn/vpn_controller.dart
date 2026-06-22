@@ -113,10 +113,19 @@ class VpnController extends GetxController {
           final config = SingboxConfigBuilder.build(
             bundle: bundle, transport: t, clientPrivateKey: keys.private);
           activeTransport.value = t;
-          await _engine.start(jsonEncode(config), profileName: 'Erebrus · ${target.name}');
-          if (await _awaitConnected()) return; // success
-        } catch (e) {
-          if (kDebugMode) debugPrint('transport ${t.label} failed: $e');
+          final srv = bundle.serverPublicKey;
+          final srvShort = srv.length > 8 ? '${srv.substring(0, 8)}…' : srv;
+          debugPrint(
+            '[VPN] trying ${t.label} → ${bundle.endpoint} '
+            '(wg ${bundle.address}, srv $srvShort)',
+          );
+          final ok = await _armAndStart(
+            _engine.start(jsonEncode(config), profileName: 'Erebrus · ${target.name}'),
+          );
+          debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
+          if (ok) return;
+        } catch (e, st) {
+          debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
         }
         await _engine.stop().catchError((_) {});
       }
@@ -145,9 +154,11 @@ class VpnController extends GetxController {
 
   Future<void> toggle() => isConnected ? disconnect() : connect();
 
-  /// Waits up to [timeout] for the engine to report connected; false otherwise.
-  Future<bool> _awaitConnected({Duration timeout = const Duration(seconds: 12)}) async {
-    if (stage.value == VpnStage.connected) return true;
+  /// Subscribes before [startFuture] completes so fast native errors are not missed.
+  Future<bool> _armAndStart(
+    Future<void> startFuture, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     final completer = Completer<bool>();
     late StreamSubscription<VpnStage> sub;
     final timer = Timer(timeout, () {
@@ -157,10 +168,16 @@ class VpnController extends GetxController {
       if (s == VpnStage.connected && !completer.isCompleted) completer.complete(true);
       if (s == VpnStage.error && !completer.isCompleted) completer.complete(false);
     });
-    final result = await completer.future;
-    timer.cancel();
-    await sub.cancel();
-    return result;
+    try {
+      await startFuture;
+      final now = await _engine.stage();
+      if (now == VpnStage.connected) return true;
+      if (now == VpnStage.error) return false;
+      return await completer.future;
+    } finally {
+      timer.cancel();
+      await sub.cancel();
+    }
   }
 
   Future<({String private, String public})> _ensureWgKeys() async {
