@@ -30,46 +30,51 @@ class ConnectView extends StatelessWidget {
           const _AuroraBackdrop(),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
+              // Clearance for the floating bottom nav in [MainShell].
+              padding: const EdgeInsets.fromLTRB(AppSpace.xl, 0, AppSpace.xl, 88),
               child: Column(
                 children: [
                   const _TopBar(),
-                  const Spacer(flex: 2),
-                  Obx(() {
-                    final authed = auth?.isAuthenticated ?? false;
-                    final entitled = auth?.isEntitled ?? false;
-                    return ConnectOrb(
-                      stage: c.stage.value,
-                      transport: c.activeTransport.value,
-                      onTap: c.isBusy
-                          ? null
-                          : () {
-                              if (auth != null && !authed) {
-                                c.error.value = PlatformCapabilities.isDesktop
-                                    ? 'Sign in from Account first'
-                                    : 'Connect your Solana wallet in Account first';
-                                onRequireAuth?.call();
-                                return;
-                              }
-                              if (auth != null && !entitled) {
-                                c.error.value =
-                                    'Start a free trial in Account to connect';
-                                onRequireAuth?.call();
-                                return;
-                              }
-                              c.toggle();
-                            },
-                    );
-                  }),
-                  const SizedBox(height: AppSpace.xl),
-                  Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
-                  const Spacer(flex: 2),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Obx(() {
+                          final authed = auth?.isAuthenticated ?? false;
+                          final entitled = auth?.isEntitled ?? false;
+                          return ConnectOrb(
+                            stage: c.stage.value,
+                            transport: c.activeTransport.value,
+                            onTap: c.isBusy
+                                ? null
+                                : () {
+                                    if (auth != null && !authed) {
+                                      c.error.value = PlatformCapabilities.isDesktop
+                                          ? 'Sign in from Account first'
+                                          : 'Connect your Solana wallet in Account first';
+                                      onRequireAuth?.call();
+                                      return;
+                                    }
+                                    if (auth != null && !entitled) {
+                                      c.error.value =
+                                          'Start a free trial in Account to connect';
+                                      onRequireAuth?.call();
+                                      return;
+                                    }
+                                    c.toggle();
+                                  },
+                          );
+                        }),
+                        const SizedBox(height: AppSpace.xl),
+                        Obx(() => _StatusText(stage: c.stage.value, error: c.error.value)),
+                      ],
+                    ),
+                  ),
                   Obx(() => _ModeSelector(selected: c.mode.value, onSelect: c.setMode, enabled: !c.isConnected)),
                   const SizedBox(height: AppSpace.lg),
                   Obx(() => _NodeCard(node: c.selectedNode.value, onTap: onChooseNode)),
                   const SizedBox(height: AppSpace.lg),
                   Obx(() => _StatsBar(stats: c.stats.value, connected: c.isConnected)),
-                  const SizedBox(height: AppSpace.xl),
                 ],
               ),
             ),

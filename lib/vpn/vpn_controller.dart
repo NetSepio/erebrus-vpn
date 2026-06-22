@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 
+import '../platform/secure_storage.dart';
 import 'gateway_client.dart';
 import 'gateway_errors.dart';
 import 'singbox_engine.dart';
@@ -28,7 +28,7 @@ class VpnController extends GetxController {
   VpnController({Provisioner? provisioner}) : _provision = provisioner;
 
   final _engine = SingboxEngine.instance;
-  final _storage = const FlutterSecureStorage();
+  final _storage = ErebrusSecureStorage.instance;
   Provisioner? _provision;
 
   // observables

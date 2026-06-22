@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../platform/secure_storage.dart';
 
 /// Persisted gateway session + optional Solana Mobile Wallet Adapter state.
 class AuthSessionStore {
   AuthSessionStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ?? ErebrusSecureStorage.instance;
 
   final FlutterSecureStorage _storage;
 
@@ -15,16 +18,22 @@ class AuthSessionStore {
   static const kMwaToken = 'erebrus_mwa_auth_token';
 
   Future<StoredAuthSession?> read() async {
-    final token = await _storage.read(key: kToken);
-    if (token == null || token.isEmpty) return null;
-    return StoredAuthSession(
-      token: token,
-      walletAddress: await _storage.read(key: kWallet) ?? '',
-      userId: await _storage.read(key: kUserId) ?? '',
-      role: await _storage.read(key: kRole) ?? 'user',
-      authMethod: await _storage.read(key: kAuthMethod) ?? 'reown',
-      mwaAuthToken: await _storage.read(key: kMwaToken),
-    );
+    try {
+      final token = await _storage.read(key: kToken);
+      if (token == null || token.isEmpty) return null;
+      return StoredAuthSession(
+        token: token,
+        walletAddress: await _storage.read(key: kWallet) ?? '',
+        userId: await _storage.read(key: kUserId) ?? '',
+        role: await _storage.read(key: kRole) ?? 'user',
+        authMethod: await _storage.read(key: kAuthMethod) ?? 'reown',
+        mwaAuthToken: await _storage.read(key: kMwaToken),
+      );
+    } catch (e) {
+      debugPrint('[Auth] secure storage read failed (session cleared): $e');
+      await clear();
+      return null;
+    }
   }
 
   Future<void> write({
