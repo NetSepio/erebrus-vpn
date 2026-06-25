@@ -16,6 +16,8 @@ class NodeDisplay {
     required this.supportsStealth,
     this.minTier = 0,
     this.latencyMs,
+    this.isPlaceholder = false,
+    this.showLoad = true,
   });
 
   final String flag;
@@ -28,11 +30,16 @@ class NodeDisplay {
   final bool supportsStealth;
   final int minTier;
   final int? latencyMs;
+  final bool isPlaceholder;
+  final bool showLoad;
 
-  String get loadLabel => '${loadValue.toStringAsFixed(0)}%';
+  String get loadLabel => showLoad ? '${loadValue.toStringAsFixed(0)}%' : '—';
 
-  Color get loadColor =>
-      loadValue < 50 ? AppColors.success : (loadValue < 80 ? AppColors.warn : AppColors.danger);
+  Color get loadColor => isPlaceholder
+      ? AppColors.textMuted
+      : loadValue < 50
+          ? AppColors.success
+          : (loadValue < 80 ? AppColors.warn : AppColors.danger);
 
   String get accessLabel => switch (access) {
         'private' => 'Private',
@@ -46,28 +53,35 @@ class NodeDisplay {
 
   String? get tierLabel => minTier > 0 ? 'T$minTier' : null;
 
-  static NodeDisplay of(VpnNode? node) {
-    if (node == null) {
-      return const NodeDisplay(
-        flag: '🌐',
-        name: 'Choose a node',
-        location: 'Smart pick by latency',
-        network: 'SOL',
-        networkColor: AppColors.solana,
-        loadValue: 0,
-        access: 'public',
-        supportsStealth: false,
-      );
-    }
+  /// Connect-tab card when no node is selected or the registry is empty.
+  static NodeDisplay placeholder({bool registryError = false}) {
+    return NodeDisplay(
+      flag: '',
+      name: registryError ? 'Registry unavailable' : 'Select a server',
+      location: registryError
+          ? 'Could not reach the node registry'
+          : 'Community nodes on the Erebrus network',
+      network: 'DePIN',
+      networkColor: AppColors.textMuted,
+      loadValue: 0,
+      access: 'public',
+      supportsStealth: false,
+      isPlaceholder: true,
+      showLoad: false,
+    );
+  }
+
+  static NodeDisplay of(VpnNode? node, {bool forcePlaceholder = false}) {
+    if (node == null || forcePlaceholder) return placeholder();
     final region = node.region.isEmpty ? 'Erebrus node' : node.region;
     final latency = node.latencyMs;
-    final location = latency != null ? '$region · ${latency}ms' : region;
+    final location = latency != null && latency > 0 ? '$region · ${latency}ms' : region;
     return NodeDisplay(
       flag: _flag(node.region),
       name: node.name,
       location: location,
-      network: 'SOL',
-      networkColor: AppColors.solana,
+      network: 'WG',
+      networkColor: AppColors.accent,
       loadValue: node.loadPct,
       access: node.accessMode,
       supportsStealth: node.supportsStealth,

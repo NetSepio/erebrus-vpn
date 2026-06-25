@@ -8,6 +8,7 @@ import '../../auth/wallet_auth_controller.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
+import '../../vpn/gateway_controller.dart';
 import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
@@ -168,13 +169,21 @@ class _ConnectViewState extends State<ConnectView> {
               Obx(() => _DataReadout(stats: _c.stats.value, connected: _c.isConnected)),
               const SizedBox(height: 14),
               // server card
-              Obx(() => _ServerCard(
-                    node: _c.selectedNode.value,
-                    egressIp: _c.egressIp.value,
-                    egressLoading: _c.egressIpLoading.value,
-                    connected: _c.isConnected,
-                    onTap: widget.onOpenServers,
-                  )),
+              Obx(() {
+                final gw = Get.find<GatewayController>();
+                final node = _c.selectedNode.value;
+                final registryEmpty = gw.nodes.isEmpty;
+                final display = registryEmpty
+                    ? NodeDisplay.placeholder(registryError: gw.error.value != null)
+                    : NodeDisplay.of(node);
+                return _ServerCard(
+                  display: display,
+                  egressIp: _c.egressIp.value,
+                  egressLoading: _c.egressIpLoading.value,
+                  connected: _c.isConnected,
+                  onTap: widget.onOpenServers,
+                );
+              }),
             ],
           ),
         ),
@@ -543,13 +552,13 @@ class _DataReadout extends StatelessWidget {
 
 class _ServerCard extends StatelessWidget {
   const _ServerCard({
-    required this.node,
+    required this.display,
     this.egressIp,
     this.egressLoading = false,
     this.connected = false,
     this.onTap,
   });
-  final VpnNode? node;
+  final NodeDisplay display;
   final String? egressIp;
   final bool egressLoading;
   final bool connected;
@@ -557,13 +566,29 @@ class _ServerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = NodeDisplay.of(node);
+    final d = display;
     return SurfaceCard(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
+      color: d.isPlaceholder ? AppColors.surface2 : AppColors.surface,
+      borderColor: d.isPlaceholder && d.name.contains('unavailable')
+          ? AppColors.warn.withValues(alpha: 0.35)
+          : AppColors.stroke,
       child: Row(
         children: [
-          Text(d.flag, style: const TextStyle(fontSize: 26, height: 1)),
+          if (d.isPlaceholder)
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.hub_outlined, size: 22, color: AppColors.accent.withValues(alpha: 0.9)),
+            )
+          else
+            Text(d.flag, style: const TextStyle(fontSize: 26, height: 1)),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
@@ -609,7 +634,10 @@ class _ServerCard extends StatelessWidget {
             children: [
               Text(d.loadLabel, style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor)),
               const SizedBox(height: 2),
-              Text('CHANGE ›', style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted)),
+              Text(
+                d.isPlaceholder ? 'BROWSE ›' : 'CHANGE ›',
+                style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted),
+              ),
             ],
           ),
         ],

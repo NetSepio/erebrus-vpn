@@ -2,13 +2,25 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 
-/// Production gateway — override at build time via `--dart-define=GATEWAY_URL=…`.
+import '../auth/runtime_config.dart';
+
+/// Production gateway — override at build time via `--dart-define=GATEWAY_URL=…`
+/// or project-root `.env` (bundled on mobile).
 const kDefaultGatewayUrl = 'https://gateway.erebrus.io';
 
-const kGatewayUrl = String.fromEnvironment(
-  'GATEWAY_URL',
-  defaultValue: kDefaultGatewayUrl,
-);
+const _kGatewayUrlDefine = String.fromEnvironment('GATEWAY_URL', defaultValue: '');
+
+/// Resolved gateway base URL (dart-define → bundled `.env` → production default).
+String resolveGatewayUrl() {
+  final fromDefine = _kGatewayUrlDefine.trim();
+  if (fromDefine.isNotEmpty) return fromDefine;
+  final fromEnv = RuntimeConfig.gatewayUrl.trim();
+  if (fromEnv.isNotEmpty) return fromEnv;
+  return kDefaultGatewayUrl;
+}
+
+/// Compile-time override when set; otherwise empty (use [resolveGatewayUrl]).
+const kGatewayUrl = _kGatewayUrlDefine;
 
 /// v2 trial length (`trial_period=168h` in gateway platform_settings).
 const kTrialPeriodDays = 7;

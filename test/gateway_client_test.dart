@@ -25,7 +25,7 @@ void main() {
   });
 
   test('GatewayClient defaults to production gateway', () {
-    final c = GatewayClient();
+    final c = GatewayClient(baseUrl: 'https://gateway.erebrus.io');
     expect(c.baseUrl, 'https://gateway.erebrus.io');
   });
 

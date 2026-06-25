@@ -5,7 +5,7 @@ import 'gateway_config.dart';
 import 'gateway_http.dart';
 import 'vpn_models.dart';
 
-export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodDays;
+export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodDays, resolveGatewayUrl;
 
 /// Last-known erebrus-nexus payload — used when the gateway registry is empty
 /// but the node at :9080 is still running (dev / ops gap).
@@ -22,7 +22,7 @@ const kDevFallbackNodeJson = {
 /// Thin HTTP client for the Erebrus gateway discovery + provisioning APIs.
 class GatewayClient {
   GatewayClient({String? baseUrl, String? bearerToken})
-      : _base = GatewayHttp.normalizeBase(baseUrl ?? kGatewayUrl),
+      : _base = GatewayHttp.normalizeBase(baseUrl ?? resolveGatewayUrl()),
         _bearerToken = bearerToken;
 
   final Uri _base;
@@ -36,7 +36,24 @@ class GatewayClient {
   }
 
   Future<List<VpnNode>> fetchNodes() async {
-    final decoded = await _getJson('/api/v2/nodes?status=online');
+    GatewayException? lastError;
+    for (final query in const [
+      {'status': 'online'},
+      null,
+    ]) {
+      try {
+        final decoded = await _getJson('/api/v2/nodes', query: query);
+        return _parseNodes(decoded);
+      } on GatewayException catch (e) {
+        lastError = e;
+        final is404 = e.message.contains('404') || e.message.toLowerCase().contains('not found');
+        if (!is404) rethrow;
+      }
+    }
+    throw lastError ?? GatewayException('Gateway registry not found at $baseUrl');
+  }
+
+  List<VpnNode> _parseNodes(dynamic decoded) {
     final list = decoded is List
         ? decoded
         : (decoded is Map ? (decoded['nodes'] as List?) : null) ?? const [];
@@ -120,13 +137,19 @@ class GatewayClient {
     return map;
   }
 
-  Future<dynamic> _getJson(String path) => _request('GET', path);
+  Future<dynamic> _getJson(String path, {Map<String, String>? query}) =>
+      _request('GET', path, query: query);
 
   Future<dynamic> _postJson(String path, Map<String, dynamic> body) =>
       _request('POST', path, body: body);
 
-  Future<dynamic> _request(String method, String path, {Map<String, dynamic>? body}) async {
-    final uri = _base.replace(path: '${_base.path}$path');
+  Future<dynamic> _request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+  }) async {
+    final uri = GatewayHttp.apiUri(_base, path: path, query: query);
     final client = HttpClient();
     try {
       final req = await client.openUrl(method, uri);
@@ -144,7 +167,7 @@ class GatewayClient {
       if (text.isEmpty) return const {};
       return jsonDecode(text);
     } on SocketException catch (e) {
-      throw GatewayException('Cannot reach gateway at $baseUrl (${e.message})');
+      throw GatewayException('Cannot reach $baseUrl (${e.message})');
     } on FormatException {
       throw GatewayException('Gateway returned invalid JSON');
     } finally {

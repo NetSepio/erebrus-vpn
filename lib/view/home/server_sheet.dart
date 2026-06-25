@@ -6,6 +6,7 @@ import '../../vpn/gateway_controller.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'node_display.dart';
+import 'nodes_empty_panel.dart';
 import 'sheet_chrome.dart';
 
 /// Presents the node-picker bottom sheet (slide-up, rounded top, dim backdrop).
@@ -29,14 +30,37 @@ class _ServerSheetState extends State<_ServerSheet> {
   String _filter = 'all'; // all | public | private
 
   @override
+  void initState() {
+    super.initState();
+    // Always hit the gateway when the sheet opens — node list is not cached locally.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Get.find<GatewayController>().refreshNodes();
+    });
+  }
+
+  bool _matchesFilter(VpnNode node) {
+    return switch (_filter) {
+      'private' => node.isPrivateAccess,
+      'public' => !node.isPrivateAccess,
+      _ => true,
+    };
+  }
+
+  Future<void> _refresh(GatewayController gateway) async {
+    setState(() => _filter = 'all');
+    await gateway.refreshNodes();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final gateway = Get.find<GatewayController>();
     final vpn = Get.find<VpnController>();
 
     return Obx(() {
-      final nodes = gateway.nodes
-          .where((n) => _filter == 'all' || NodeDisplay.of(n).access == _filter)
-          .toList();
+      final allNodes = gateway.nodes;
+      final nodes = allNodes.where(_matchesFilter).toList();
+      final err = gateway.error.value;
+      final warn = gateway.warning.value;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -51,15 +75,19 @@ class _ServerSheetState extends State<_ServerSheet> {
                   children: [
                     Text('Select node', style: grotesk(size: 18, weight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('${nodes.length} NODES AVAILABLE',
-                        style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04)),
+                    Text(
+                      _filter == 'all'
+                          ? '${allNodes.length} NODES ONLINE'
+                          : '${nodes.length} OF ${allNodes.length} NODES',
+                      style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04),
+                    ),
                   ],
                 ),
                 const Spacer(),
                 Obx(() {
                   final busy = gateway.loading.value;
                   return GestureDetector(
-                    onTap: busy ? null : gateway.refreshNodes,
+                    onTap: busy ? null : () => _refresh(gateway),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: busy
@@ -76,6 +104,12 @@ class _ServerSheetState extends State<_ServerSheet> {
               ],
             ),
           ),
+          if (warn != null && warn.isNotEmpty && allNodes.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+              child: Text(warn, style: grotesk(size: 12, color: AppColors.warn)),
+            ),
+          ],
           // search (decorative)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
@@ -111,16 +145,10 @@ class _ServerSheetState extends State<_ServerSheet> {
           // node rows
           Flexible(
             child: nodes.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Center(
-                      child: Text(
-                        _filter == 'all'
-                            ? 'No nodes available yet'
-                            : 'No $_filter nodes for this wallet',
-                        style: grotesk(size: 13.5, weight: FontWeight.w400, color: AppColors.textMuted),
-                      ),
-                    ),
+                ? _buildEmptyState(
+                    gateway: gateway,
+                    allNodes: allNodes,
+                    err: err,
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
@@ -142,6 +170,31 @@ class _ServerSheetState extends State<_ServerSheet> {
         ],
       );
     });
+  }
+
+  Widget _buildEmptyState({
+    required GatewayController gateway,
+    required List<VpnNode> allNodes,
+    required String? err,
+  }) {
+    if (allNodes.isEmpty) {
+      if (gateway.loading.value) {
+        return NodesEmptyPanel.registryEmpty(loading: true);
+      }
+      if (err != null && err.isNotEmpty) {
+        return NodesEmptyPanel.registryError(
+          message: err,
+          gatewayUrl: gateway.gatewayUrl.value,
+          onRetry: () => _refresh(gateway),
+        );
+      }
+      return NodesEmptyPanel.registryEmpty(onRetry: () => _refresh(gateway));
+    }
+    return NodesEmptyPanel.filteredEmpty(
+      filter: _filter,
+      totalOnline: allNodes.length,
+      onShowAll: () => setState(() => _filter = 'all'),
+    );
   }
 
   void _select(VpnController vpn, VpnNode node) {
@@ -257,4 +310,3 @@ class _FilterChip extends StatelessWidget {
     );
   }
 }
-

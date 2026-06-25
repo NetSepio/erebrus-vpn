@@ -74,6 +74,8 @@ flutter:
 
   assets:
     - assets/icons/tray_icon.png
+    - assets/icons/erebrus-vpn-icon-1024.png
+    - assets/icons/erebrus-vpn-glyph-white-1024.png
     - .env
 
   fonts:

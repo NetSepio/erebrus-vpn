@@ -66,7 +66,9 @@ class VpnNode {
   bool get supportsStealth =>
       protocols.contains('vless-reality') || protocols.contains('hysteria2');
 
-  bool get isDraining => status == 'draining';
+  bool get isDraining => status.toLowerCase() == 'draining';
+  bool get isOffline => status.toLowerCase() == 'offline';
+  bool get isPrivateAccess => accessMode.toLowerCase() == 'private';
   bool get requiresHigherTier => minTier > 0;
 
   factory VpnNode.fromJson(Map<String, dynamic> j) {

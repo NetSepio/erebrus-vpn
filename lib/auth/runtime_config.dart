@@ -15,6 +15,10 @@ class RuntimeConfig {
 
   static bool get hasReownProjectId => reownProjectId.isNotEmpty;
 
+  static String get gatewayUrl => _values['GATEWAY_URL'] ?? '';
+
+  static String get erebrusWebOrigin => _values['EREBRUS_WEB_ORIGIN'] ?? '';
+
   static Future<void> load() async {
     if (kReownProjectId.isNotEmpty) {
       debugPrint('[Config] REOWN_PROJECT_ID from --dart-define');

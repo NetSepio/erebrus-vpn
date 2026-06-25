@@ -10,7 +10,7 @@ import '../vpn/gateway_http.dart';
 /// Wallet auth + subscriptions against the Erebrus gateway (v2).
 class GatewayAuthClient {
   GatewayAuthClient({String? gatewayUrl})
-      : _base = GatewayHttp.normalizeBase(gatewayUrl ?? kGatewayUrl);
+      : _base = GatewayHttp.normalizeBase(gatewayUrl ?? resolveGatewayUrl());
 
   final Uri _base;
 
@@ -24,9 +24,10 @@ class GatewayAuthClient {
     required String walletAddress,
     String chain = kSolanaChain,
   }) async {
-    final uri = _base.replace(
-      path: '${_base.path}/api/v2/auth',
-      queryParameters: {
+    final uri = GatewayHttp.apiUri(
+      _base,
+      path: '/api/v2/auth',
+      query: {
         'wallet_address': walletAddress,
         'chain': chain,
       },
@@ -55,7 +56,7 @@ class GatewayAuthClient {
       body['ref'] = ref;
     }
     final map = await _postJson(
-      _base.replace(path: '${_base.path}/api/v2/auth'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth'),
       body,
     );
     return AuthSession(
@@ -69,7 +70,7 @@ class GatewayAuthClient {
   /// `GET /api/v2/subscriptions` — requires bearer token.
   Future<EntitlementState> fetchSubscription(String bearerToken) async {
     final map = await _getJson(
-      _base.replace(path: '${_base.path}/api/v2/subscriptions'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/subscriptions'),
       bearerToken: bearerToken,
     );
     return EntitlementState.fromJson(map);
@@ -78,7 +79,7 @@ class GatewayAuthClient {
   /// `POST /api/v2/subscriptions/trial` — one-time free trial (7 days on pro).
   Future<EntitlementState> startTrial(String bearerToken) async {
     final map = await _postJson(
-      _base.replace(path: '${_base.path}/api/v2/subscriptions/trial'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/subscriptions/trial'),
       const {},
       bearerToken: bearerToken,
     );
@@ -95,7 +96,7 @@ class GatewayAuthClient {
   /// `GET /api/v2/account/profile`
   Future<UserProfile> fetchProfile(String bearerToken) async {
     final map = await _getJson(
-      _base.replace(path: '${_base.path}/api/v2/account/profile'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/account/profile'),
       bearerToken: bearerToken,
     );
     return UserProfile.fromJson(map);
@@ -104,7 +105,7 @@ class GatewayAuthClient {
   /// `PATCH /api/v2/account/profile` — updates display name only.
   Future<UserProfile> patchProfile(String bearerToken, {required String name}) async {
     final map = await _patchJson(
-      _base.replace(path: '${_base.path}/api/v2/account/profile'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/account/profile'),
       {'name': name},
       bearerToken: bearerToken,
     );
@@ -114,7 +115,7 @@ class GatewayAuthClient {
   /// `POST /api/v2/auth/email` — send OTP to link a recovery email.
   Future<void> startEmailLink(String bearerToken, String email) async {
     await _postJson(
-      _base.replace(path: '${_base.path}/api/v2/auth/email'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/email'),
       {'email': email.trim()},
       bearerToken: bearerToken,
     );
@@ -127,7 +128,7 @@ class GatewayAuthClient {
     required String code,
   }) async {
     final map = await _postJson(
-      _base.replace(path: '${_base.path}/api/v2/auth/email/verify'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/email/verify'),
       {'email': email.trim(), 'code': code.trim()},
       bearerToken: bearerToken,
     );
@@ -137,7 +138,7 @@ class GatewayAuthClient {
   /// `POST /api/v2/subscriptions/nft/refresh` — verify gating NFT, grant ~30d.
   Future<EntitlementState> refreshNftEntitlement(String bearerToken) async {
     final map = await _postJson(
-      _base.replace(path: '${_base.path}/api/v2/subscriptions/nft/refresh'),
+      GatewayHttp.apiUri(_base, path: '/api/v2/subscriptions/nft/refresh'),
       const {},
       bearerToken: bearerToken,
     );

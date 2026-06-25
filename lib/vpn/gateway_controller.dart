@@ -73,14 +73,16 @@ class GatewayController extends GetxController {
     };
   }
 
+  /// Fetches the live node registry from the gateway (not cached locally).
   Future<void> refreshNodes() async {
     loading.value = true;
     error.value = null;
     warning.value = null;
+    final previous = List<VpnNode>.from(nodes);
     try {
       debugPrint('[Gateway] fetching nodes from ${gatewayUrl.value}');
       var list = await _client.fetchNodes();
-      list = list.where((n) => !n.isDraining && n.status != 'offline').toList();
+      list = list.where((n) => !n.isDraining && !n.isOffline).toList();
 
       if (list.isEmpty) {
         if (kDebugMode) {
@@ -88,7 +90,7 @@ class GatewayController extends GetxController {
           list = GatewayClient.devFallbackNodes();
           warning.value = 'Dev: gateway returned 0 online nodes — showing erebrus-nexus';
         } else {
-          warning.value = 'No servers available — pull to refresh in a moment';
+          warning.value = 'No servers available — try refresh again in a moment';
         }
       }
 
@@ -99,14 +101,26 @@ class GatewayController extends GetxController {
       Get.find<VpnController>().reconcileNodeFromGateway();
     } on GatewayException catch (e) {
       debugPrint('[Gateway] error: ${e.message}');
-      error.value = e.message;
-      nodes.clear();
-      _reconcileSelection(const []);
+      error.value = '${e.message} · ${gatewayUrl.value}';
+      if (previous.isNotEmpty) {
+        warning.value = 'Showing last known servers — refresh failed';
+        nodes.assignAll(previous);
+        nodes.refresh();
+      } else {
+        nodes.clear();
+        _reconcileSelection(const []);
+      }
     } catch (e) {
       debugPrint('[Gateway] error: $e');
       error.value = e.toString();
-      nodes.clear();
-      _reconcileSelection(const []);
+      if (previous.isNotEmpty) {
+        warning.value = 'Showing last known servers — refresh failed';
+        nodes.assignAll(previous);
+        nodes.refresh();
+      } else {
+        nodes.clear();
+        _reconcileSelection(const []);
+      }
     } finally {
       loading.value = false;
     }
