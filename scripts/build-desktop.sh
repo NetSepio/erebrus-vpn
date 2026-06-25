@@ -64,10 +64,8 @@ embed_singbox_windows() {
 dart_define_args() {
   if [[ -f "${ROOT_DIR}/.env" ]]; then
     echo "--dart-define-from-file=${ROOT_DIR}/.env"
-  elif [[ -f "${ROOT_DIR}/env.json" ]]; then
-    echo "--dart-define-from-file=${ROOT_DIR}/env.json"
   else
-    echo "⚠ .env missing — copy example.env to .env and set REOWN_PROJECT_ID" >&2
+    echo "⚠ .env missing — cp env.example .env and set REOWN_PROJECT_ID" >&2
   fi
 }
 

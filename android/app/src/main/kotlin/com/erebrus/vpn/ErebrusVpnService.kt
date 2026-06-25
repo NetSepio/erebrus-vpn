@@ -150,7 +150,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private fun stopTunnel() {
         if (stopping) return
         stopping = true
-        val run = {
+        val run: () -> Unit = {
             SingboxBridge.emitStage("disconnecting")
             stopForeground(STOP_FOREGROUND_REMOVE)
             releaseTunnelResources()

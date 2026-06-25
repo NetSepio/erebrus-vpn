@@ -6,6 +6,7 @@ import 'credential_cache.dart';
 import 'gateway_client.dart';
 import 'vpn_controller.dart';
 import 'vpn_models.dart';
+import 'vpn_session_store.dart';
 
 /// Loads the gateway node list and wires [VpnController.provisioner].
 class GatewayController extends GetxController {
@@ -33,6 +34,8 @@ class GatewayController extends GetxController {
   }
 
   void setBearerToken(String? token) => _client.setBearerToken(token);
+
+  Future<void> clearLocalCaches() => _bundleCache.clearAll();
 
   void _wireProvisioner() {
     final vpn = Get.find<VpnController>();
@@ -77,31 +80,78 @@ class GatewayController extends GetxController {
     try {
       debugPrint('[Gateway] fetching nodes from ${gatewayUrl.value}');
       var list = await _client.fetchNodes();
+      list = list.where((n) => !n.isDraining && n.status != 'offline').toList();
+
       if (list.isEmpty) {
-        debugPrint('[Gateway] registry empty — using dev fallback erebrus-nexus');
-        list = GatewayClient.devFallbackNodes();
-        warning.value =
-            'Gateway returned 0 nodes. Showing erebrus-nexus from cache — '
-            'the node may need to re-register with the gateway.';
+        if (kDebugMode) {
+          debugPrint('[Gateway] registry empty — dev fallback erebrus-nexus');
+          list = GatewayClient.devFallbackNodes();
+          warning.value = 'Dev: gateway returned 0 online nodes — showing erebrus-nexus';
+        } else {
+          warning.value = 'No servers available — pull to refresh in a moment';
+        }
       }
+
       nodes.assignAll(list);
       nodes.refresh();
       debugPrint('[Gateway] loaded ${list.length} node(s): ${list.map((n) => n.name).join(", ")}');
-      final vpn = Get.find<VpnController>();
-      if (vpn.selectedNode.value == null && list.isNotEmpty) {
-        vpn.selectNode(list.first);
-      }
-      vpn.reconcileNodeFromGateway();
+      _reconcileSelection(list);
+      Get.find<VpnController>().reconcileNodeFromGateway();
     } on GatewayException catch (e) {
       debugPrint('[Gateway] error: ${e.message}');
       error.value = e.message;
       nodes.clear();
+      _reconcileSelection(const []);
     } catch (e) {
       debugPrint('[Gateway] error: $e');
       error.value = e.toString();
       nodes.clear();
+      _reconcileSelection(const []);
     } finally {
       loading.value = false;
     }
+  }
+
+  void _reconcileSelection(List<VpnNode> list) {
+    final vpn = Get.find<VpnController>();
+    final current = vpn.selectedNode.value;
+
+    if (current != null) {
+      VpnNode? match;
+      for (final n in list) {
+        if (n.id == current.id) {
+          match = n;
+          break;
+        }
+      }
+      if (match != null) {
+        vpn.selectNode(match);
+        return;
+      }
+      if (!vpn.isConnected && !vpn.killSwitchBlocking.value) {
+        vpn.clearSelectedNode();
+        if (list.isNotEmpty) {
+          vpn.selectNode(list.first);
+          warning.value ??= 'Previous server is no longer available — picked ${list.first.name}';
+        } else {
+          warning.value ??= 'Previous server is no longer available';
+        }
+        return;
+      }
+    }
+
+    if (current == null && list.isNotEmpty && !vpn.isConnected) {
+      vpn.selectNode(list.first);
+    }
+  }
+
+  /// Clears VPN-side persisted state (bundles, session snapshot, WG keys).
+  Future<void> resetVpnLocalState() async {
+    await clearLocalCaches();
+    await VpnSessionStore.clear();
+    if (Get.isRegistered<VpnController>()) {
+      await Get.find<VpnController>().resetLocalVpnData();
+    }
+    await refreshNodes();
   }
 }

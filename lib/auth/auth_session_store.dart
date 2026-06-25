@@ -31,7 +31,9 @@ class AuthSessionStore {
     if (PlatformCapabilities.isDesktop) {
       return _readPrefs();
     }
-    return _readSecure();
+    final secure = await _readSecure();
+    if (secure != null) return secure;
+    return _readPrefs();
   }
 
   Future<void> write({
@@ -58,12 +60,9 @@ class AuthSessionStore {
     }
 
     final secureOk = await _writeSecure(session);
-    if (!secureOk) {
-      throw PlatformException(
-        code: 'secure_storage_unavailable',
-        message: 'Could not persist sign-in session',
-      );
-    }
+    if (secureOk) return;
+    await _writePrefs(session);
+    debugPrint('[Auth] session saved (mobile prefs fallback — KeyStore unavailable)');
   }
 
   Future<void> clear() async {
@@ -71,6 +70,7 @@ class AuthSessionStore {
       await _clearPrefs();
       return;
     }
+    await _clearPrefs();
     for (final key in [kToken, kWallet, kUserId, kRole, kAuthMethod, kMwaToken]) {
       try {
         await _storage.delete(key: key);

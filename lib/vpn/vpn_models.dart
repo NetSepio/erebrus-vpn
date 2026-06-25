@@ -46,6 +46,10 @@ class VpnNode {
     required this.did,
     required this.protocols,
     required this.loadPct,
+    this.status = 'online',
+    this.accessMode = 'public',
+    this.minTier = 0,
+    this.latencyMs,
   });
 
   final String id;
@@ -54,18 +58,32 @@ class VpnNode {
   final String did;
   final List<String> protocols;
   final double loadPct;
+  final String status;
+  final String accessMode;
+  final int minTier;
+  final int? latencyMs;
 
   bool get supportsStealth =>
       protocols.contains('vless-reality') || protocols.contains('hysteria2');
 
-  factory VpnNode.fromJson(Map<String, dynamic> j) => VpnNode(
-        id: (j['node_id'] ?? j['id'] ?? '').toString(),
-        name: (j['name'] ?? 'Erebrus node').toString(),
-        region: (j['region'] ?? '').toString(),
-        did: (j['did'] ?? '').toString(),
-        protocols: ((j['protocols'] as List?) ?? const []).map((e) => e.toString()).toList(),
-        loadPct: (j['load_pct'] as num?)?.toDouble() ?? 0,
-      );
+  bool get isDraining => status == 'draining';
+  bool get requiresHigherTier => minTier > 0;
+
+  factory VpnNode.fromJson(Map<String, dynamic> j) {
+    final speedtest = (j['speedtest'] as Map?)?.cast<String, dynamic>();
+    return VpnNode(
+      id: (j['node_id'] ?? j['id'] ?? '').toString(),
+      name: (j['name'] ?? 'Erebrus node').toString(),
+      region: (j['region'] ?? '').toString(),
+      did: (j['did'] ?? '').toString(),
+      protocols: ((j['protocols'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      loadPct: (j['load_pct'] as num?)?.toDouble() ?? 0,
+      status: (j['status'] ?? 'online').toString(),
+      accessMode: (j['access_mode'] ?? 'public').toString(),
+      minTier: (j['min_tier'] as num?)?.toInt() ?? 0,
+      latencyMs: (speedtest?['latency_ms'] as num?)?.toInt(),
+    );
+  }
 }
 
 /// The unified credential bundle returned by the gateway when a VPN client is

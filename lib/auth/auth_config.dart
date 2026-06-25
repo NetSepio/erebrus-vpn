@@ -1,18 +1,15 @@
-/// Reown (WalletConnect) project id — mobile only; inject at build/run time.
-///
-/// Copy [example.env] to `.env` (gitignored). Format: `KEY=value` per line —
-/// no quotes, no spaces around `=`. Then run:
-/// `flutter run --dart-define-from-file=.env`
+/// Config: project-root `.env` (bundled into the app) or `--dart-define-from-file`.
+
+/// Reown (WalletConnect) project id — Android / iOS wallet login.
 const kReownProjectId = String.fromEnvironment('REOWN_PROJECT_ID');
 
 /// True when [kReownProjectId] was passed via `--dart-define` / `.env`.
 bool get hasReownProjectId => kReownProjectId.isNotEmpty;
 
-/// Erebrus webapp origin for desktop browser sign-in.
-/// Dev: https://dev.erebrus.io · Prod: https://erebrus.io
+/// Erebrus webapp origin for desktop browser sign-in (override in .env for local dev).
 const kErebrusWebOrigin = String.fromEnvironment(
   'EREBRUS_WEB_ORIGIN',
-  defaultValue: 'https://dev.erebrus.io',
+  defaultValue: 'https://erebrus.io',
 );
 
 /// Webapp route that performs wallet auth and redirects with a PASETO token.
@@ -44,9 +41,8 @@ const kErebrusUniversalRedirect = 'https://erebrus.io/vpn';
 
 /// Shown when Reown init runs without a project id in the build environment.
 const kReownProjectIdMissingMessage =
-    'REOWN_PROJECT_ID is not set. Copy example.env to .env, add your '
-    'project id from cloud.reown.com, then run with '
-    '--dart-define-from-file=.env';
+    'REOWN_PROJECT_ID is not set. Add it to .env in the project root '
+    '(cp env.example .env), then rebuild the app.';
 
 /// macOS / iOS bundle id — sent to the webapp as `client_id`.
 const kErebrusBundleId = 'com.erebrus.vpn';

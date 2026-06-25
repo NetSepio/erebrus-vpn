@@ -18,4 +18,18 @@ void main() {
     );
     expect(msg, contains('free trial'));
   });
+
+  test('friendlyGatewayError maps tier gate', () {
+    final msg = friendlyGatewayError(
+      GatewayException('node requires a higher tier'),
+    );
+    expect(msg, contains('tier'));
+  });
+
+  test('friendlyGatewayError maps private node', () {
+    final msg = friendlyGatewayError(
+      GatewayException('private node — org membership required'),
+    );
+    expect(msg, contains('private'));
+  });
 }

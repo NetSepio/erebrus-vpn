@@ -50,7 +50,7 @@ app.*.map.json
 # sing-box CLI binaries (fetch via scripts/fetch-singbox-cli.sh)
 /bin/sing-box/
 
-# Local secrets / dart-define injection (copy from example.env)
+# Local secrets (copy from env.example)
 .env
 
 # sing-box libbox binaries (build via scripts/build-libbox*.sh)

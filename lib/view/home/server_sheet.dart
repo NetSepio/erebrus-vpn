@@ -26,7 +26,7 @@ class _ServerSheet extends StatefulWidget {
 }
 
 class _ServerSheetState extends State<_ServerSheet> {
-  String _filter = 'all'; // all | public | private | shared
+  String _filter = 'all'; // all | public | private
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +56,22 @@ class _ServerSheetState extends State<_ServerSheet> {
                   ],
                 ),
                 const Spacer(),
+                Obx(() {
+                  final busy = gateway.loading.value;
+                  return GestureDetector(
+                    onTap: busy ? null : gateway.refreshNodes,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                            )
+                          : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+                    ),
+                  );
+                }),
                 SheetCloseButton(onTap: () => Navigator.of(context).pop()),
               ],
             ),
@@ -84,7 +100,7 @@ class _ServerSheetState extends State<_ServerSheet> {
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
             child: Row(
               children: [
-                for (final f in const [('all', 'ALL'), ('public', 'PUBLIC'), ('private', 'PRIVATE'), ('shared', 'SHARED')])
+                for (final f in const [('all', 'ALL'), ('public', 'PUBLIC'), ('private', 'PRIVATE')])
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _FilterChip(label: f.$2, active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
@@ -176,6 +192,8 @@ class _NodeRow extends StatelessWidget {
                       Container(width: 4, height: 4, decoration: BoxDecoration(color: d.networkColor, shape: BoxShape.circle)),
                       Text(d.network, style: mono(size: 10.5, weight: FontWeight.w400, color: AppColors.textTertiary)),
                       _AccessPill(label: d.accessLabel, color: d.accessColor),
+                      if (d.tierLabel != null)
+                        _AccessPill(label: d.tierLabel!, color: AppColors.warn),
                       if (d.supportsStealth)
                         Text('stealth', style: mono(size: 10.5, weight: FontWeight.w400, color: AppColors.textMuted)),
                     ],

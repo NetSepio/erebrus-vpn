@@ -193,8 +193,10 @@ class LoginView extends StatelessWidget {
                       ),
                     ],
 
-                    const SizedBox(height: 22),
-                    const _PasteTokenSection(),
+                    if (webLogin) ...[
+                      const SizedBox(height: 22),
+                      const _PasteTokenSection(),
+                    ],
 
                     const SizedBox(height: 26),
                     Obx(() {
@@ -388,7 +390,7 @@ class _ConnectingOverlay extends StatelessWidget {
                   : 'verifying credentials…',
               style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary),
             ),
-            if (waitingForBrowser && onPasteFromClipboard != null) ...[
+            if (waitingForBrowser && PlatformCapabilities.usesWebLogin && onPasteFromClipboard != null) ...[
               const SizedBox(height: 28),
               Text(
                 'Redirect didn\'t work?',

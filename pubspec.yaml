@@ -74,6 +74,7 @@ flutter:
 
   assets:
     - assets/icons/tray_icon.png
+    - .env
 
   fonts:
     - family: Space Grotesk

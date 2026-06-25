@@ -11,14 +11,26 @@ void main() {
       'did': 'did:erebrus:test',
       'protocols': ['wireguard', 'vless-reality'],
       'load_pct': 14.68,
+      'status': 'online',
+      'access_mode': 'public',
+      'min_tier': 1,
+      'speedtest': {'latency_ms': 42},
     });
     expect(node.id, '59d52ecd-dfc3-41c2-90a4-0d2495a239e2');
     expect(node.name, 'erebrus-nexus');
     expect(node.supportsStealth, isTrue);
+    expect(node.minTier, 1);
+    expect(node.latencyMs, 42);
+    expect(node.requiresHigherTier, isTrue);
   });
 
-  test('GatewayClient normalizes base URL', () {
-    final c = GatewayClient(baseUrl: '212.147.232.36:8080');
+  test('GatewayClient defaults to production gateway', () {
+    final c = GatewayClient();
+    expect(c.baseUrl, 'https://gateway.erebrus.io');
+  });
+
+  test('GatewayClient normalizes dev base URL', () {
+    final c = GatewayClient(baseUrl: 'http://212.147.232.36:8080');
     expect(c.baseUrl, 'http://212.147.232.36:8080');
   });
 }

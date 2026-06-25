@@ -3,14 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../vpn/vpn_models.dart';
 
-/// Maps a real gateway [VpnNode] onto the fields the design's node UI shows.
-///
-/// The gateway discovery list (`GET /api/v2/nodes`) currently returns
-/// id/name/region/protocols/load — it does not yet carry ping, peer counts, or
-/// public/private/shared access scoping. We surface what is real (name, region,
-/// load, transport capability) and default the rest (network = Solana, access =
-/// public) rather than inventing latency/peer numbers. As the node API grows to
-/// match the handoff data model, extend this mapper.
+/// Maps a gateway [VpnNode] onto the fields the connect / server picker UI shows.
 class NodeDisplay {
   const NodeDisplay({
     required this.flag,
@@ -21,6 +14,8 @@ class NodeDisplay {
     required this.loadValue,
     required this.access,
     required this.supportsStealth,
+    this.minTier = 0,
+    this.latencyMs,
   });
 
   final String flag;
@@ -29,8 +24,10 @@ class NodeDisplay {
   final String network;
   final Color networkColor;
   final double loadValue;
-  final String access; // public | private | shared
+  final String access; // public | private
   final bool supportsStealth;
+  final int minTier;
+  final int? latencyMs;
 
   String get loadLabel => '${loadValue.toStringAsFixed(0)}%';
 
@@ -39,15 +36,15 @@ class NodeDisplay {
 
   String get accessLabel => switch (access) {
         'private' => 'Private',
-        'shared' => 'Shared',
         _ => 'Public',
       };
 
   Color get accessColor => switch (access) {
         'private' => AppColors.accent,
-        'shared' => AppColors.shared,
         _ => AppColors.textMuted,
       };
+
+  String? get tierLabel => minTier > 0 ? 'T$minTier' : null;
 
   static NodeDisplay of(VpnNode? node) {
     if (node == null) {
@@ -62,15 +59,20 @@ class NodeDisplay {
         supportsStealth: false,
       );
     }
+    final region = node.region.isEmpty ? 'Erebrus node' : node.region;
+    final latency = node.latencyMs;
+    final location = latency != null ? '$region · ${latency}ms' : region;
     return NodeDisplay(
       flag: _flag(node.region),
       name: node.name,
-      location: node.region.isEmpty ? 'Erebrus node' : node.region,
+      location: location,
       network: 'SOL',
       networkColor: AppColors.solana,
       loadValue: node.loadPct,
-      access: 'public',
+      access: node.accessMode,
       supportsStealth: node.supportsStealth,
+      minTier: node.minTier,
+      latencyMs: latency,
     );
   }
 

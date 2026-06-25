@@ -6,6 +6,7 @@ import 'package:reown_appkit/reown_appkit.dart';
 import 'dart:async';
 
 import 'auth/deep_link_handler.dart';
+import 'auth/runtime_config.dart';
 import 'auth/wallet_auth_controller.dart';
 import 'platform/desktop_shell.dart';
 import 'platform/platform_capabilities.dart';
@@ -20,6 +21,7 @@ import 'vpn/vpn_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await RuntimeConfig.load();
   DeepLinkHandler.initListener();
   if (PlatformCapabilities.isMobile) {
     await SystemChrome.setPreferredOrientations([

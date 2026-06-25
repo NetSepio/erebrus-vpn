@@ -156,7 +156,12 @@ class VpnController extends GetxController {
     if (session == null) return;
     mode.value = session.mode;
     activeTransport.value = session.transport;
-    selectedNode.value = _matchNode(session) ?? session.toNode();
+    final matched = _matchNode(session);
+    if (matched != null) {
+      selectedNode.value = matched;
+    } else if (isConnected || killSwitchBlocking.value) {
+      selectedNode.value = session.toNode();
+    }
   }
 
   VpnNode? _matchNode(VpnSessionSnapshot session) {
@@ -189,6 +194,17 @@ class VpnController extends GetxController {
 
   void setMode(ConnectMode m) => mode.value = m;
   void selectNode(VpnNode n) => selectedNode.value = n;
+  void clearSelectedNode() => selectedNode.value = null;
+
+  /// Wipes locally stored WG keys and disconnects (used on sign-out / reset).
+  Future<void> resetLocalVpnData() async {
+    await disconnect().catchError((_) {});
+    selectedNode.value = null;
+    activeTransport.value = null;
+    await _deleteStoredSecret(_kWgPrivate);
+    await _deleteStoredSecret(_kWgPublic);
+    await VpnSessionStore.clear();
+  }
 
   /// Connects to [node] (or the currently selected node) using the current mode,
   /// trying each candidate transport in order until one connects.
@@ -441,6 +457,16 @@ class VpnController extends GetxController {
       return DesktopPrefsStorage.write(key, value);
     }
     return _storage.write(key: key, value: value);
+  }
+
+  Future<void> _deleteStoredSecret(String key) async {
+    try {
+      if (PlatformCapabilities.isDesktop) {
+        await DesktopPrefsStorage.delete(key);
+      } else {
+        await _storage.delete(key: key);
+      }
+    } catch (_) {}
   }
 
   String _clientName() {

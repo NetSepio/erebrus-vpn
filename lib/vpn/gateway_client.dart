@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'gateway_config.dart';
+import 'gateway_http.dart';
 import 'vpn_models.dart';
 
-/// Default Erebrus gateway for local / dev testing.
-const kDefaultGatewayUrl = 'http://212.147.232.36:8080';
+export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodDays;
 
 /// Last-known erebrus-nexus payload — used when the gateway registry is empty
 /// but the node at :9080 is still running (dev / ops gap).
@@ -21,7 +22,7 @@ const kDevFallbackNodeJson = {
 /// Thin HTTP client for the Erebrus gateway discovery + provisioning APIs.
 class GatewayClient {
   GatewayClient({String? baseUrl, String? bearerToken})
-      : _base = _normalizeBase(baseUrl ?? kDefaultGatewayUrl),
+      : _base = GatewayHttp.normalizeBase(baseUrl ?? kGatewayUrl),
         _bearerToken = bearerToken;
 
   final Uri _base;
@@ -35,7 +36,7 @@ class GatewayClient {
   }
 
   Future<List<VpnNode>> fetchNodes() async {
-    final decoded = await _getJson('/api/v2/nodes');
+    final decoded = await _getJson('/api/v2/nodes?status=online');
     final list = decoded is List
         ? decoded
         : (decoded is Map ? (decoded['nodes'] as List?) : null) ?? const [];
@@ -129,20 +130,16 @@ class GatewayClient {
     final client = HttpClient();
     try {
       final req = await client.openUrl(method, uri);
-      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      if (_bearerToken != null && _bearerToken!.isNotEmpty) {
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $_bearerToken');
-      }
+      GatewayHttp.applyHeaders(req, bearerToken: _bearerToken, jsonBody: body != null);
       if (body != null) {
         final encoded = jsonEncode(body);
-        req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
         req.contentLength = utf8.encode(encoded).length;
         req.write(encoded);
       }
       final res = await req.close();
       final text = await utf8.decodeStream(res);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw GatewayException(_errorMessage(res.statusCode, text));
+        throw GatewayException(GatewayHttp.errorMessage(res.statusCode, text));
       }
       if (text.isEmpty) return const {};
       return jsonDecode(text);
@@ -155,23 +152,6 @@ class GatewayClient {
     }
   }
 
-  static String _errorMessage(int status, String body) {
-    try {
-      final j = jsonDecode(body);
-      if (j is Map) {
-        final msg = j['error'] ?? j['message'] ?? j['detail'];
-        if (msg != null) return msg.toString();
-      }
-    } catch (_) {}
-    return 'Gateway error ($status)';
-  }
-
-  static Uri _normalizeBase(String url) {
-    final trimmed = url.trim();
-    final withScheme =
-        trimmed.contains('://') ? trimmed : 'http://$trimmed';
-    return Uri.parse(withScheme);
-  }
 }
 
 class GatewayException implements Exception {

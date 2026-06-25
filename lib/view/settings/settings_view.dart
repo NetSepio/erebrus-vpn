@@ -4,18 +4,36 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../auth/wallet_auth_controller.dart';
+import '../../vpn/gateway_config.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'about_view.dart';
+import 'account_sheets.dart';
+import '../../vpn/gateway_controller.dart';
 
 /// The settings tab — account, subscription, VPN & security, about, log out.
 /// All values are bound to the real controllers; the upgrade CTA is disabled
 /// (trial-only for now) per product.
-class SettingsView extends StatelessWidget {
+class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
+
+  @override
+  State<SettingsView> createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<SettingsView> {
+  @override
+  void initState() {
+    super.initState();
+    final auth = Get.find<WalletAuthController>();
+    if (auth.isAuthenticated) {
+      auth.refreshProfile();
+      Get.find<GatewayController>().refreshNodes();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +75,13 @@ class SettingsView extends StatelessWidget {
                     trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
                   ),
                   _RowDivider(),
-                  _GroupRow(
+                  Obx(() => _GroupRow(
                     icon: Icons.edit_outlined,
                     title: 'Edit profile',
+                    subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
+                    onTap: () => showEditProfileSheet(context, auth),
                     trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
-                  ),
+                  )),
                 ])),
             const SizedBox(height: 18),
 
@@ -99,6 +119,22 @@ class SettingsView extends StatelessWidget {
                   _GroupRow(
                     icon: Icons.alt_route,
                     title: 'Split tunneling',
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                  ),
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.refresh,
+                    title: 'Refresh servers',
+                    subtitle: 'Fetch latest node list from gateway',
+                    onTap: () => Get.find<GatewayController>().refreshNodes(),
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                  ),
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.delete_outline,
+                    title: 'Reset VPN data',
+                    subtitle: 'Clear cached servers, keys, and credentials',
+                    onTap: () => Get.find<GatewayController>().resetVpnLocalState(),
                     trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
                   ),
                 ])),
@@ -267,12 +303,14 @@ class _SubscriptionCard extends StatelessWidget {
     final entitled = ent.entitled;
     final source = ent.source;
     final days = ent.daysRemaining;
-    final busy = auth.isLoadingEntitlement.value || auth.isStartingTrial.value;
+    final busy = auth.isLoadingEntitlement.value ||
+        auth.isStartingTrial.value ||
+        auth.isRefreshingNft.value;
 
     final badge = switch (source) {
       'trial' => 'TRIAL',
       'nft' => 'NFT',
-      'crypto' => 'PRO',
+      'rank' => 'RANK',
       'admin' => 'ADMIN',
       _ => entitled ? 'ACTIVE' : 'FREE',
     };
@@ -280,11 +318,12 @@ class _SubscriptionCard extends StatelessWidget {
     final sub = busy
         ? 'Checking subscription…'
         : entitled
-            ? (days != null ? '$days of 14 days remaining' : 'Active')
+            ? (days != null ? '$days of $kTrialPeriodDays days remaining' : 'Active')
             : ent.trialConsumed
-                ? 'Trial ended — renew on erebrus.io with this wallet'
-                : 'Start a free 14-day trial to connect';
-    final progress = entitled && days != null ? (days / 14).clamp(0.0, 1.0) : 0.0;
+                ? 'Trial ended — verify your gating NFT or renew on erebrus.io'
+                : 'Start a free $kTrialPeriodDays-day trial to connect';
+    final progress =
+        entitled && days != null ? (days / kTrialPeriodDays).clamp(0.0, 1.0) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -333,6 +372,23 @@ class _SubscriptionCard extends StatelessWidget {
                 decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(11)),
                 child: Text(busy ? 'STARTING…' : 'START FREE TRIAL',
                     style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+              ),
+            ),
+          ] else if (ent.nftGatingEnabled) ...[
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: busy ? null : auth.refreshNftEntitlement,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
+                ),
+                child: Text(busy ? 'CHECKING…' : 'VERIFY GATING NFT',
+                    style: mono(size: 13, weight: FontWeight.w600, color: AppColors.accent, letterSpacing: 13 * 0.05)),
               ),
             ),
           ],
@@ -433,26 +489,33 @@ class _EmailRow extends StatelessWidget {
   final WalletAuthController auth;
   @override
   Widget build(BuildContext context) {
-    // The app does not yet track a linked recovery email; offer to connect one
-    // through the existing sign-in/social flow.
-    return Obx(() => _row());
+    return Obx(() => _row(context));
   }
 
-  Widget _row() {
-    final linked = auth.authMethod.value.toLowerCase().contains('email');
+  Widget _row(BuildContext context) {
+    if (!auth.isAuthenticated) {
+      return const _GroupRow(
+        icon: Icons.mail_outline,
+        title: 'Email',
+        subtitle: 'Sign in to link a recovery email',
+      );
+    }
+    final linked = auth.profileEmailVerified.value;
+    final email = auth.profileEmail.value;
     return _GroupRow(
       icon: Icons.mail_outline,
       title: 'Email',
-      subtitle: linked ? 'Recovery email linked' : 'Add a recovery email',
+      subtitle: linked && email.isNotEmpty ? email : 'Add a recovery email (OTP)',
+      onTap: linked ? null : () => showEmailLinkSheet(context, auth),
       trailing: GestureDetector(
-        onTap: linked ? null : auth.openSignIn,
+        onTap: linked ? null : () => showEmailLinkSheet(context, auth),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: (linked ? AppColors.success : AppColors.accent).withValues(alpha: linked ? 0.14 : 0.16),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(linked ? 'LINKED' : 'CONNECT',
+          child: Text(linked ? 'LINKED' : 'LINK',
               style: mono(size: 11, weight: FontWeight.w500, color: linked ? AppColors.success : AppColors.accent, letterSpacing: 11 * 0.06)),
         ),
       ),

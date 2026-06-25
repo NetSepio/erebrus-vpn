@@ -43,6 +43,17 @@ void main() {
     expect(ent.periodEnd, end);
   });
 
+  test('EntitlementState.fromJson parses rank source', () {
+    final ent = EntitlementState.fromJson({
+      'status': 'active',
+      'entitled': true,
+      'source': 'rank',
+      'plan_id': 'pro',
+    });
+    expect(ent.source, 'rank');
+    expect(ent.entitled, isTrue);
+  });
+
   test('daysRemaining counts down to zero', () {
     final ent = EntitlementState(
       entitled: true,

@@ -9,11 +9,13 @@ import 'package:reown_appkit/reown_appkit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'auth_config.dart';
+import 'runtime_config.dart';
 import 'auth_session_store.dart';
 import 'deep_link_handler.dart';
 import 'desktop_web_auth.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import 'user_profile.dart';
 import '../platform/platform_capabilities.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
@@ -42,6 +44,13 @@ class WalletAuthController extends GetxController {
   final entitlement = EntitlementState.none.obs;
   final isLoadingEntitlement = false.obs;
   final isStartingTrial = false.obs;
+  final isRefreshingNft = false.obs;
+  final profileEmail = ''.obs;
+  final profileEmailVerified = false.obs;
+  final profileName = ''.obs;
+  final isLoadingProfile = false.obs;
+  final profileError = RxnString();
+  final isLinkingEmail = false.obs;
   final entitlementError = RxnString();
   final awaitingWebCallback = false.obs;
 
@@ -92,6 +101,7 @@ class WalletAuthController extends GetxController {
         authMethod.value = stored.authMethod;
         _syncGatewayToken();
         await refreshEntitlement();
+        await refreshProfile();
         debugPrint('[Auth] restored session for ${stored.walletAddress}');
       } else {
         entitlement.value = EntitlementState.none;
@@ -108,10 +118,10 @@ class WalletAuthController extends GetxController {
       reownReady.value = false;
       return;
     }
-    if (!hasReownProjectId) {
+    if (!RuntimeConfig.hasReownProjectId) {
       authError.value = kReownProjectIdMissingMessage;
       reownReady.value = false;
-      debugPrint('[Reown] init skipped — REOWN_PROJECT_ID not in build env');
+      debugPrint('[Reown] init skipped — REOWN_PROJECT_ID not configured');
       return;
     }
     if (appKitModal != null) {
@@ -139,7 +149,7 @@ class WalletAuthController extends GetxController {
 
     appKitModal = ReownAppKitModal(
       context: context,
-      projectId: kReownProjectId,
+      projectId: RuntimeConfig.reownProjectId,
       logLevel: LogLevel.error,
       metadata: PairingMetadata(
         name: 'Erebrus VPN',
@@ -166,9 +176,8 @@ class WalletAuthController extends GetxController {
     );
 
     try {
-      final projectHint = kReownProjectId.length > 8
-          ? '${kReownProjectId.substring(0, 8)}…'
-          : kReownProjectId;
+      final pid = RuntimeConfig.reownProjectId;
+      final projectHint = pid.length > 8 ? '${pid.substring(0, 8)}…' : pid;
       final packageInfo = await PackageInfo.fromPlatform();
       final relayOrigin = packageInfo.packageName;
       debugPrint(
@@ -372,6 +381,7 @@ class WalletAuthController extends GetxController {
       );
       await _persistSession(session, method: 'solana_mobile', mwaToken: result.authToken);
       await refreshEntitlement();
+      await _refreshGatewayNodes();
       debugPrint('[MWA] gateway auth OK for ${result.address}');
     } on MwaException catch (e) {
       authError.value = e.message;
@@ -387,7 +397,11 @@ class WalletAuthController extends GetxController {
   Future<void> signOut() async {
     authError.value = null;
     entitlementError.value = null;
+    profileError.value = null;
     entitlement.value = EntitlementState.none;
+    profileEmail.value = '';
+    profileEmailVerified.value = false;
+    profileName.value = '';
     final mwaToken = _mwaAuthToken;
     _token = null;
     _mwaAuthToken = null;
@@ -400,6 +414,11 @@ class WalletAuthController extends GetxController {
     } catch (e) {
       debugPrint('[Auth] signOut: secure storage clear failed (session cleared in memory): $e');
     }
+    if (Get.isRegistered<GatewayController>()) {
+      await Get.find<GatewayController>().resetVpnLocalState();
+    } else if (Get.isRegistered<VpnController>()) {
+      await Get.find<VpnController>().resetLocalVpnData();
+    }
     if (appKitModal?.isConnected == true) {
       await appKitModal?.disconnect();
     }
@@ -407,6 +426,85 @@ class WalletAuthController extends GetxController {
     awaitingWebCallback.value = false;
     DesktopWebAuth.clearPendingState();
     _syncGatewayToken();
+  }
+
+  Future<void> refreshProfile() async {
+    final token = _token;
+    if (token == null || token.isEmpty) {
+      profileEmail.value = '';
+      profileEmailVerified.value = false;
+      profileName.value = '';
+      return;
+    }
+    isLoadingProfile.value = true;
+    profileError.value = null;
+    try {
+      final profile = await _authClient.fetchProfile(token);
+      _applyProfile(profile);
+    } on AuthException catch (e) {
+      profileError.value = e.message;
+    } catch (e) {
+      profileError.value = e.toString();
+    } finally {
+      isLoadingProfile.value = false;
+    }
+  }
+
+  Future<void> updateDisplayName(String name) async {
+    if (!isAuthenticated) return;
+    isLoadingProfile.value = true;
+    profileError.value = null;
+    try {
+      final profile = await _authClient.patchProfile(_token!, name: name.trim());
+      _applyProfile(profile);
+    } on AuthException catch (e) {
+      profileError.value = e.message;
+      rethrow;
+    } finally {
+      isLoadingProfile.value = false;
+    }
+  }
+
+  Future<void> startEmailLink(String email) async {
+    if (!isAuthenticated) {
+      profileError.value = 'Sign in first';
+      return;
+    }
+    isLinkingEmail.value = true;
+    profileError.value = null;
+    try {
+      await _authClient.startEmailLink(_token!, email);
+    } on AuthException catch (e) {
+      profileError.value = e.message;
+      rethrow;
+    } finally {
+      isLinkingEmail.value = false;
+    }
+  }
+
+  Future<void> verifyEmailLink({required String email, required String code}) async {
+    if (!isAuthenticated) return;
+    isLinkingEmail.value = true;
+    profileError.value = null;
+    try {
+      final profile = await _authClient.verifyEmailLink(_token!, email: email, code: code);
+      _applyProfile(profile);
+    } on AuthException catch (e) {
+      profileError.value = e.message;
+      rethrow;
+    } finally {
+      isLinkingEmail.value = false;
+    }
+  }
+
+  void _applyProfile(UserProfile profile) {
+    profileEmail.value = profile.email ?? '';
+    profileEmailVerified.value = profile.emailVerified;
+    profileName.value = profile.name ?? '';
+    if (profile.walletAddress != null && profile.walletAddress!.isNotEmpty) {
+      walletAddress.value = profile.walletAddress!;
+    }
+    if (profile.role.isNotEmpty) role.value = profile.role;
   }
 
   Future<void> refreshEntitlement() async {
@@ -432,6 +530,30 @@ class WalletAuthController extends GetxController {
       entitlement.value = EntitlementState.none;
     } finally {
       isLoadingEntitlement.value = false;
+    }
+  }
+
+  Future<void> refreshNftEntitlement() async {
+    if (!isAuthenticated) {
+      entitlementError.value = 'Sign in first to verify your NFT';
+      return;
+    }
+    if (!entitlement.value.nftGatingEnabled) {
+      entitlementError.value = 'NFT gating is not enabled on this gateway';
+      return;
+    }
+
+    isRefreshingNft.value = true;
+    entitlementError.value = null;
+    try {
+      await _authClient.refreshNftEntitlement(_token!);
+      await refreshEntitlement();
+    } on AuthException catch (e) {
+      entitlementError.value = e.message;
+    } catch (e) {
+      entitlementError.value = e.toString();
+    } finally {
+      isRefreshingNft.value = false;
     }
   }
 
@@ -485,11 +607,18 @@ class WalletAuthController extends GetxController {
       debugPrint('[Auth] session persist failed (in-memory session active): $e');
     }
     _syncGatewayToken();
+    unawaited(refreshProfile());
   }
 
   void _syncGatewayToken() {
     if (Get.isRegistered<GatewayController>()) {
       Get.find<GatewayController>().setBearerToken(_token);
+    }
+  }
+
+  Future<void> _refreshGatewayNodes() async {
+    if (Get.isRegistered<GatewayController>()) {
+      await Get.find<GatewayController>().refreshNodes();
     }
   }
 
@@ -532,6 +661,7 @@ class WalletAuthController extends GetxController {
       );
       await _persistSession(session, method: 'reown');
       await refreshEntitlement();
+      await _refreshGatewayNodes();
       if (modal.isOpen) modal.closeModal();
       debugPrint('[Reown] gateway auth OK for $address');
     } on AuthException catch (e) {

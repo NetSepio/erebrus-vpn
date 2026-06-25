@@ -12,6 +12,12 @@ String friendlyGatewayError(Object error, {String? nodeName}) {
   if (lower.contains('no active subscription')) {
     return 'No active subscription — start a free trial in Account first';
   }
+  if (lower.contains('higher tier')) {
+    return 'This server requires a higher XP tier — earn rank on erebrus.io or pick an open-pool node';
+  }
+  if (lower.contains('private node') || lower.contains('org membership')) {
+    return 'This is a private org node — you need membership to connect';
+  }
   if (lower.contains('node unreachable') || lower.contains('no reachable api')) {
     return 'Gateway cannot reach $node (port 9080). '
         'The node may need to re-register with the gateway, or the server '
