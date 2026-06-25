@@ -13,6 +13,12 @@ class PlatformCapabilities {
     return Platform.isAndroid || Platform.isIOS;
   }
 
+  /// Per-app bypass via Android VpnService.Builder.addDisallowedApplication.
+  static bool get supportsSplitTunnel {
+    if (kIsWeb) return false;
+    return Platform.isAndroid;
+  }
+
   static bool get isDesktop {
     if (kIsWeb) return false;
     return Platform.isMacOS || Platform.isWindows || Platform.isLinux;

@@ -9,6 +9,7 @@ import '../platform/desktop_prefs_storage.dart';
 import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 import '../settings/app_settings_controller.dart';
+import '../settings/split_tunnel_config.dart';
 import 'gateway_client.dart';
 import 'gateway_controller.dart';
 import 'gateway_errors.dart';
@@ -277,7 +278,11 @@ class VpnController extends GetxController {
             '(wg ${bundle.address}, srv $srvShort)',
           );
           final ok = await _armAndStart(
-            _engine.start(jsonEncode(config), profileName: 'Erebrus · ${target.name}'),
+            _engine.start(
+              jsonEncode(config),
+              profileName: 'Erebrus · ${target.name}',
+              splitTunnel: _splitTunnelConfig(),
+            ),
           );
           debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
           if (ok) {
@@ -376,6 +381,11 @@ class VpnController extends GetxController {
       Get.isRegistered<AppSettingsController>() &&
       Get.find<AppSettingsController>().killSwitchEnabled.value;
 
+  SplitTunnelConfig _splitTunnelConfig() {
+    if (!Get.isRegistered<AppSettingsController>()) return const SplitTunnelConfig();
+    return Get.find<AppSettingsController>().activeSplitTunnelConfig();
+  }
+
   Future<void> _engageKillSwitch() async {
     if (killSwitchBlocking.value || !_killSwitchEnabled) return;
     killSwitchBlocking.value = true;
@@ -387,6 +397,7 @@ class VpnController extends GetxController {
       await _engine.start(
         jsonEncode(config),
         profileName: 'Erebrus · Kill switch',
+        splitTunnel: _splitTunnelConfig(),
       );
       final node = selectedNode.value;
       if (node != null) {

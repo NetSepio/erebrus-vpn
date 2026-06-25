@@ -52,6 +52,8 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     // WebView proxy override for in-app browser over the local sing-box mixed inbound.
     implementation("androidx.webkit:webkit:1.12.1")
+    // FlutterView uses WindowInfoTracker; sidecar stubs must be on the APK classpath.
+    implementation("androidx.window:window:1.3.0")
 }
 
 flutter {

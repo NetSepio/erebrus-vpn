@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,7 @@ import 'user_profile.dart';
 import '../platform/platform_capabilities.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
+import '../vpn/vpn_controller.dart';
 
 /// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
 class WalletAuthController extends GetxController {

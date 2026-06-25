@@ -19,6 +19,22 @@ object SingboxBridge {
     @Volatile var stage: String = "disconnected"
         private set
 
+    @Volatile var splitTunnelEnabled: Boolean = false
+        private set
+
+    /** "include" = VPN only for selected apps; "exclude" = selected apps bypass VPN. */
+    @Volatile var splitTunnelMode: String = "exclude"
+        private set
+
+    @Volatile var splitTunnelPackages: List<String> = emptyList()
+        private set
+
+    fun setSplitTunnel(enabled: Boolean, mode: String?, packages: List<String>?) {
+        splitTunnelEnabled = enabled
+        splitTunnelMode = if (mode == "include") "include" else "exclude"
+        splitTunnelPackages = packages?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
+    }
+
     private var statusSink: EventChannel.EventSink? = null
     private var statsSink: EventChannel.EventSink? = null
     private var lastStats: Map<String, Long>? = null

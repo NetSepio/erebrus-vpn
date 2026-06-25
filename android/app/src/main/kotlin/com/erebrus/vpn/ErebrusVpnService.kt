@@ -34,6 +34,9 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         private const val ACTION_STOP = "com.erebrus.app.STOP"
         private const val EXTRA_CONFIG = "config"
         private const val EXTRA_NAME = "name"
+        private const val EXTRA_SPLIT_ENABLED = "split_tunnel_enabled"
+        private const val EXTRA_SPLIT_MODE = "split_tunnel_mode"
+        private const val EXTRA_SPLIT_PACKAGES = "split_tunnel_packages"
         private const val NOTIF_CHANNEL = "erebrus_vpn"
         private const val NOTIF_ID = 0x5713
         /** Tunnel DNS — must match SingboxConfigBuilder.tunDnsAddress in Dart. */
@@ -44,11 +47,22 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         var tunnelActive: Boolean = false
             private set
 
-        fun start(ctx: Context, config: String, name: String) {
+        fun start(
+            ctx: Context,
+            config: String,
+            name: String,
+            splitTunnelEnabled: Boolean = false,
+            splitTunnelMode: String = "exclude",
+            splitTunnelPackages: List<String> = emptyList(),
+        ) {
+            SingboxBridge.setSplitTunnel(splitTunnelEnabled, splitTunnelMode, splitTunnelPackages)
             val i = Intent(ctx, ErebrusVpnService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_CONFIG, config)
                 putExtra(EXTRA_NAME, name)
+                putExtra(EXTRA_SPLIT_ENABLED, splitTunnelEnabled)
+                putExtra(EXTRA_SPLIT_MODE, splitTunnelMode)
+                putStringArrayListExtra(EXTRA_SPLIT_PACKAGES, ArrayList(splitTunnelPackages))
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(i)
@@ -78,6 +92,10 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             ACTION_START -> {
                 val config = intent.getStringExtra(EXTRA_CONFIG).orEmpty()
                 val name = intent.getStringExtra(EXTRA_NAME) ?: "Erebrus"
+                val splitEnabled = intent.getBooleanExtra(EXTRA_SPLIT_ENABLED, false)
+                val splitMode = intent.getStringExtra(EXTRA_SPLIT_MODE) ?: "exclude"
+                val splitPackages = intent.getStringArrayListExtra(EXTRA_SPLIT_PACKAGES) ?: arrayListOf()
+                SingboxBridge.setSplitTunnel(splitEnabled, splitMode, splitPackages)
                 startTunnel(config, name)
             }
         }
@@ -191,9 +209,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             builder.addDnsServer(dns)
         }
 
-        // Exclude this app UID from the system TUN. libbox WireGuard UDP must not
-        // loop back into the tunnel (protect() alone fails on some OEM devices).
-        runCatching { builder.addDisallowedApplication(packageName) }
+        applySplitTunnel(builder)
 
         val pfd: ParcelFileDescriptor = builder.establish()
             ?: throw IllegalStateException("VpnService.Builder.establish() returned null")
@@ -244,6 +260,30 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             }
         } else {
             builder.addRoute("::", 0)
+        }
+    }
+
+    private fun applySplitTunnel(builder: Builder) {
+        val enabled = SingboxBridge.splitTunnelEnabled
+        val mode = SingboxBridge.splitTunnelMode
+        val packages = SingboxBridge.splitTunnelPackages.filter { it != packageName }
+
+        when {
+            enabled && mode == "include" && packages.isNotEmpty() -> {
+                for (pkg in packages) {
+                    runCatching { builder.addAllowedApplication(pkg) }
+                }
+            }
+            enabled && mode == "exclude" -> {
+                runCatching { builder.addDisallowedApplication(packageName) }
+                for (pkg in packages) {
+                    runCatching { builder.addDisallowedApplication(pkg) }
+                }
+            }
+            else -> {
+                // Default: all apps through VPN except Erebrus (WireGuard must not loop).
+                runCatching { builder.addDisallowedApplication(packageName) }
+            }
         }
     }
 

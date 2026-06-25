@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../platform/platform_capabilities.dart';
+import '../settings/split_tunnel_config.dart';
 import 'singbox_desktop_runner.dart';
 import 'wg_keygen.dart';
 
@@ -75,12 +76,22 @@ class SingboxEngine {
     }
   }
 
-  Future<void> start(String configJson, {String profileName = 'Erebrus'}) async {
+  Future<void> start(
+    String configJson, {
+    String profileName = 'Erebrus',
+    SplitTunnelConfig splitTunnel = const SplitTunnelConfig(),
+  }) async {
     if (_useDesktopRunner) {
       await _desktop.start(configJson, profileName: profileName);
       return;
     }
-    await _method.invokeMethod('start', {'config': configJson, 'name': profileName});
+    await _method.invokeMethod('start', {
+      'config': configJson,
+      'name': profileName,
+      'splitTunnelEnabled': splitTunnel.enabled,
+      'splitTunnelMode': splitTunnel.mode.name,
+      'splitTunnelPackages': splitTunnel.packages,
+    });
   }
 
   Future<void> stop() async {

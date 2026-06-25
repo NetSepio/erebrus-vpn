@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../platform/platform_capabilities.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../vpn/gateway_config.dart';
 import '../../settings/app_settings_controller.dart';
@@ -12,6 +13,7 @@ import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'about_view.dart';
 import 'account_sheets.dart';
+import 'split_tunnel_sheet.dart';
 import '../../vpn/gateway_controller.dart';
 
 /// The settings tab — account, subscription, VPN & security, about, log out.
@@ -115,28 +117,24 @@ class _SettingsViewState extends State<SettingsView> {
                     title: 'Kill switch',
                     trailing: EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch),
                   ),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.alt_route,
-                    title: 'Split tunneling',
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
-                  ),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.refresh,
-                    title: 'Refresh servers',
-                    subtitle: 'Fetch latest node list from gateway',
-                    onTap: () => Get.find<GatewayController>().refreshNodes(),
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
-                  ),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.delete_outline,
-                    title: 'Reset VPN data',
-                    subtitle: 'Clear cached servers, keys, and credentials',
-                    onTap: () => Get.find<GatewayController>().resetVpnLocalState(),
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
-                  ),
+                  if (PlatformCapabilities.supportsSplitTunnel) ...[
+                    _RowDivider(),
+                    Obx(() {
+                      final enabled = settings.splitTunnelEnabled.value;
+                      final mode = settings.splitTunnelMode.value;
+                      final count = settings.splitTunnelActivePackages.length;
+                      final subtitle = enabled
+                          ? mode.settingsSubtitle(count)
+                          : 'Per-app VPN routing';
+                      return _GroupRow(
+                        icon: Icons.alt_route,
+                        title: 'Split tunneling',
+                        subtitle: subtitle,
+                        onTap: () => showSplitTunnelSheet(context, settings),
+                        trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
+                      );
+                    }),
+                  ],
                 ])),
             const SizedBox(height: 18),
 

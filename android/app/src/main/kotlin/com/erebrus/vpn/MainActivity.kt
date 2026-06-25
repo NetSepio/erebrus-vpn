@@ -78,9 +78,19 @@ class MainActivity : FlutterActivity() {
                 "start" -> {
                     val config = call.argument<String>("config") ?: ""
                     val name = call.argument<String>("name") ?: "Erebrus"
-                    ErebrusVpnService.start(this, config, name)
+                    @Suppress("UNCHECKED_CAST")
+                    val packages = call.argument<List<String>>("splitTunnelPackages") ?: emptyList()
+                    ErebrusVpnService.start(
+                        this,
+                        config,
+                        name,
+                        splitTunnelEnabled = call.argument<Boolean>("splitTunnelEnabled") ?: false,
+                        splitTunnelMode = call.argument<String>("splitTunnelMode") ?: "exclude",
+                        splitTunnelPackages = packages,
+                    )
                     result.success(null)
                 }
+                "listApps" -> result.success(SplitTunnelApps.listUserApps(this))
                 "stop" -> {
                     ErebrusVpnService.stop(this)
                     result.success(null)

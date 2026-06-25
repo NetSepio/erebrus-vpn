@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../platform/platform_capabilities.dart';
 import '../vpn/vpn_controller.dart';
 import '../vpn/vpn_models.dart';
+import 'split_tunnel_config.dart';
 
 /// Persisted user preferences (protocol default, kill switch, diagnostics).
 class AppSettingsController extends GetxController {
@@ -13,16 +14,31 @@ class AppSettingsController extends GetxController {
   static const _kKillSwitch = 'settings.kill_switch';
   static const _kDiagnostics = 'settings.anonymous_diagnostics';
   static const _kOnboardingSeen = 'settings.onboarding_seen';
+  static const _kSplitTunnelEnabled = 'settings.split_tunnel_enabled';
+  static const _kSplitTunnelMode = 'settings.split_tunnel_mode';
+  static const _kSplitTunnelInclude = 'settings.split_tunnel_include';
+  static const _kSplitTunnelExclude = 'settings.split_tunnel_exclude';
+  // Legacy key from the first split-tunnel build.
+  static const _kSplitTunnelExcludedLegacy = 'settings.split_tunnel_excluded';
 
   final defaultProtocol = ConnectMode.auto.obs;
   final autoConnectOnLaunch = false.obs;
   final killSwitchEnabled = true.obs;
   final anonymousDiagnostics = false.obs;
+  final splitTunnelEnabled = false.obs;
+  final splitTunnelMode = SplitTunnelMode.exclude.obs;
+  final splitTunnelIncludePackages = <String>[].obs;
+  final splitTunnelExcludePackages = <String>[].obs;
 
   /// Whether first-launch onboarding has been completed (persisted).
   final onboardingSeen = false.obs;
 
   final diagnosticsStatus = RxnString();
+
+  RxList<String> get splitTunnelActivePackages => switch (splitTunnelMode.value) {
+        SplitTunnelMode.include => splitTunnelIncludePackages,
+        SplitTunnelMode.exclude => splitTunnelExcludePackages,
+      };
 
   @override
   void onInit() {
@@ -37,6 +53,14 @@ class AppSettingsController extends GetxController {
     killSwitchEnabled.value = prefs.getBool(_kKillSwitch) ?? true;
     anonymousDiagnostics.value = prefs.getBool(_kDiagnostics) ?? false;
     onboardingSeen.value = prefs.getBool(_kOnboardingSeen) ?? false;
+    splitTunnelEnabled.value = prefs.getBool(_kSplitTunnelEnabled) ?? false;
+    splitTunnelMode.value = SplitTunnelMode.fromName(prefs.getString(_kSplitTunnelMode));
+    splitTunnelIncludePackages.value = prefs.getStringList(_kSplitTunnelInclude) ?? [];
+    var excluded = prefs.getStringList(_kSplitTunnelExclude) ?? [];
+    if (excluded.isEmpty) {
+      excluded = prefs.getStringList(_kSplitTunnelExcludedLegacy) ?? [];
+    }
+    splitTunnelExcludePackages.value = excluded;
 
     if (Get.isRegistered<VpnController>()) {
       Get.find<VpnController>().setMode(defaultProtocol.value);
@@ -64,6 +88,56 @@ class AppSettingsController extends GetxController {
     autoConnectOnLaunch.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAutoConnect, value);
+  }
+
+  Future<void> setSplitTunnelEnabled(bool value) async {
+    splitTunnelEnabled.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kSplitTunnelEnabled, value);
+  }
+
+  Future<void> setSplitTunnelMode(SplitTunnelMode mode) async {
+    splitTunnelMode.value = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kSplitTunnelMode, mode.name);
+  }
+
+  Future<void> _persistActivePackages(List<String> packages) async {
+    final unique = packages.toSet().toList()..sort();
+    final prefs = await SharedPreferences.getInstance();
+    switch (splitTunnelMode.value) {
+      case SplitTunnelMode.include:
+        splitTunnelIncludePackages.value = unique;
+        await prefs.setStringList(_kSplitTunnelInclude, unique);
+      case SplitTunnelMode.exclude:
+        splitTunnelExcludePackages.value = unique;
+        await prefs.setStringList(_kSplitTunnelExclude, unique);
+    }
+  }
+
+  Future<void> toggleSplitTunnelApp(String packageName, bool selected) async {
+    final next = splitTunnelActivePackages.toSet();
+    if (selected) {
+      next.add(packageName);
+    } else {
+      next.remove(packageName);
+    }
+    await _persistActivePackages(next.toList());
+  }
+
+  Future<void> clearSplitTunnelSelection() async {
+    await _persistActivePackages(const []);
+  }
+
+  SplitTunnelConfig activeSplitTunnelConfig() {
+    if (!PlatformCapabilities.supportsSplitTunnel || !splitTunnelEnabled.value) {
+      return const SplitTunnelConfig();
+    }
+    return SplitTunnelConfig(
+      enabled: true,
+      mode: splitTunnelMode.value,
+      packages: splitTunnelActivePackages.toList(),
+    );
   }
 
   Future<void> setKillSwitch(bool value) async {
