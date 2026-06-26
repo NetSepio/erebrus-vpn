@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,18 +7,6 @@ import 'gateway_http.dart';
 import 'vpn_models.dart';
 
 export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodDays, resolveGatewayUrl;
-
-/// Last-known erebrus-nexus payload — used when the gateway registry is empty
-/// but the node at :9080 is still running (dev / ops gap).
-const kDevFallbackNodeJson = {
-  'node_id': '59d52ecd-dfc3-41c2-90a4-0d2495a239e2',
-  'name': 'erebrus-nexus',
-  'did': 'did:erebrus:12D3KooWHqXFLdm2krcJ5ouyUMeBwfMCiEpKsSBhvJGm4u5tdeL5',
-  'region': 'NO',
-  'status': 'online',
-  'protocols': ['wireguard', 'vless-reality', 'hysteria2'],
-  'load_pct': 0.0,
-};
 
 /// Thin HTTP client for the Erebrus gateway discovery + provisioning APIs.
 class GatewayClient {
@@ -62,11 +51,6 @@ class GatewayClient {
         .where((n) => n.id.isNotEmpty)
         .toList();
   }
-
-  /// Shown when [fetchNodes] returns an empty registry (gateway up, no nodes).
-  static List<VpnNode> devFallbackNodes() => [
-        VpnNode.fromJson(kDevFallbackNodeJson),
-      ];
 
   Future<CredentialBundle> provisionClient({
     required String nodeId,
@@ -155,29 +139,57 @@ class GatewayClient {
     Map<String, String>? query,
   }) async {
     final uri = GatewayHttp.apiUri(_base, path: path, query: query);
-    final client = HttpClient();
-    try {
-      final req = await client.openUrl(method, uri);
-      GatewayHttp.applyHeaders(req, bearerToken: _bearerToken, jsonBody: body != null);
-      if (body != null) {
-        final encoded = jsonEncode(body);
-        req.contentLength = utf8.encode(encoded).length;
-        req.write(encoded);
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (attempt == 0) {
+        try {
+          await GatewayHttp.preflightHost(uri.host);
+        } on Object catch (e) {
+          lastError = e;
+          if (GatewayHttp.isTransientNetworkError(e)) {
+            await Future<void>.delayed(const Duration(milliseconds: 400));
+            continue;
+          }
+          rethrow;
+        }
       }
-      final res = await req.close();
-      final text = await utf8.decodeStream(res);
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw GatewayException(GatewayHttp.errorMessage(res.statusCode, text));
+      final client = GatewayHttp.createClient();
+      try {
+        final req = await client.openUrl(method, uri);
+        GatewayHttp.applyHeaders(req, bearerToken: _bearerToken, jsonBody: body != null);
+        if (body != null) {
+          final encoded = jsonEncode(body);
+          req.contentLength = utf8.encode(encoded).length;
+          req.write(encoded);
+        }
+        final res = await req.close();
+        final text = await utf8.decodeStream(res);
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          throw GatewayException(GatewayHttp.errorMessage(res.statusCode, text));
+        }
+        if (text.isEmpty) return const {};
+        return jsonDecode(text);
+      } on SocketException catch (e) {
+        lastError = e;
+        if (attempt == 0 && GatewayHttp.isTransientNetworkError(e)) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          continue;
+        }
+        throw GatewayException('Cannot reach $baseUrl (${e.message})');
+      } on TimeoutException catch (e) {
+        lastError = e;
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          continue;
+        }
+        throw GatewayException('Cannot reach $baseUrl (timed out)');
+      } on FormatException {
+        throw GatewayException('Gateway returned invalid JSON');
+      } finally {
+        client.close(force: true);
       }
-      if (text.isEmpty) return const {};
-      return jsonDecode(text);
-    } on SocketException catch (e) {
-      throw GatewayException('Cannot reach $baseUrl (${e.message})');
-    } on FormatException {
-      throw GatewayException('Gateway returned invalid JSON');
-    } finally {
-      client.close(force: true);
     }
+    throw GatewayException('Cannot reach $baseUrl (${lastError ?? 'unknown error'})');
   }
 
 }

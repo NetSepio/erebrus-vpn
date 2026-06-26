@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
@@ -22,6 +24,8 @@ class GatewayController extends GetxController {
   final error = RxnString();
   final warning = RxnString();
   late final RxString gatewayUrl;
+  Timer? _refreshTimer;
+  static const _registryPollInterval = Duration(seconds: 30);
 
   @override
   void onInit() {
@@ -31,7 +35,15 @@ class GatewayController extends GetxController {
       _client.setBearerToken(Get.find<WalletAuthController>().bearerToken);
     }
     _wireProvisioner();
-    refreshNodes();
+    _refreshTimer = Timer.periodic(_registryPollInterval, (_) {
+      if (!loading.value) refreshNodes(silent: true);
+    });
+  }
+
+  @override
+  void onClose() {
+    _refreshTimer?.cancel();
+    super.onClose();
   }
 
   void setBearerToken(String? token) => _client.setBearerToken(token);
@@ -85,10 +97,10 @@ class GatewayController extends GetxController {
   }
 
   /// Fetches the live node registry from the gateway (not cached locally).
-  Future<void> refreshNodes() async {
-    loading.value = true;
+  Future<void> refreshNodes({bool silent = false}) async {
+    if (!silent) loading.value = true;
     error.value = null;
-    warning.value = null;
+    if (!silent) warning.value = null;
     final previous = List<VpnNode>.from(nodes);
     try {
       debugPrint('[Gateway] fetching nodes from ${gatewayUrl.value}');
@@ -96,18 +108,20 @@ class GatewayController extends GetxController {
       list = sortNodesForPicker(list.where((n) => !n.isDraining && !n.isOffline));
 
       if (list.isEmpty) {
-        if (kDebugMode) {
-          debugPrint('[Gateway] registry empty — dev fallback erebrus-nexus');
-          list = GatewayClient.devFallbackNodes();
-          warning.value = 'Dev: gateway returned 0 online nodes — showing erebrus-nexus';
-        } else {
-          warning.value = 'No servers available — try refresh again in a moment';
-        }
+        debugPrint('[Gateway] registry empty — 0 online nodes from API');
+        warning.value = 'No servers available — try refresh again in a moment';
       }
 
       nodes.assignAll(list);
       nodes.refresh();
       debugPrint('[Gateway] loaded ${list.length} node(s): ${list.map((n) => n.name).join(", ")}');
+      if (list.isNotEmpty) {
+        final n = list.first;
+        debugPrint(
+          '[Gateway] node meta: zone=${n.zone} org=${n.org?.name} '
+          'verified=${n.org?.verified} wallet=${n.walletAddress != null && n.walletAddress!.isNotEmpty}',
+        );
+      }
       _reconcileSelection(list);
       Get.find<VpnController>().reconcileNodeFromGateway();
     } on GatewayException catch (e) {
@@ -133,7 +147,7 @@ class GatewayController extends GetxController {
         _reconcileSelection(const []);
       }
     } finally {
-      loading.value = false;
+      if (!silent) loading.value = false;
     }
   }
 

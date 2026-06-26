@@ -19,6 +19,39 @@ class GatewayAuthClient {
     return '${_base.scheme}://${_base.host}$port';
   }
 
+  /// Quick DNS + HTTP probe before wallet sign-in (avoids failing mid-MWA).
+  Future<void> checkReachability() async {
+    final uri = GatewayHttp.apiUri(_base, path: '/healthz');
+    await GatewayHttp.preflightHost(uri.host);
+    final client = GatewayHttp.createClient();
+    try {
+      final req = await client.getUrl(uri).timeout(const Duration(seconds: 8));
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw AuthException('Gateway unreachable at $baseUrl (HTTP ${res.statusCode})');
+      }
+      await res.drain();
+    } on SocketException catch (e) {
+      throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
+    } on IOException catch (e) {
+      throw AuthException(_networkErrorMessage(e.toString(), gateway: baseUrl));
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static String _networkErrorMessage(String? detail, {required String gateway}) {
+    final d = (detail ?? '').toLowerCase();
+    if (d.contains('failed host lookup') || d.contains('no address associated')) {
+      return 'No internet or DNS cannot resolve the gateway ($gateway). '
+          'Check Wi‑Fi/mobile data, turn off Private DNS temporarily, and retry.';
+    }
+    if (d.contains('network is unreachable') || d.contains('connection refused')) {
+      return 'Cannot reach the gateway ($gateway). Check your network connection.';
+    }
+    return 'Cannot reach gateway ($gateway)${detail == null || detail.isEmpty ? '' : ': $detail'}';
+  }
+
   /// Start wallet login — `GET /api/v2/auth`.
   Future<AuthChallenge> fetchAuthChallenge({
     required String walletAddress,
@@ -153,8 +186,8 @@ class GatewayAuthClient {
     });
   }
 
-  Future<Map<String, dynamic>> _getJson(Uri uri, {String? bearerToken}) async {
-    final client = HttpClient();
+  Future<dynamic> _getDecoded(Uri uri, {String? bearerToken}) async {
+    final client = GatewayHttp.createClient();
     try {
       final req = await client.getUrl(uri);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken);
@@ -163,12 +196,17 @@ class GatewayAuthClient {
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
       }
-      return Map<String, dynamic>.from(jsonDecode(text) as Map);
+      return jsonDecode(text);
     } on SocketException catch (e) {
-      throw AuthException('Cannot reach gateway ($baseUrl): ${e.message}');
+      throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<Map<String, dynamic>> _getJson(Uri uri, {String? bearerToken}) async {
+    final decoded = await _getDecoded(uri, bearerToken: bearerToken);
+    return Map<String, dynamic>.from(decoded as Map);
   }
 
   Future<Map<String, dynamic>> _patchJson(
@@ -176,7 +214,7 @@ class GatewayAuthClient {
     Map<String, dynamic> body, {
     String? bearerToken,
   }) async {
-    final client = HttpClient();
+    final client = GatewayHttp.createClient();
     try {
       final req = await client.patchUrl(uri);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken, jsonBody: true);
@@ -193,7 +231,7 @@ class GatewayAuthClient {
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
       return const {};
     } on SocketException catch (e) {
-      throw AuthException('Cannot reach gateway ($baseUrl): ${e.message}');
+      throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
     } finally {
       client.close(force: true);
     }
@@ -204,7 +242,7 @@ class GatewayAuthClient {
     Map<String, dynamic> body, {
     String? bearerToken,
   }) async {
-    final client = HttpClient();
+    final client = GatewayHttp.createClient();
     try {
       final req = await client.postUrl(uri);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken, jsonBody: true);
@@ -221,7 +259,7 @@ class GatewayAuthClient {
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
       return const {};
     } on SocketException catch (e) {
-      throw AuthException('Cannot reach gateway ($baseUrl): ${e.message}');
+      throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
     } finally {
       client.close(force: true);
     }

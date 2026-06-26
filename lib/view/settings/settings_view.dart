@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../platform/platform_capabilities.dart';
 import '../../auth/wallet_auth_controller.dart';
@@ -15,6 +14,24 @@ import 'about_view.dart';
 import 'account_sheets.dart';
 import 'split_tunnel_sheet.dart';
 import '../../vpn/gateway_controller.dart';
+
+String _formatChainLabel(String chain) {
+  if (chain.isEmpty) return 'Solana';
+  switch (chain.toLowerCase()) {
+    case 'solana':
+      return 'Solana';
+    case 'ethereum':
+      return 'Ethereum';
+    default:
+      return chain[0].toUpperCase() + chain.substring(1).toLowerCase();
+  }
+}
+
+String _formatMemberSinceLabel(DateTime? createdAt) {
+  if (createdAt == null) return '—';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${months[createdAt.month - 1]} ${createdAt.year}';
+}
 
 /// The settings tab — account, subscription, VPN & security, about, log out.
 /// All values are bound to the real controllers; the upgrade CTA is disabled
@@ -56,7 +73,12 @@ class _SettingsViewState extends State<SettingsView> {
             const SizedBox(height: 18),
 
             // profile
-            Obx(() => _ProfileCard(walletAddress: auth.walletAddress.value, authMethod: auth.authMethod.value)),
+            Obx(() => _ProfileCard(
+                  walletAddress: auth.walletAddress.value,
+                  authMethod: auth.authMethod.value,
+                  displayName: auth.profileName.value,
+                  chain: auth.profileChain.value,
+                )),
             const SizedBox(height: 14),
 
             // subscription
@@ -70,20 +92,18 @@ class _SettingsViewState extends State<SettingsView> {
                   _EmailRow(auth: auth),
                   _RowDivider(),
                   _GroupRow(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'Wallet',
-                    subtitle: _walletSubtitle(auth.walletAddress.value),
-                    subtitleMono: true,
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                  ),
-                  _RowDivider(),
-                  Obx(() => _GroupRow(
                     icon: Icons.edit_outlined,
-                    title: 'Edit profile',
+                    title: 'Display name',
                     subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
                     onTap: () => showEditProfileSheet(context, auth),
                     trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                  )),
+                  ),
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.calendar_today_outlined,
+                    title: 'Member since',
+                    subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
+                  ),
                 ])),
             const SizedBox(height: 18),
 
@@ -143,12 +163,7 @@ class _SettingsViewState extends State<SettingsView> {
             const SizedBox(height: 9),
             _GroupCard(children: [
               _GroupRow(
-                title: 'Version',
-                trailing: const _VersionLabel(),
-              ),
-              _RowDivider(),
-              _GroupRow(
-                title: 'Help & support',
+                title: 'About',
                 onTap: () => Get.to(() => const AboutView()),
                 trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
               ),
@@ -175,14 +190,6 @@ class _SettingsViewState extends State<SettingsView> {
       ),
     );
   }
-
-  static String _walletSubtitle(String address) {
-    if (address.isEmpty) return 'Not connected';
-    return 'Solana · ${_short(address)}';
-  }
-
-  static String _short(String a) =>
-      a.length < 10 ? a : '${a.substring(0, 4)}…${a.substring(a.length - 4)}';
 
   void _pickProtocol(BuildContext context, AppSettingsController settings, VpnController vpn) {
     showModalBottomSheet(
@@ -215,9 +222,16 @@ class _SettingsViewState extends State<SettingsView> {
 }
 
 class _ProfileCard extends StatefulWidget {
-  const _ProfileCard({required this.walletAddress, required this.authMethod});
+  const _ProfileCard({
+    required this.walletAddress,
+    required this.authMethod,
+    required this.displayName,
+    required this.chain,
+  });
   final String walletAddress;
   final String authMethod;
+  final String displayName;
+  final String chain;
   @override
   State<_ProfileCard> createState() => _ProfileCardState();
 }
@@ -232,9 +246,31 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   String get _initials {
+    final name = widget.displayName.trim();
+    if (name.isNotEmpty) {
+      final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+      if (parts.length >= 2) {
+        return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
+      }
+      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
+    }
     final a = widget.walletAddress;
     if (a.length < 2) return 'ER';
-    return a.substring(0, 2);
+    return a.substring(0, 2).toUpperCase();
+  }
+
+  String get _title {
+    final name = widget.displayName.trim();
+    if (name.isNotEmpty) return name;
+    return _short;
+  }
+
+  String get _subtitle {
+    final name = widget.displayName.trim();
+    if (name.isNotEmpty && widget.walletAddress.isNotEmpty) {
+      return '${_formatChainLabel(widget.chain)} · $_short';
+    }
+    return widget.authMethod.isEmpty ? 'Solana wallet' : 'Signed in · ${widget.authMethod}';
   }
 
   void _copy() {
@@ -264,10 +300,9 @@ class _ProfileCardState extends State<_ProfileCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_short, style: grotesk(size: 16, weight: FontWeight.w600)),
+                Text(_title, style: grotesk(size: 16, weight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(widget.authMethod.isEmpty ? 'Solana wallet' : 'Signed in · ${widget.authMethod}',
-                    style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                Text(_subtitle, style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
               ],
             ),
           ),
@@ -438,14 +473,12 @@ class _GroupRow extends StatelessWidget {
     this.icon,
     required this.title,
     this.subtitle,
-    this.subtitleMono = false,
     this.trailing,
     this.onTap,
   });
   final IconData? icon;
   final String title;
   final String? subtitle;
-  final bool subtitleMono;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -467,9 +500,7 @@ class _GroupRow extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
-                        style: subtitleMono
-                            ? mono(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)
-                            : grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)),
+                        style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)),
                   ],
                 ],
               ),
@@ -517,20 +548,6 @@ class _EmailRow extends StatelessWidget {
               style: mono(size: 11, weight: FontWeight.w500, color: linked ? AppColors.success : AppColors.accent, letterSpacing: 11 * 0.06)),
         ),
       ),
-    );
-  }
-}
-
-class _VersionLabel extends StatelessWidget {
-  const _VersionLabel();
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (_, snap) {
-        final v = snap.data?.version ?? '1.0.0';
-        return Text('$v · agentic', style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textMuted));
-      },
     );
   }
 }

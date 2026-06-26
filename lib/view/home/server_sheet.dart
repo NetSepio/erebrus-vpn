@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -7,6 +9,7 @@ import '../../vpn/node_probe.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'node_display.dart';
+import 'node_ui_widgets.dart';
 import 'nodes_empty_panel.dart';
 import 'sheet_chrome.dart';
 
@@ -32,16 +35,31 @@ class _ServerSheetState extends State<_ServerSheet> {
   Map<String, int> _clientPingMs = const {};
   bool _probing = false;
   int _probeGeneration = 0;
+  Timer? _pollTimer;
+  static const _pollInterval = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final gateway = Get.find<GatewayController>();
-      await gateway.refreshNodes();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAndProbe());
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
       if (!mounted) return;
-      _startClientProbes(gateway.nodes);
+      _startClientProbes(Get.find<GatewayController>().nodes);
     });
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshAndProbe({bool silent = false}) async {
+    if (!mounted) return;
+    final gateway = Get.find<GatewayController>();
+    await gateway.refreshNodes(silent: silent);
+    if (!mounted) return;
+    await _startClientProbes(gateway.nodes);
   }
 
   Future<void> _startClientProbes(List<VpnNode> nodes) async {
@@ -68,9 +86,7 @@ class _ServerSheetState extends State<_ServerSheet> {
 
   Future<void> _refresh(GatewayController gateway) async {
     setState(() => _filter = 'all');
-    await gateway.refreshNodes();
-    if (!mounted) return;
-    _startClientProbes(gateway.nodes);
+    await _refreshAndProbe();
   }
 
   @override
@@ -249,7 +265,7 @@ class _NodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = NodeDisplay.of(node, clientPingMs: clientPingMs);
+    final d = NodeDisplay.of(node, clientPingMs: clientPingMs, showActivity: true);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -259,120 +275,11 @@ class _NodeRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.55) : AppColors.stroke),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(d.flag, style: const TextStyle(fontSize: 24, height: 1)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(d.name, style: mono(size: 13.5, weight: FontWeight.w600, color: AppColors.textPrimary)),
-                  const SizedBox(height: 4),
-                  Text(
-                    d.orgName != null ? '${d.location} · ${d.orgName}' : d.location,
-                    style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textTertiary),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      _AccessPill(label: d.network, color: d.networkColor),
-                      _AccessPill(label: d.accessLabel, color: d.accessColor),
-                      if (d.tierLabel != null) _AccessPill(label: d.tierLabel!, color: AppColors.warn),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            _NodeMetrics(display: d, probing: probing),
-          ],
+        child: NodeCompactRow(
+          display: d,
+          metrics: NodeMetricsColumn(display: d, probing: probing),
         ),
       ),
-    );
-  }
-}
-
-class _NodeMetrics extends StatelessWidget {
-  const _NodeMetrics({required this.display, required this.probing});
-  final NodeDisplay display;
-  final bool probing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _MetricCell(
-              label: 'PING',
-              value: display.pingLabel(probing: probing),
-              valueColor: display.pingColor(probing: probing),
-            ),
-            const SizedBox(width: 10),
-            _MetricCell(
-              label: 'LOAD',
-              value: display.loadLabel,
-              valueColor: display.loadColor,
-            ),
-          ],
-        ),
-        if (display.showNodeSpeedtest) ...[
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _MetricCell(label: '↓', value: display.downloadLabel),
-              const SizedBox(width: 10),
-              _MetricCell(label: '↑', value: display.uploadLabel),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _MetricCell extends StatelessWidget {
-  const _MetricCell({required this.label, required this.value, this.valueColor});
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(label, style: mono(size: 9, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 0.4, height: 1)),
-        const SizedBox(width: 3),
-        Text(
-          value,
-          style: mono(size: 11.5, weight: FontWeight.w600, color: valueColor ?? AppColors.textPrimary, height: 1),
-        ),
-      ],
-    );
-  }
-}
-
-class _AccessPill extends StatelessWidget {
-  const _AccessPill({required this.label, required this.color});
-  final String label;
-  final Color color;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(5), border: Border.all(color: color)),
-      child: Text(label, style: mono(size: 10, weight: FontWeight.w400, color: color)),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:erebrus_vpn/view/home/node_display.dart';
 import 'package:erebrus_vpn/vpn/gateway_client.dart';
 import 'package:erebrus_vpn/vpn/vpn_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +21,13 @@ void main() {
         'upload_mbps': 44.2,
         'measured_at': 1710000000,
       },
-      'org': {'name': 'clawbrick'},
+      'zone': 'east',
+      'peer_id': '12D3KooWTestPeer',
+      'wallet_address': '9SXo8wiAdsDBQPUKk4LFN73T4DcueYhPDRN3p6wTsgaR',
+      'chain': 'SOLANA',
+      'version': '2.0.0-abc1234',
+      'last_heartbeat': DateTime.now().toUtc().subtract(const Duration(seconds: 13)).toIso8601String(),
+      'org': {'name': 'clawbrick', 'kind': 'team', 'verified': false, 'slug': 'clawbrick'},
       'endpoints': {
         'wireguard': {'host': '203.0.113.10', 'port': 51820, 'public_key': 'abc'},
         'vless_reality': {'port': 443, 'public_key': 'def', 'short_ids': ['01'], 'sni': 'example.com'},
@@ -33,12 +40,66 @@ void main() {
     expect(node.latencyMs, 42);
     expect(node.downloadMbps, 128.4);
     expect(node.uploadMbps, 44.2);
-    expect(node.orgName, 'clawbrick');
+    expect(node.org?.name, 'clawbrick');
+    expect(node.zone, 'east');
+    expect(node.peerId, '12D3KooWTestPeer');
+    expect(node.walletAddress, '9SXo8wiAdsDBQPUKk4LFN73T4DcueYhPDRN3p6wTsgaR');
+    expect(node.chain, 'SOLANA');
+    expect(node.isSolana, isTrue);
+    expect(node.version, '2.0.0-abc1234');
+    expect(node.hasHeartbeat, isTrue);
+    expect(node.org?.verified, isFalse);
+
+    final display = NodeDisplay.of(node, showActivity: true);
+    expect(display.showSolanaBadge, isTrue);
+    expect(display.regionCompact, 'NO-East');
+    expect(display.activityTime, isNotNull);
+    expect(display.activityLive, isTrue);
+    expect(display.downloadLabel, '128');
+    expect(display.uploadLabel, '44.2');
+    expect(display.showNodeSpeedtest, isTrue);
     expect(node.protocolsLabel, 'WG · VLESS');
     expect(node.probeHost, '203.0.113.10');
     expect(node.probePorts, [443, 51820]);
     expect(node.hasReportedSpeedtest, isTrue);
     expect(node.requiresHigherTier, isTrue);
+  });
+
+  test('NodeDisplay activity uses latest heartbeat or peer handshake', () {
+    final now = DateTime.now().toUtc();
+    final recentBeat = now.subtract(const Duration(seconds: 20)).toIso8601String();
+    final olderPeer = now.subtract(const Duration(minutes: 5)).toIso8601String();
+    final recentPeer = now.subtract(const Duration(seconds: 40)).toIso8601String();
+
+    final fromHeartbeat = NodeDisplay.of(
+      VpnNode.fromJson({
+        'node_id': 'a',
+        'name': 'alpha',
+        'region': 'US',
+        'did': 'did:1',
+        'protocols': ['wireguard'],
+        'last_heartbeat': recentBeat,
+        'last_peer_handshake': olderPeer,
+      }),
+      showActivity: true,
+    );
+    expect(fromHeartbeat.activityLive, isTrue);
+    expect(fromHeartbeat.activityTime, contains('s ago'));
+
+    final fromPeer = NodeDisplay.of(
+      VpnNode.fromJson({
+        'node_id': 'b',
+        'name': 'beta',
+        'region': 'US',
+        'did': 'did:2',
+        'protocols': ['wireguard'],
+        'last_heartbeat': olderPeer,
+        'last_peer_handshake': recentPeer,
+      }),
+      showActivity: true,
+    );
+    expect(fromPeer.activityLive, isTrue);
+    expect(fromPeer.activityTime, contains('s ago'));
   });
 
   test('sortNodesForPicker ranks client ping then load', () {

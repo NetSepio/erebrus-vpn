@@ -37,6 +37,64 @@ extension TransportX on Transport {
       };
 }
 
+/// Org summary on gateway node discovery (`GET /api/v2/nodes`).
+class VpnNodeOrg {
+  const VpnNodeOrg({
+    required this.name,
+    this.kind,
+    this.verified = false,
+    this.slug,
+    this.description,
+    this.website,
+  });
+
+  final String name;
+  final String? kind;
+  /// Always present when the org block exists; `false` is meaningful.
+  final bool verified;
+  final String? slug;
+  final String? description;
+  final String? website;
+
+  factory VpnNodeOrg.fromJson(Map<String, dynamic> j) {
+    final kind = (j['kind'] ?? '').toString().trim();
+    final slug = (j['slug'] ?? '').toString().trim();
+    final description = (j['description'] ?? '').toString().trim();
+    final website = (j['website'] ?? '').toString().trim();
+    return VpnNodeOrg(
+      name: (j['name'] ?? '').toString(),
+      kind: kind.isEmpty ? null : kind,
+      verified: j['verified'] == true,
+      slug: slug.isEmpty ? null : slug,
+      description: description.isEmpty ? null : description,
+      website: website.isEmpty ? null : website,
+    );
+  }
+}
+
+/// Capability flags advertised by a node.
+class VpnNodeCapabilities {
+  const VpnNodeCapabilities({
+    this.accessMode,
+    this.appHosting = false,
+    this.wildcardDomain,
+  });
+
+  final String? accessMode;
+  final bool appHosting;
+  final String? wildcardDomain;
+
+  factory VpnNodeCapabilities.fromJson(Map<String, dynamic> j) {
+    final wildcard = (j['wildcard_domain'] ?? '').toString().trim();
+    final accessMode = (j['access_mode'] ?? '').toString().trim();
+    return VpnNodeCapabilities(
+      accessMode: accessMode.isEmpty ? null : accessMode,
+      appHosting: j['app_hosting'] == true,
+      wildcardDomain: wildcard.isEmpty ? null : wildcard,
+    );
+  }
+}
+
 /// A node from the gateway discovery list (`GET /api/v2/nodes`).
 class VpnNode {
   VpnNode({
@@ -49,11 +107,23 @@ class VpnNode {
     this.status = 'online',
     this.accessMode = 'public',
     this.minTier = 0,
+    this.zone,
+    this.peerId,
+    this.walletAddress,
+    this.chain,
+    this.ipHash,
+    this.version,
+    this.rxBytes,
+    this.txBytes,
+    this.lastHeartbeat,
+    this.lastPeerHandshake,
+    this.createdAt,
     this.latencyMs,
     this.downloadMbps,
     this.uploadMbps,
     this.speedtestMeasuredAt,
-    this.orgName,
+    this.org,
+    this.capabilities,
     this.probeHost,
     this.probePorts = const [],
   });
@@ -67,11 +137,23 @@ class VpnNode {
   final String status;
   final String accessMode;
   final int minTier;
+  final String? zone;
+  final String? peerId;
+  final String? walletAddress;
+  final String? chain;
+  final String? ipHash;
+  final String? version;
+  final int? rxBytes;
+  final int? txBytes;
+  final String? lastHeartbeat;
+  final String? lastPeerHandshake;
+  final String? createdAt;
   final int? latencyMs;
   final double? downloadMbps;
   final double? uploadMbps;
   final int? speedtestMeasuredAt;
-  final String? orgName;
+  final VpnNodeOrg? org;
+  final VpnNodeCapabilities? capabilities;
   final String? probeHost;
   final List<int> probePorts;
 
@@ -93,6 +175,13 @@ class VpnNode {
       speedtestMeasuredAt! > 0 &&
       (hasLatency || hasDownloadMbps || hasUploadMbps);
 
+  bool get hasHeartbeat => lastHeartbeat != null && lastHeartbeat!.isNotEmpty;
+
+  bool get hasPeerHandshake =>
+      lastPeerHandshake != null && lastPeerHandshake!.isNotEmpty;
+
+  bool get isSolana => chain?.toUpperCase() == 'SOLANA';
+
   bool get canProbe => probeHost != null && probeHost!.isNotEmpty && probePorts.isNotEmpty;
 
   String get protocolsLabel {
@@ -106,10 +195,19 @@ class VpnNode {
   factory VpnNode.fromJson(Map<String, dynamic> j) {
     final caps = (j['capabilities'] as Map?)?.cast<String, dynamic>();
     final speedtest = (j['speedtest'] as Map?)?.cast<String, dynamic>();
-    final org = (j['org'] as Map?)?.cast<String, dynamic>();
-    final orgName = (org?['name'] ?? '').toString().trim();
+    final orgMap = (j['org'] as Map?)?.cast<String, dynamic>();
+    final org = orgMap == null ? null : VpnNodeOrg.fromJson(orgMap);
     final endpoints = (j['endpoints'] as Map?)?.cast<String, dynamic>();
     final probe = _parseProbeTargets(endpoints);
+    final zone = (j['zone'] ?? '').toString().trim();
+    final peerId = (j['peer_id'] ?? '').toString().trim();
+    final walletAddress = (j['wallet_address'] ?? '').toString().trim();
+    final chain = (j['chain'] ?? '').toString().trim();
+    final ipHash = (j['ip_hash'] ?? '').toString().trim();
+    final version = (j['version'] ?? '').toString().trim();
+    final lastHeartbeat = (j['last_heartbeat'] ?? '').toString().trim();
+    final lastPeerHandshake = (j['last_peer_handshake'] ?? '').toString().trim();
+    final createdAt = (j['created_at'] ?? '').toString().trim();
     return VpnNode(
       id: (j['node_id'] ?? j['id'] ?? '').toString(),
       name: (j['name'] ?? 'Erebrus node').toString(),
@@ -120,11 +218,23 @@ class VpnNode {
       status: (j['status'] ?? 'online').toString(),
       accessMode: (j['access_mode'] ?? caps?['access_mode'] ?? 'public').toString(),
       minTier: (j['min_tier'] as num?)?.toInt() ?? 0,
+      zone: zone.isEmpty ? null : zone,
+      peerId: peerId.isEmpty ? null : peerId,
+      walletAddress: walletAddress.isEmpty ? null : walletAddress,
+      chain: chain.isEmpty ? null : chain,
+      ipHash: ipHash.isEmpty ? null : ipHash,
+      version: version.isEmpty ? null : version,
+      rxBytes: (j['rx_bytes'] as num?)?.toInt(),
+      txBytes: (j['tx_bytes'] as num?)?.toInt(),
+      lastHeartbeat: lastHeartbeat.isEmpty ? null : lastHeartbeat,
+      lastPeerHandshake: lastPeerHandshake.isEmpty ? null : lastPeerHandshake,
+      createdAt: createdAt.isEmpty ? null : createdAt,
       latencyMs: (speedtest?['latency_ms'] as num?)?.toInt(),
       downloadMbps: (speedtest?['download_mbps'] as num?)?.toDouble(),
       uploadMbps: (speedtest?['upload_mbps'] as num?)?.toDouble(),
       speedtestMeasuredAt: (speedtest?['measured_at'] as num?)?.toInt(),
-      orgName: orgName.isEmpty ? null : orgName,
+      org: org,
+      capabilities: caps == null ? null : VpnNodeCapabilities.fromJson(caps),
       probeHost: probe.$1,
       probePorts: probe.$2,
     );

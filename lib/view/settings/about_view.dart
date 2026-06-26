@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import 'privacy_view.dart';
 import 'terms_view.dart';
 
-/// NetSepio ethos, Erebrus capabilities, version, and legal links.
+/// NetSepio ethos, Erebrus capabilities, and legal links.
 class AboutView extends StatelessWidget {
   const AboutView({super.key});
 
@@ -38,8 +37,6 @@ class AboutView extends StatelessWidget {
           const Center(
             child: Text('by NetSepio', style: TextStyle(color: AppColors.textMuted)),
           ),
-          const SizedBox(height: AppSpace.sm),
-          const _VersionLabel(),
           const SizedBox(height: AppSpace.xl),
           const SectionLabel('Our ethos'),
           const SizedBox(height: AppSpace.md),
@@ -102,29 +99,6 @@ class AboutView extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _VersionLabel extends StatelessWidget {
-  const _VersionLabel();
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<PackageInfo>(
-      future: PackageInfo.fromPlatform(),
-      builder: (context, snap) {
-        final info = snap.data;
-        final label = info == null
-            ? 'Version …'
-            : 'Version ${info.version} (${info.buildNumber})';
-        return Center(
-          child: Text(
-            label,
-            style: const TextStyle(color: AppColors.cyan, fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        );
-      },
     );
   }
 }

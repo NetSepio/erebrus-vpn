@@ -24,7 +24,7 @@ security find-identity -p codesigning -v | head -5
 ## 3. Project signing config
 
 ```bash
-cd /Users/shachindra/Projects/NetSepio/erebrus-vpn
+cd /Users/User/Projects/NetSepio/erebrus-vpn
 cp macos/Runner/Configs/Signing.xcconfig.example macos/Runner/Configs/Signing.xcconfig
 ```
 

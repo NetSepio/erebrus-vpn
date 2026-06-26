@@ -158,6 +158,21 @@ androidComponents {
     }
 }
 
+// Flutter looks for app-debug.apk when --flavor is omitted; flavored builds emit
+// app-playstore-debug.apk. Mirror the playstore debug artifact so IDE Run still works.
+tasks.configureEach {
+    if (name == "assemblePlaystoreDebug") {
+        doLast {
+            val flutterApkDir = layout.buildDirectory.dir("outputs/flutter-apk").get().asFile
+            val src = flutterApkDir.resolve("app-playstore-debug.apk")
+            val dst = flutterApkDir.resolve("app-debug.apk")
+            if (src.exists()) {
+                src.copyTo(dst, overwrite = true)
+            }
+        }
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

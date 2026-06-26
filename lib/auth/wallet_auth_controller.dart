@@ -50,6 +50,8 @@ class WalletAuthController extends GetxController {
   final profileEmail = ''.obs;
   final profileEmailVerified = false.obs;
   final profileName = ''.obs;
+  final profileChain = ''.obs;
+  final profileCreatedAt = Rxn<DateTime>();
   final isLoadingProfile = false.obs;
   final profileError = RxnString();
   final isLinkingEmail = false.obs;
@@ -363,6 +365,8 @@ class WalletAuthController extends GetxController {
     isAuthenticating.value = true;
     authError.value = null;
     try {
+      debugPrint('[MWA] gateway=${_authClient.baseUrl}');
+      await _authClient.checkReachability();
       // One MWA association: authorize → fetch the challenge → sign it.
       var challengeId = '';
       final result = await mwaSignIn(
@@ -404,6 +408,8 @@ class WalletAuthController extends GetxController {
     profileEmail.value = '';
     profileEmailVerified.value = false;
     profileName.value = '';
+    profileChain.value = '';
+    profileCreatedAt.value = null;
     final mwaToken = _mwaAuthToken;
     _token = null;
     _mwaAuthToken = null;
@@ -436,6 +442,8 @@ class WalletAuthController extends GetxController {
       profileEmail.value = '';
       profileEmailVerified.value = false;
       profileName.value = '';
+      profileChain.value = '';
+      profileCreatedAt.value = null;
       return;
     }
     isLoadingProfile.value = true;
@@ -503,6 +511,8 @@ class WalletAuthController extends GetxController {
     profileEmail.value = profile.email ?? '';
     profileEmailVerified.value = profile.emailVerified;
     profileName.value = profile.name ?? '';
+    profileChain.value = profile.chain ?? '';
+    profileCreatedAt.value = profile.createdAt;
     if (profile.walletAddress != null && profile.walletAddress!.isNotEmpty) {
       walletAddress.value = profile.walletAddress!;
     }

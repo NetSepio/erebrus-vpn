@@ -8,6 +8,7 @@ class UserProfile {
     this.email,
     this.emailVerified = false,
     this.name,
+    this.createdAt,
   });
 
   final String id;
@@ -17,6 +18,7 @@ class UserProfile {
   final String? email;
   final bool emailVerified;
   final String? name;
+  final DateTime? createdAt;
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
         id: (j['id'] ?? '').toString(),
@@ -26,5 +28,15 @@ class UserProfile {
         email: j['email']?.toString(),
         emailVerified: j['email_verified'] == true,
         name: j['name']?.toString(),
+        createdAt: _parseDateTime(j['created_at']),
       );
+
+  static DateTime? _parseDateTime(dynamic v) {
+    if (v == null) return null;
+    try {
+      return DateTime.parse(v.toString()).toUtc();
+    } catch (_) {
+      return null;
+    }
+  }
 }

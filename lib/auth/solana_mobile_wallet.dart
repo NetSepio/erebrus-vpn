@@ -9,6 +9,7 @@ import 'package:solana_mobile_client/solana_mobile_client.dart';
 
 import '../platform/platform_capabilities.dart';
 import 'auth_config.dart';
+import 'gateway_auth_client.dart';
 
 bool? _solanaMobileDeviceCache;
 
@@ -147,6 +148,9 @@ Future<MwaSignInResult> mwaSignIn({
     );
   } on MwaException {
     rethrow;
+  } on AuthException catch (e) {
+    debugPrint('[MWA] gateway unreachable during sign-in: ${e.message}');
+    throw MwaException(e.message);
   } catch (e) {
     debugPrint('[MWA] sign-in failed: $e');
     throw MwaException('Wallet sign-in failed: $e');

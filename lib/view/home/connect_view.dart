@@ -13,6 +13,7 @@ import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'node_display.dart';
+import 'node_ui_widgets.dart';
 
 /// The dVPN tab — connect/disconnect the tunnel, pick protocol, watch live
 /// stats, and open diagnostics / the server picker. Binds to [VpnController];
@@ -175,7 +176,7 @@ class _ConnectViewState extends State<ConnectView> {
                 final registryEmpty = gw.nodes.isEmpty;
                 final display = registryEmpty
                     ? NodeDisplay.placeholder(registryError: gw.error.value != null)
-                    : NodeDisplay.of(node);
+                    : NodeDisplay.of(node, showActivity: true);
                 return _ServerCard(
                   display: display,
                   egressIp: _c.egressIp.value,
@@ -615,8 +616,9 @@ class _ServerCard extends StatelessWidget {
           ? AppColors.warn.withValues(alpha: 0.35)
           : AppColors.stroke,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (d.isPlaceholder)
+          if (d.isPlaceholder) ...[
             Container(
               width: 40,
               height: 40,
@@ -626,60 +628,73 @@ class _ServerCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.hub_outlined, size: 22, color: AppColors.accent.withValues(alpha: 0.9)),
-            )
-          else
-            Text(d.flag, style: const TextStyle(fontSize: 26, height: 1)),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(d.name, style: mono(size: 14, weight: FontWeight.w600, color: AppColors.textPrimary)),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(d.location,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(width: 5, height: 5, decoration: BoxDecoration(color: d.networkColor, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    Text(d.network, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary)),
-                  ],
-                ),
-                if (connected) ...[
-                  const SizedBox(height: 6),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    egressLoading
-                        ? 'Egress IP · checking…'
-                        : (egressIp != null
-                            ? 'Egress IP · $egressIp'
-                            : 'Egress IP · unavailable (see Diagnostics)'),
-                    style: mono(
-                      size: 11,
-                      weight: FontWeight.w500,
-                      color: egressIp != null ? AppColors.success : AppColors.textMuted,
-                    ),
+                    d.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(size: 14, weight: FontWeight.w600, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    d.location,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
+          ] else
+            Expanded(
+              child: NodeCompactRow(display: d, nameSize: 14),
+            ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (d.showLoad)
-                Text(d.loadLabel, style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor)),
-              if (d.showLoad) const SizedBox(height: 6),
-              TextActionChip(
-                label: d.isPlaceholder ? 'BROWSE' : 'CHANGE',
-                accent: true,
-                onTap: onTap,
-              ),
+              if (d.isPlaceholder)
+                TextActionChip(label: 'BROWSE', accent: true, onTap: onTap)
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (d.showLoad) ...[
+                      Text(
+                        d.loadLabel,
+                        style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    VisibleIconButton(
+                      icon: Icons.swap_horiz_rounded,
+                      onTap: onTap,
+                      color: AppColors.accent,
+                      borderColor: AppColors.accent.withValues(alpha: 0.35),
+                      backgroundColor: AppColors.accent.withValues(alpha: 0.14),
+                    ),
+                  ],
+                ),
+              if (connected) ...[
+                const SizedBox(height: 6),
+                Text(
+                  egressLoading
+                      ? 'Egress · …'
+                      : (egressIp != null ? 'Egress · $egressIp' : 'Egress · —'),
+                  style: mono(
+                    size: 10,
+                    weight: FontWeight.w500,
+                    color: egressIp != null ? AppColors.success : AppColors.textMuted,
+                  ),
+                ),
+              ],
             ],
           ),
         ],
