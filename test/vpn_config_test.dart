@@ -82,5 +82,14 @@ void main() {
     expect(cfg['route']['final'], 'wg-out');
     final rules = cfg['route']['rules'] as List;
     expect(rules.any((r) => (r as Map)['action'] == 'hijack-dns'), isTrue); // tunnel DNS capture
+    final outbounds = cfg['outbounds'] as List;
+    expect(outbounds.any((o) => (o as Map)['tag'] == 'direct'), isTrue);
+  });
+
+  test('dialTarget uses carrier port for stealth transports', () {
+    final b = CredentialBundle.fromJson(jsonDecode(_bundleJson));
+    expect(b.dialTarget(Transport.wireguard), '203.0.113.10:51820');
+    expect(b.dialTarget(Transport.vlessReality), '203.0.113.10:8443');
+    expect(b.dialTarget(Transport.hysteria2), '203.0.113.10:4443');
   });
 }

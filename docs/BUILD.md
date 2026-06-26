@@ -32,6 +32,7 @@ All scripts share pinned versions via `scripts/libbox-common.sh`
 | Platform | Script | Output |
 |---|---|---|
 | Android arm64 | `./scripts/build-libbox.sh` | `android/app/libs/libbox.aar` |
+| iOS device + sim | `./scripts/build-libbox-ios.sh` | `ios/Frameworks/Libbox.xcframework` |
 | macOS M + Intel | `./scripts/build-libbox-macos.sh` | `macos/Frameworks/Libbox.xcframework` |
 | Windows x64 + arm64 | `./scripts/build-libbox-windows.sh` | `windows/native/libbox/libbox.dll` |
 | Linux x64 + arm64 | `./scripts/build-libbox-linux.sh` | `linux/native/libbox/libbox.so` |
@@ -93,13 +94,21 @@ capabilities (`cap_net_admin` or polkit).
 
 ## iOS
 
-iOS needs a Network Extension target running the same engine:
-- Build `Libbox.xcframework` (gomobile `-target=ios`).
-- Add a `NEPacketTunnelProvider` extension that starts sing-box with the config.
-- Wire `NETunnelProviderManager` + an app group.
+```bash
+./scripts/build-libbox-ios.sh
+ruby ./scripts/setup-ios-tunnel.rb   # once — adds ErebrusTunnel target to Xcode
+flutter run -d <iphone-device-id>
+```
 
-The Dart side is identical (same channels). Details in
-[STEALTH_CLIENT.md](STEALTH_CLIENT.md).
+1. Build `Libbox.xcframework` (gomobile `-target=ios`).
+2. `setup-ios-tunnel.rb` wires the **ErebrusTunnel** Packet Tunnel extension
+   (sources in `ios/ErebrusTunnel/`).
+3. Enable **App Groups** + **Network Extensions** on Runner + extension in the
+   Apple Developer portal (`group.com.erebrus.vpn`, bundle `com.erebrus.vpn.ErebrusTunnel`).
+4. Run on a **physical device** — VPN tunnels do not work in the Simulator.
+
+WireGuard and stealth (VLESS/Hysteria2) use the same Dart `SingboxConfigBuilder` as
+Android. Details in [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
 
 ## Troubleshooting
 

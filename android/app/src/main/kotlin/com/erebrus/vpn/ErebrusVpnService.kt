@@ -138,19 +138,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         statsMonitor.stop()
         AndroidNetworkPlatform.stopMonitor()
 
-        // Close the OS VPN interface first — this drops the status-bar key icon.
-        // libbox dups the tun fd internally; our PFD from establish() must be closed explicitly.
-        val tun = tunInterface
-        tunInterface = null
-        if (tun != null) {
-            try {
-                tun.close()
-                android.util.Log.i("erebrus-singbox", "TUN interface closed")
-            } catch (e: Exception) {
-                android.util.Log.e("erebrus-singbox", "TUN close failed", e)
-            }
-        }
-
+        // Close libbox before the OS TUN fd — closing TUN first can auto-close libbox
+        // and make a second service.close() log a spurious "file already closed".
         val service = box
         box = null
         if (service != null) {
@@ -158,11 +147,35 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 service.close()
                 android.util.Log.i("erebrus-singbox", "libbox service closed")
             } catch (e: Exception) {
-                android.util.Log.e("erebrus-singbox", "libbox close failed", e)
+                if (isBenignCloseError(e)) {
+                    android.util.Log.d("erebrus-singbox", "libbox already closed")
+                } else {
+                    android.util.Log.e("erebrus-singbox", "libbox close failed", e)
+                }
+            }
+        }
+
+        val tun = tunInterface
+        tunInterface = null
+        if (tun != null) {
+            try {
+                tun.close()
+                android.util.Log.i("erebrus-singbox", "TUN interface closed")
+            } catch (e: Exception) {
+                if (isBenignCloseError(e)) {
+                    android.util.Log.d("erebrus-singbox", "TUN already closed")
+                } else {
+                    android.util.Log.e("erebrus-singbox", "TUN close failed", e)
+                }
             }
         }
 
         tunnelActive = false
+    }
+
+    private fun isBenignCloseError(e: Exception): Boolean {
+        val msg = (e.message ?: "").lowercase()
+        return msg.contains("already closed") || msg.contains("file already closed")
     }
 
     private fun stopTunnel() {
@@ -185,7 +198,9 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     }
 
     override fun onDestroy() {
-        releaseTunnelResources()
+        if (box != null || tunInterface != null) {
+            releaseTunnelResources()
+        }
         super.onDestroy()
     }
 

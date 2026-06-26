@@ -226,6 +226,22 @@ class CredentialBundle {
       serverPublicKey.isNotEmpty && endpoint.isNotEmpty && address.isNotEmpty;
 
   bool get hasStealth => singboxProfile.isNotEmpty && (vlessUri.isNotEmpty || hysteria2Uri.isNotEmpty);
+
+  /// Host:port the client actually dials for [transport] (for logs / diagnostics).
+  String dialTarget(Transport transport) {
+    switch (transport) {
+      case Transport.wireguard:
+        return endpoint;
+      case Transport.vlessReality:
+        final m = RegExp(r'^vless://[^@]+@([^:/?#]+):(\d+)').firstMatch(vlessUri);
+        if (m != null) return '${m.group(1)}:${m.group(2)}';
+        return endpoint;
+      case Transport.hysteria2:
+        final m = RegExp(r'^hysteria2://[^@]+@([^:/?#]+):(\d+)').firstMatch(hysteria2Uri);
+        if (m != null) return '${m.group(1)}:${m.group(2)}';
+        return endpoint;
+    }
+  }
 }
 
 /// Builds the sing-box configuration the on-device engine runs, from a
@@ -379,7 +395,8 @@ class SingboxConfigBuilder {
         ((profile['outbounds'] as List?)?.cast<Map<String, dynamic>>() ?? [])
             .map((o) => Map<String, dynamic>.from(o))
             .toList();
-    if (outbounds.isEmpty) {
+    // Node profiles ship carrier outbounds only; local bypass rules need `direct`.
+    if (!outbounds.any((o) => o['tag'] == 'direct')) {
       outbounds.add({'type': 'direct', 'tag': 'direct'});
     }
     _patchStealthOutbounds(outbounds, transport, bundle);

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Build libbox for every supported platform.
-# Usage: ./scripts/build-libbox-all.sh [android|macos|windows|linux|all]
+# Usage: ./scripts/build-libbox-all.sh [android|ios|macos|windows|linux|all]
 #
 set -euo pipefail
 
@@ -18,17 +18,19 @@ run() {
 
 case "${TARGET}" in
   android) run "Android arm64" build-libbox.sh ;;
+  ios)     run "iOS device + simulator" build-libbox-ios.sh ;;
   macos)   run "macOS universal" build-libbox-macos.sh ;;
   windows) run "Windows amd64+arm64" build-libbox-windows.sh ;;
   linux)   run "Linux amd64+arm64" build-libbox-linux.sh ;;
   all)
     run "Android arm64" build-libbox.sh
+    run "iOS device + simulator" build-libbox-ios.sh
     run "macOS universal" build-libbox-macos.sh
     run "Windows amd64+arm64" build-libbox-windows.sh
     run "Linux amd64+arm64" build-libbox-linux.sh
     ;;
   *)
-    echo "usage: $0 [android|macos|windows|linux|all]"
+    echo "usage: $0 [android|ios|macos|windows|linux|all]"
     exit 1
     ;;
 esac

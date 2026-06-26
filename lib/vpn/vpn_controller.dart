@@ -291,7 +291,7 @@ class VpnController extends GetxController {
           final srv = bundle.serverPublicKey;
           final srvShort = srv.length > 8 ? '${srv.substring(0, 8)}…' : srv;
           debugPrint(
-            '[VPN] trying ${t.label} → ${bundle.endpoint} '
+            '[VPN] trying ${t.label} → ${bundle.dialTarget(t)} '
             '(wg ${bundle.address}, srv $srvShort)',
           );
           final ok = await _armAndStart(
@@ -302,6 +302,14 @@ class VpnController extends GetxController {
             ),
           );
           debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
+          if (ok && t != Transport.wireguard) {
+            final ready = await _waitStealthReady();
+            if (!ready) {
+              debugPrint('[VPN] ${t.label} tunnel not ready — trying next transport');
+              await _engine.stop().catchError((_) {});
+              continue;
+            }
+          }
           if (ok) {
             _wasConnected = true;
             debugPrint(
@@ -434,6 +442,23 @@ class VpnController extends GetxController {
   }
 
   Future<void> toggle() => isConnected ? disconnect() : connect();
+
+  /// Stealth carriers need a moment after sing-box starts before the inner WG
+  /// handshake succeeds; probe egress before declaring connect success.
+  Future<bool> _waitStealthReady({
+    int attempts = 8,
+    Duration interval = const Duration(milliseconds: 500),
+  }) async {
+    for (var i = 0; i < attempts; i++) {
+      final ip = await EgressIpProbe.fetch(
+        timeout: const Duration(seconds: 4),
+        useTunnelProxy: true,
+      );
+      if (ip != null) return true;
+      if (i + 1 < attempts) await Future<void>.delayed(interval);
+    }
+    return false;
+  }
 
   /// Subscribes before [startFuture] completes so fast native errors are not missed.
   Future<bool> _armAndStart(
