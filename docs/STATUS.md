@@ -8,22 +8,24 @@ What works today vs what still needs work. Updated 2026-06-26.
 |---|---|---|---|
 | **Android** | Yes | `ErebrusVpnService` + `libbox.aar` | arm64 devices only |
 | **iOS** | Yes | `ErebrusTunnel` Network Extension + `Libbox.xcframework` | Physical device; Apple App Group + NE entitlements; `./scripts/build-libbox-ios.sh` |
-| **macOS** | Partial | Unsigned: **sing-box CLI** proxy mode (`singbox_desktop_runner`). Signed TUN: NE scaffold only — libbox not wired in `macos/ErebrusTunnel/` | Full system VPN needs signed NE + libbox in extension |
-| **Windows** | No | Channel stub → `error` | Wire `windows/runner/singbox_plugin.cpp` to built `libbox.dll` + Wintun |
-| **Linux** | No | Channel stub → `error` | Wire `linux/runner/singbox_plugin.cc` to built `libbox.so` + TUN caps |
+| **macOS** | Partial | **sing-box CLI** proxy mode via `SingboxDesktopRunner` (Dart — not the native plugin). Signed TUN: NE scaffold only | System-wide VPN needs signed NE + libbox in `macos/ErebrusTunnel/` |
+| **Windows** | Partial | Same **sing-box CLI** path as macOS (`SingboxEngine` → `SingboxDesktopRunner`). System proxy via registry on connect | Bundle CLI (`./scripts/build-desktop.sh windows`); tray minimize; libbox TUN optional later |
+| **Linux** | Partial | Same **sing-box CLI** path as macOS. System proxy via `gsettings` on connect (GNOME/GTK) | Bundle CLI (`./scripts/build-desktop.sh linux`); tray minimize; KDE/non-GNOME may need extra proxy backend |
 
 Dart config (`SingboxConfigBuilder`), connect fallback (Auto / Stealth / WireGuard), and
-stealth readiness probe are shared across mobile. Android and iOS use the same method
-channels (`dev.erebrus/singbox`).
+stealth readiness probe are shared across **all** platforms. Mobile uses native libbox
+via `dev.erebrus/singbox` method channels. **All desktop** (macOS / Windows / Linux) uses
+`SingboxDesktopRunner` — a sing-box CLI subprocess — and ignores the C++ plugin stubs.
 
 ## Features
 
 | Feature | Android | iOS | macOS | Win/Linux |
 |---|---|---|---|---|
 | Per-app split tunnel | Yes | No (system-wide NE) | No | No |
-| In-app browser via tunnel | WebView → local proxy | System NE routes WebView | System proxy (CLI) | — |
-| Live RX/TX stats | Yes | Yes (app group) | CLI log / partial | — |
+| In-app browser via tunnel | WebView → `setAppProxy` | System NE routes all traffic | System proxy on connect | System proxy on connect (Win registry / Linux gsettings) |
+| Live RX/TX stats | Yes | Yes (app group) | Yes (Clash API `:9090`) | Yes (Clash API `:9090`) |
 | Wallet auth (Reown) | Yes | Yes | Web login | Web login |
+| Gateway provisioner | Yes | Yes | Yes (`GatewayController`) | Yes (`GatewayController`) |
 
 ## Recently fixed (no longer open)
 
@@ -33,13 +35,24 @@ channels (`dev.erebrus/singbox`).
 - Stealth reported connected before carrier ready — `_waitStealthReady()` egress probe in `vpn_controller.dart`.
 - iOS tunnel was a stub — full `ErebrusTunnel` + `TunnelManager` + libbox v1.11 stack shipped.
 
-## Open work
+## Open work (prod blockers)
 
-1. **macOS Network Extension** — port `ios/ErebrusTunnel/` libbox integration into `macos/ErebrusTunnel/`, add Xcode target (see `macos/ErebrusTunnel/README.md`).
-2. **Windows / Linux native plugin** — link built libbox; implement TUN (Wintun / `cap_net_admin`).
-3. **iOS per-app rules** — optional; needs `NEAppRule` / managed-app APIs (different from Android split tunnel).
-4. **DNS picker in UI** — node DNS vs public resolver (`topology.md` future item).
-5. **Gateway provisioner in app** — hook `VpnController.provisioner` to production gateway (manual import works for testing).
+### Ship mobile (Android / iOS)
+
+1. **iOS** — App Group + NE entitlements on physical device; `./scripts/build-libbox-ios.sh`.
+2. **Android** — arm64 only; Play / dApp Store signing per `scripts/build-android-release.sh`.
+
+### Ship desktop
+
+1. **Windows / Linux QA** — run `./scripts/build-desktop.sh windows|linux`, verify connect, egress probe, and browser egress via system proxy.
+2. **Linux KDE / non-GNOME** — optional `kwriteconfig` or `xdg-settings` proxy backend if `gsettings` is unavailable.
+3. **macOS Network Extension (optional)** — port `ios/ErebrusTunnel/` libbox into `macos/ErebrusTunnel/` for signed system TUN (see `macos/ErebrusTunnel/README.md`). Unsigned builds already ship via CLI proxy mode.
+
+### Future / optional
+
+1. **Windows / Linux libbox TUN** — `windows/runner/singbox_plugin.cpp` and `linux/runner/singbox_plugin.cc` are stubs (emit `error` on `start`). Only needed for **system-wide TUN** without the CLI; not required for proxy-mode MVP.
+2. **iOS per-app rules** — optional; `NEAppRule` / managed-app APIs.
+3. **DNS picker in UI** — node DNS vs public resolver (`topology.md` future item).
 
 ## Verify stealth vs direct WireGuard
 

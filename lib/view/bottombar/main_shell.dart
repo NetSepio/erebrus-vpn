@@ -97,7 +97,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         onOpenDiagnostics: () => showDiagnosticsSheet(context),
         onGoSettings: () => _go(2),
       ),
-      const BrowserView(),
+      BrowserView(isActive: _index == 1),
       const SettingsView(),
     ];
 

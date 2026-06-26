@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -19,14 +22,18 @@ class BrowserTab {
     required this.url,
     this.title = 'New tab',
     WebViewController? controller,
-  }) : controller = controller ?? WebViewController();
+  }) : _controller = controller;
 
   final String id;
   String url;
   String title;
-  final WebViewController controller;
+  WebViewController? _controller;
+  bool configured = false;
   bool canGoBack = false;
   bool canGoForward = false;
+
+  /// Created lazily — Android WebView init is expensive and must not run off-screen.
+  WebViewController get controller => _controller ??= WebViewController();
 
   /// True while the tab is showing the private start page (no web content).
   bool get isStart => url == kStartPage || url.isEmpty;
@@ -40,7 +47,13 @@ class BrowserController extends GetxController {
   final addressBar = kStartPage.obs;
   final isLoading = false.obs;
 
-  BrowserTab get activeTab => tabs[activeIndex.value.clamp(0, tabs.length - 1)];
+  BrowserTab get activeTab {
+    if (tabs.isEmpty) throw StateError('BrowserController has no tabs');
+    return tabs[activeIndex.value.clamp(0, tabs.length - 1)];
+  }
+
+  /// True while the shell's BROWSER bottom-nav tab is selected.
+  bool _shellTabVisible = false;
 
   @override
   void onInit() {
@@ -67,10 +80,11 @@ class BrowserController extends GetxController {
   void addTab([String? url]) {
     final u = url == null ? kStartPage : _normalizeUrl(url);
     final tab = BrowserTab(id: DateTime.now().microsecondsSinceEpoch.toString(), url: u, title: kStartTitle);
-    _configure(tab);
     tabs.add(tab);
     activeIndex.value = tabs.length - 1;
     addressBar.value = u;
+    tabs.refresh();
+    if (!tab.isStart && _shellTabVisible) unawaited(_loadActiveTabIfNeeded());
   }
 
   void closeTab(int index) {
@@ -78,7 +92,6 @@ class BrowserController extends GetxController {
     if (tabs.length <= 1) {
       // Always keep ≥1 tab — closing the last spawns a fresh start page.
       final fresh = BrowserTab(id: DateTime.now().microsecondsSinceEpoch.toString(), url: kStartPage, title: kStartTitle);
-      _configure(fresh);
       tabs[0] = fresh;
       activeIndex.value = 0;
       addressBar.value = kStartPage;
@@ -106,34 +119,59 @@ class BrowserController extends GetxController {
     tabs.refresh();
   }
 
+  /// Called when the shell switches to the BROWSER tab. WebView is mounted only
+  /// while visible — loads are kicked off here, not while the tab is hidden in
+  /// [IndexedStack].
+  void setShellTabVisible(bool visible) {
+    final wasVisible = _shellTabVisible;
+    _shellTabVisible = visible;
+    if (visible && !wasVisible) _loadActiveTabIfNeeded();
+  }
+
   Future<void> navigate(String input) async {
     final url = _normalizeUrl(input);
     final tab = activeTab;
     tab.url = url;
     addressBar.value = url;
-    if (url == kStartPage) {
-      tabs.refresh();
-      return;
-    }
-    await tab.controller.loadRequest(Uri.parse(url));
+    if (url != kStartPage && _shellTabVisible) _ensureConfigured(tab);
+    tabs.refresh();
+    if (url == kStartPage) return;
+    if (_shellTabVisible) await tab.controller.loadRequest(Uri.parse(url));
+  }
+
+  Future<void> _loadActiveTabIfNeeded() async {
+    final tab = activeTab;
+    if (tab.isStart) return;
+    _ensureConfigured(tab);
+    tabs.refresh();
+    await tab.controller.loadRequest(Uri.parse(tab.url));
+  }
+
+  void _ensureConfigured(BrowserTab tab) {
+    if (tab.configured) return;
+    _configure(tab);
+    tab.configured = true;
   }
 
   Future<void> reload() async {
-    if (activeTab.isStart) return;
-    await activeTab.controller.reload();
+    final tab = activeTab;
+    if (tab.isStart || !tab.configured) return;
+    await tab.controller.reload();
   }
 
   Future<void> goBack() async {
-    if (activeTab.isStart) return;
-    if (await activeTab.controller.canGoBack()) {
-      await activeTab.controller.goBack();
+    final tab = activeTab;
+    if (tab.isStart || !tab.configured) return;
+    if (await tab.controller.canGoBack()) {
+      await tab.controller.goBack();
     }
   }
 
   Future<void> goForward() async {
-    if (activeTab.isStart) return;
-    if (await activeTab.controller.canGoForward()) {
-      await activeTab.controller.goForward();
+    final tab = activeTab;
+    if (tab.isStart || !tab.configured) return;
+    if (await tab.controller.canGoForward()) {
+      await tab.controller.goForward();
     }
   }
 
@@ -157,12 +195,12 @@ class BrowserController extends GetxController {
               tabs.refresh();
             }
           },
+          onWebResourceError: (error) {
+            debugPrint('[Browser] resource error: ${error.description} (${error.errorCode})');
+          },
           onNavigationRequest: (req) => NavigationDecision.navigate,
         ),
       );
-    if (!tab.isStart) {
-      tab.controller.loadRequest(Uri.parse(tab.url));
-    }
   }
 
   static String _normalizeUrl(String input) {

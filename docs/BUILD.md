@@ -19,8 +19,8 @@ flutter run          # launches on a connected device / emulator
 ```
 
 At this point the UI runs on every platform. **Tunnel traffic** needs the native
-engine below (Android/iOS: libbox; macOS: sing-box CLI; Win/Linux: not wired yet).
-See [STATUS.md](STATUS.md).
+engine below (Android/iOS: libbox; desktop: sing-box CLI via `SingboxDesktopRunner`).
+See [STATUS.md](STATUS.md) for Win/Linux browser-routing gaps.
 
 ## 3. Build the native tunnel (`libbox`)
 
@@ -82,14 +82,27 @@ Auth on desktop uses **web login** (not Reown). Stealth configs use the same Dar
 
 ## Windows / Linux
 
+Desktop tunneling uses the **sing-box CLI** (same Dart path as macOS), not the
+C++ `singbox_plugin` stubs in `windows/runner/` and `linux/runner/`.
+
 ```bash
-./scripts/build-libbox-windows.sh   # or build-libbox-linux.sh
-flutter run -d windows                # or -d linux
+./scripts/fetch-singbox-cli.sh windows   # or linux
+flutter run -d windows                   # or -d linux
+# release + embed CLI:
+./scripts/build-desktop.sh windows       # or linux
 ```
 
-Wire the generated libbox binary into the native `singbox_plugin` (see
-`windows/runner/` and `linux/runner/`). Windows uses Wintun; Linux needs TUN
-capabilities (`cap_net_admin` or polkit).
+**What works today:** connect / disconnect, Auto / Stealth / WireGuard, egress
+probe, live stats (Clash API), web wallet login, gateway node list + provision.
+
+**System proxy:** On connect, `DesktopSystemProxy` routes HTTP/HTTPS/SOCKS through
+`127.0.0.1:10808` (macOS: `networksetup`, Windows: registry, Linux: `gsettings`).
+The in-app browser and system browsers use the tunnel while connected. Close the
+window to **minimize to tray**; use tray → Quit to exit fully.
+
+**Optional later:** wire `libbox` + TUN into `singbox_plugin` for system-wide VPN
+without the CLI (`./scripts/build-libbox-windows.sh`, Wintun / `cap_net_admin`).
+Not required for proxy-mode MVP.
 
 ## iOS
 

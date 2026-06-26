@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../platform/desktop_system_proxy.dart';
 import '../platform/macos_privileged_process.dart';
-import '../platform/macos_system_proxy.dart';
 import '../platform/platform_capabilities.dart';
 import 'clash_stats_poller.dart';
 import 'singbox_engine.dart';
@@ -97,9 +97,7 @@ class SingboxDesktopRunner {
     debugPrint('[DesktopVPN] starting $binary ($profileName, ${configJson.length} bytes)');
     _setStage('connecting');
     _lastError = null;
-    if (Platform.isMacOS) {
-      await MacosSystemProxy.disable();
-    }
+    await DesktopSystemProxy.disable();
 
     final wantsTun = _configUsesTun(configJson);
     if (Platform.isMacOS && wantsTun) {
@@ -112,18 +110,18 @@ class SingboxDesktopRunner {
       final proxyConfig = _stripTunInbound(configJson);
       await File(configPath).writeAsString(proxyConfig);
       await _startSubprocess(binary, configPath);
-      await _awaitReady(privileged: false, enableSystemProxy: true);
+      await _awaitReady(privileged: false);
       return;
     }
 
     if (Platform.isMacOS && !wantsTun) {
       await _startSubprocess(binary, configPath);
-      await _awaitReady(privileged: false, enableSystemProxy: true);
+      await _awaitReady(privileged: false);
       return;
     }
 
     await _startSubprocess(binary, configPath);
-    await _awaitReady(privileged: false, enableSystemProxy: false);
+    await _awaitReady(privileged: false);
   }
 
   Future<bool> _startPrivilegedMacos(String binary, String configPath) async {
@@ -180,7 +178,7 @@ class SingboxDesktopRunner {
 
     _process!.exitCode.then((code) async {
       _stopStats();
-      await MacosSystemProxy.disable();
+      await DesktopSystemProxy.disable();
       if (_stage == 'disconnecting') {
         _setStage('disconnected');
       } else if (code != 0) {
@@ -193,10 +191,7 @@ class SingboxDesktopRunner {
     });
   }
 
-  Future<void> _awaitReady({
-    required bool privileged,
-    bool enableSystemProxy = false,
-  }) async {
+  Future<void> _awaitReady({required bool privileged}) async {
     final ready = await _waitUntilReady(
       hasFatal: () => _lastError != null && _lastError!.contains('FATAL'),
       processAlive: () => privileged ? _privilegedMacos : _process != null,
@@ -213,18 +208,16 @@ class SingboxDesktopRunner {
       _setStage('connected');
       _startStats();
     }
-    if (Platform.isMacOS) {
-      // Route Safari/Chrome through the local mixed inbound (same path as egress probe).
-      // TUN alone often breaks DNS for system browsers on unsigned macOS CLI builds.
-      await MacosSystemProxy.enable(
+    if (PlatformCapabilities.isDesktop) {
+      await DesktopSystemProxy.enable(
         host: SingboxConfigBuilder.localProxyHost,
         port: SingboxConfigBuilder.localProxyPort,
       );
-      if (privileged) {
-        debugPrint('[DesktopVPN] TUN + system HTTP/SOCKS proxy → 127.0.0.1:10808');
-      } else if (enableSystemProxy) {
-        debugPrint('[DesktopVPN] system HTTP/SOCKS proxy → 127.0.0.1:10808');
-      }
+      debugPrint(
+        '[DesktopVPN] system HTTP/SOCKS proxy → '
+        '${SingboxConfigBuilder.localProxyHost}:${SingboxConfigBuilder.localProxyPort}'
+        '${privileged ? ' (with TUN)' : ''}',
+      );
     }
   }
 
@@ -288,7 +281,7 @@ class SingboxDesktopRunner {
   }
 
   Future<void> stop() async {
-    await MacosSystemProxy.disable();
+    await DesktopSystemProxy.disable();
     _logTailer?.cancel();
     _logTailer = null;
 

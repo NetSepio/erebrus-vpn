@@ -28,8 +28,10 @@ flutter run          # launch on a connected device or emulator
 
 > **Heads-up:** Android and iOS need a one-time **libbox** build before the tunnel
 > works (`./scripts/build-libbox.sh` or `build-libbox-ios.sh`). See
-> **[docs/BUILD.md](docs/BUILD.md)**. macOS uses the sing-box CLI for unsigned dev;
-> Windows/Linux tunnel plugins are not wired yet — see **[docs/STATUS.md](docs/STATUS.md)**.
+> **[docs/BUILD.md](docs/BUILD.md)**. Desktop (macOS / Windows / Linux) uses the
+> **sing-box CLI** via `SingboxDesktopRunner` — run `./scripts/fetch-singbox-cli.sh`
+> then `./scripts/build-desktop.sh`. See **[docs/STATUS.md](docs/STATUS.md)** for
+> per-platform gaps (Win/Linux system proxy + in-app browser routing).
 
 ## Where things live
 
@@ -56,9 +58,9 @@ flutter run          # launch on a connected device or emulator
 ## Status
 
 ✅ **Android & iOS** — full libbox tunnel (WireGuard + stealth carriers), tested on device.
-✅ **macOS** — connect via sing-box CLI (proxy mode); signed system TUN still TODO.
-🚧 **Windows / Linux** — UI runs; native tunnel plugin not linked yet.
-🚧 **Production gateway** — manual credential import works; wire `VpnController.provisioner` for live accounts.
+✅ **macOS** — connect via sing-box CLI (proxy mode) + system HTTP/SOCKS proxy; signed system TUN still TODO.
+🚧 **Windows / Linux** — connect via sing-box CLI + system proxy; tray minimize on all desktop. QA on real hardware recommended.
+✅ **Gateway provisioner** — wired via `GatewayController` after login.
 
 See **[docs/STATUS.md](docs/STATUS.md)** for the full matrix.
 

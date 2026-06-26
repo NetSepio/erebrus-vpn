@@ -7,6 +7,7 @@ import '../auth/wallet_auth_controller.dart';
 import '../vpn/singbox_engine.dart';
 import '../vpn/vpn_controller.dart';
 import '../vpn/vpn_models.dart';
+import 'desktop_system_proxy.dart';
 import 'platform_capabilities.dart';
 
 /// Menu bar / system tray wrapper for macOS, Windows, and Linux.
@@ -42,6 +43,7 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
       await windowManager.show();
       await windowManager.focus();
     });
+    await windowManager.setPreventClose(true);
 
     await trayManager.setIcon('assets/icons/tray_icon.png');
     await _syncTrayMenu();
@@ -73,6 +75,8 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
       case 'open':
         windowManager.show();
         windowManager.focus();
+      case 'minimize':
+        windowManager.hide();
       case 'quit':
         _quit();
     }
@@ -81,6 +85,11 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
   @override
   void onWindowClose() async {
     await windowManager.hide();
+  }
+
+  @override
+  void onWindowMinimize() {
+    windowManager.hide();
   }
 
   Future<void> _toggleConnection() async {
@@ -104,6 +113,7 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
       final vpn = Get.find<VpnController>();
       if (vpn.isConnected) await vpn.disconnect();
     }
+    await DesktopSystemProxy.disable();
     await trayManager.destroy();
     await windowManager.destroy();
   }
@@ -129,6 +139,7 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
         MenuItem.separator(),
         MenuItem(key: 'connect', label: actionLabel),
         MenuItem(key: 'open', label: 'Open dashboard'),
+        MenuItem(key: 'minimize', label: 'Minimize to tray'),
         MenuItem.separator(),
         MenuItem(key: 'quit', label: 'Quit Erebrus'),
       ],

@@ -10,12 +10,40 @@ import 'browser_controller.dart';
 
 /// In-app private browser: tab strip, omnibox, the private start page (service
 /// grid) and the WebView for real pages, all over the dVPN tunnel.
-class BrowserView extends StatelessWidget {
-  const BrowserView({super.key});
+///
+/// [isActive] is true when this tab is the selected pane in [MainShell]'s
+/// [IndexedStack]. The native WebView platform view is mounted only then —
+/// embedding it in a hidden IndexedStack child freezes many Android devices.
+class BrowserView extends StatefulWidget {
+  const BrowserView({super.key, required this.isActive});
+
+  final bool isActive;
+
+  @override
+  State<BrowserView> createState() => _BrowserViewState();
+}
+
+class _BrowserViewState extends State<BrowserView> {
+  BrowserController get _c =>
+      Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
+
+  @override
+  void initState() {
+    super.initState();
+    _c.setShellTabVisible(widget.isActive);
+  }
+
+  @override
+  void didUpdateWidget(BrowserView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      _c.setShellTabVisible(widget.isActive);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final c = Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
+    final c = _c;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -34,9 +62,16 @@ class BrowserView extends StatelessWidget {
             }),
             Expanded(
               child: Obx(() {
+                c.tabs.length;
+                c.activeIndex.value;
+                c.addressBar.value;
                 if (c.tabs.isEmpty) return const SizedBox.shrink();
                 final tab = c.activeTab;
                 if (tab.isStart) return const _StartPage();
+                if (!widget.isActive) {
+                  // Shell is on VPN/Settings — keep Flutter-only UI in the tree.
+                  return _PendingWebPage(url: tab.url, loading: c.isLoading.value);
+                }
                 return Stack(
                   children: [
                     WebViewWidget(key: ValueKey(tab.id), controller: tab.controller),
@@ -47,6 +82,32 @@ class BrowserView extends StatelessWidget {
               }),
             ),
             _ControlBar(controller: c),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when a tab has a URL but the BROWSER shell tab is not visible.
+class _PendingWebPage extends StatelessWidget {
+  const _PendingWebPage({required this.url, required this.loading});
+  final String url;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (loading) const CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+            if (loading) const SizedBox(height: 16),
+            Text('Ready to load', style: grotesk(size: 16, weight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(url, textAlign: TextAlign.center, style: mono(size: 12, color: AppColors.textTertiary)),
           ],
         ),
       ),

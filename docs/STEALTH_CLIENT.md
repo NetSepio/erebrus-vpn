@@ -68,15 +68,22 @@ See [BUILD.md](BUILD.md) and [STATUS.md](STATUS.md).
 (same pattern as iOS), add NE target in Xcode, embed `macos/Frameworks/Libbox.xcframework`.
 `TunnelManager.swift` + channels exist but the extension is still a lifecycle stub.
 
-### Windows / Linux — not wired
+### Windows / Linux — CLI proxy mode (partial)
 
-1. Build libbox: `./scripts/build-libbox-windows.sh` or `build-libbox-linux.sh`.
-2. **TODO:** Implement tunnel start in `windows/runner/singbox_plugin.cpp` and
-   `linux/runner/singbox_plugin.cc` (currently emit `error` on `start`).
+Dart uses `SingboxDesktopRunner` on **all** desktop platforms (`SingboxEngine._useDesktopRunner`).
+The C++ plugins in `windows/runner/singbox_plugin.cpp` and `linux/runner/singbox_plugin.cc`
+register `dev.erebrus/singbox` but are **never called** from Dart on desktop.
 
-## Wiring the gateway provisioner
+1. Fetch CLI: `./scripts/fetch-singbox-cli.sh windows` (or `linux`).
+2. Build: `./scripts/build-desktop.sh windows` (or `linux`) — embeds `sing-box` next to the app.
+3. Config: `useSystemTunnel: false` → mixed inbound on `127.0.0.1:10808` only (no TUN).
+4. **TODO (prod):** Windows/Linux system proxy (macOS has `MacosSystemProxy` via `networksetup`).
+   Without it, `setAppProxy` is a desktop no-op and the in-app WebView does not use the tunnel.
+5. **Optional later:** wire libbox TUN in the native plugins for system-wide VPN without CLI.
 
-`VpnController.provisioner` must be set (e.g. after login) to a function that
-calls `POST /api/v2/vpn/clients { name, node_id, wg_public_key }` and returns a
-`CredentialBundle.fromJson(response)`. The WG public key comes from
-`genWgKeys` (generated once, persisted in `flutter_secure_storage`).
+## Gateway provisioner
+
+`GatewayController` wires `VpnController.provisioner` on init to call
+`POST /api/v2/vpn/clients { name, node_id, wg_public_key }` and cache the
+returned `CredentialBundle`. WG keys come from `genWgKeys` (native on mobile,
+`WgKeygen` in Dart on desktop).

@@ -53,6 +53,10 @@ app.*.map.json
 # Local secrets (copy from env.example)
 .env
 
+# Android release signing (copy from android/key.properties.example)
+android/key.properties
+android/release-keys/
+
 # sing-box libbox binaries (build via scripts/build-libbox*.sh)
 /android/app/libs/libbox.aar
 /macos/Frameworks/Libbox.xcframework/
