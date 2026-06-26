@@ -109,6 +109,7 @@ class BrowserController extends GetxController {
     if (index < 0 || index >= tabs.length) return;
     activeIndex.value = index;
     addressBar.value = activeTab.url;
+    tabs.refresh();
   }
 
   Future<void> goHome() async {
@@ -116,6 +117,8 @@ class BrowserController extends GetxController {
     tab.url = kStartPage;
     tab.title = kStartTitle;
     addressBar.value = kStartPage;
+    tab.canGoBack = false;
+    tab.canGoForward = false;
     tabs.refresh();
   }
 
@@ -161,18 +164,27 @@ class BrowserController extends GetxController {
 
   Future<void> goBack() async {
     final tab = activeTab;
-    if (tab.isStart || !tab.configured) return;
-    if (await tab.controller.canGoBack()) {
-      await tab.controller.goBack();
-    }
+    if (tab.isStart || !tab.configured || !tab.canGoBack) return;
+    await tab.controller.goBack();
+    await _refreshNavigationState(tab);
   }
 
   Future<void> goForward() async {
     final tab = activeTab;
-    if (tab.isStart || !tab.configured) return;
-    if (await tab.controller.canGoForward()) {
-      await tab.controller.goForward();
+    if (tab.isStart || !tab.configured || !tab.canGoForward) return;
+    await tab.controller.goForward();
+    await _refreshNavigationState(tab);
+  }
+
+  Future<void> _refreshNavigationState(BrowserTab tab) async {
+    if (!tab.configured || tab.isStart) {
+      tab.canGoBack = false;
+      tab.canGoForward = false;
+    } else {
+      tab.canGoBack = await tab.controller.canGoBack();
+      tab.canGoForward = await tab.controller.canGoForward();
     }
+    tabs.refresh();
   }
 
   void _configure(BrowserTab tab) {
@@ -187,8 +199,7 @@ class BrowserController extends GetxController {
             if (tabs.isNotEmpty && tabs[activeIndex.value.clamp(0, tabs.length - 1)] == tab) {
               addressBar.value = url;
             }
-            tab.canGoBack = await tab.controller.canGoBack();
-            tab.canGoForward = await tab.controller.canGoForward();
+            await _refreshNavigationState(tab);
             final title = await tab.controller.getTitle();
             if (title != null && title.isNotEmpty) {
               tab.title = title.length > 24 ? '${title.substring(0, 24)}…' : title;

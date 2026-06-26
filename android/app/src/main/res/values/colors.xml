@@ -2,4 +2,5 @@
 <resources>
     <color name="launch_background">#0A0A0C</color>
     <color name="erebrus_orange">#FF6B35</color>
+	<color name="ic_launcher_background">#050505</color>
 </resources>

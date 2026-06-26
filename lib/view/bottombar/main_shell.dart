@@ -12,6 +12,8 @@ import '../browser/browser_view.dart';
 import '../home/connect_view.dart';
 import '../home/diagnostics_sheet.dart';
 import '../home/server_sheet.dart';
+import '../layout/desktop_layout.dart';
+import '../layout/desktop_screen.dart';
 import '../settings/settings_view.dart';
 
 /// The authenticated app shell: VPN / BROWSER / SETTINGS, with the design's
@@ -91,24 +93,84 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final useSideRail = DesktopLayout.useSideRail(
+      MediaQuery.sizeOf(context).width,
+    );
     final tabs = [
-      ConnectView(
-        onOpenServers: () => showServerSheet(context),
-        onOpenDiagnostics: () => showDiagnosticsSheet(context),
-        onGoSettings: () => _go(2),
+      DesktopScreen(
+        child: ConnectView(
+          onOpenServers: () => showServerSheet(context),
+          onOpenDiagnostics: () => showDiagnosticsSheet(context),
+          onGoSettings: () => _go(2),
+        ),
       ),
-      BrowserView(isActive: _index == 1),
-      const SettingsView(),
+      DesktopScreen(
+        layout: DesktopContentLayout.browser,
+        child: BrowserView(isActive: _index == 1),
+      ),
+      const DesktopScreen(child: SettingsView()),
     ];
 
     return Scaffold(
-      // Reserve space for the bottom tab bar (per the design's 80pt tab area) so
-      // tab content — e.g. the dVPN server card that opens the node picker — is
-      // not occluded behind the bar. (extendBody:true hid it behind the nav.)
       extendBody: false,
       backgroundColor: AppColors.bg,
-      body: IndexedStack(index: _index, children: tabs),
-      bottomNavigationBar: _NavBar(index: _index, onTap: _go),
+      body: Row(
+        children: [
+          if (useSideRail) ...[
+            _DesktopNavRail(index: _index, onTap: _go),
+            const VerticalDivider(width: 1, color: AppColors.stroke),
+          ],
+          Expanded(
+            child: IndexedStack(index: _index, children: tabs),
+          ),
+        ],
+      ),
+      bottomNavigationBar: useSideRail
+          ? null
+          : _NavBar(index: _index, onTap: _go),
+    );
+  }
+}
+
+class _DesktopNavRail extends StatelessWidget {
+  const _DesktopNavRail({required this.index, required this.onTap});
+
+  final int index;
+  final ValueChanged<int> onTap;
+
+  static const _items = [
+    (icon: Icons.shield, label: 'VPN'),
+    (icon: Icons.explore, label: 'Browser'),
+    (icon: Icons.tune, label: 'Settings'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return NavigationRail(
+      selectedIndex: index,
+      onDestinationSelected: onTap,
+      labelType: NavigationRailLabelType.all,
+      backgroundColor: AppColors.bg,
+      indicatorColor: AppColors.accent.withValues(alpha: 0.18),
+      selectedIconTheme: const IconThemeData(color: AppColors.accent),
+      selectedLabelTextStyle: mono(
+        size: 11,
+        weight: FontWeight.w700,
+        color: AppColors.accent,
+      ),
+      unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary),
+      unselectedLabelTextStyle: mono(
+        size: 11,
+        weight: FontWeight.w500,
+        color: AppColors.textSecondary,
+      ),
+      destinations: [
+        for (final item in _items)
+          NavigationRailDestination(
+            icon: Icon(item.icon),
+            label: Text(item.label),
+          ),
+      ],
     );
   }
 }

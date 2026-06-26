@@ -58,6 +58,24 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/erebrus-vpn-icon-1024.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  background_color_ios: "#050505"
+  adaptive_icon_background: "#050505"
+  adaptive_icon_foreground: "assets/icons/erebrus-vpn-icon-1024.png"
+  macos:
+    generate: true
+    image_path: "assets/icons/erebrus-vpn-icon-1024.png"
+  windows:
+    generate: true
+    image_path: "assets/icons/erebrus-vpn-icon-1024.png"
+    icon_size: 256
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -73,9 +91,12 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icons/tray_icon.png
     - assets/icons/erebrus-vpn-icon-1024.png
     - assets/icons/erebrus-vpn-glyph-white-1024.png
+    - assets/icons/erebrus-tray.png
+    - assets/icons/erebrus-tray-template.png
+    - assets/icons/erebrus-tray-64.png
+    - assets/icons/erebrus-tray-template-64.png
     - .env
 
   fonts:

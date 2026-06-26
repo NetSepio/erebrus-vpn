@@ -69,6 +69,22 @@ class AppDelegate: FlutterAppDelegate {
       initialLink = url.absoluteString
     }
   }
+
+  @objc func showAboutPanel(_ sender: Any?) {
+    let info = Bundle.main.infoDictionary
+    let version = info?["CFBundleShortVersionString"] as? String ?? ""
+    let build = info?["CFBundleVersion"] as? String ?? ""
+    var options: [NSApplication.AboutPanelOptionKey: Any] = [
+      .applicationName: "Erebrus VPN",
+      .applicationVersion: version,
+      .version: build,
+    ]
+    if let icon = NSImage(named: "AboutIcon") {
+      icon.isTemplate = false
+      options[.applicationIcon] = icon
+    }
+    NSApp.orderFrontStandardAboutPanel(options: options)
+  }
 }
 
 final class LinkStreamHandler: NSObject, FlutterStreamHandler {

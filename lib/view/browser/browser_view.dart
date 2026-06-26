@@ -406,40 +406,229 @@ class _ServiceCard extends StatelessWidget {
 class _ControlBar extends StatelessWidget {
   const _ControlBar({required this.controller});
   final BrowserController controller;
+
+  void _showMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.raised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.refresh, color: AppColors.textSecondary),
+              title: Text('Reload page', style: grotesk(size: 15, weight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                controller.reload();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.add, color: AppColors.textSecondary),
+              title: Text('New tab', style: grotesk(size: 15, weight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                controller.addTab();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.tab, color: AppColors.textSecondary),
+              title: Text('All tabs', style: grotesk(size: 15, weight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                showBrowserTabsSheet(context, controller);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 10, 24, 4),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.strokeSoft))),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _CtlIcon(Icons.arrow_back, onTap: controller.goBack),
-          _CtlIcon(Icons.arrow_forward, onTap: controller.goForward),
-          _CtlIcon(Icons.home_outlined, onTap: controller.goHome),
-          Obx(() => Container(
-                constraints: const BoxConstraints(minWidth: 20),
-                height: 20,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: AppColors.textTertiary, width: 1.5),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.strokeSoft))),
+        child: Obx(() {
+          controller.activeIndex.value;
+          controller.tabs.length;
+          final tab = controller.activeTab;
+          final onWeb = !tab.isStart && tab.configured;
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _CtlIcon(
+                Icons.arrow_back,
+                onTap: controller.goBack,
+                enabled: onWeb && tab.canGoBack,
+              ),
+              _CtlIcon(
+                Icons.arrow_forward,
+                onTap: controller.goForward,
+                enabled: onWeb && tab.canGoForward,
+              ),
+              _CtlIcon(Icons.home_outlined, onTap: controller.goHome),
+              GestureDetector(
+                onTap: () => showBrowserTabsSheet(context, controller),
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.strokeHi),
+                  ),
+                  child: Text(
+                    '${controller.tabs.length}',
+                    style: mono(size: 11, weight: FontWeight.w600, color: AppColors.textSecondary),
+                  ),
                 ),
-                child: Text('${controller.tabs.length}',
-                    style: mono(size: 11, weight: FontWeight.w600, color: AppColors.textTertiary)),
-              )),
-          _CtlIcon(Icons.more_horiz, onTap: () {}),
-        ],
+              ),
+              _CtlIcon(Icons.more_horiz, onTap: () => _showMenu(context)),
+            ],
+          );
+        }),
       ),
     );
   }
 }
 
+void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: AppColors.raised,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+    ),
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.55,
+      minChildSize: 0.35,
+      maxChildSize: 0.9,
+      builder: (_, scrollController) => Obx(() {
+        controller.tabs.length;
+        controller.activeIndex.value;
+        final tabs = controller.tabs;
+        final active = controller.activeIndex.value;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
+              child: Row(
+                children: [
+                  Text('Tabs', style: grotesk(size: 18, weight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  MonoChip(
+                    label: '${tabs.length}',
+                    color: AppColors.textSecondary,
+                    background: AppColors.surface2,
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.add, color: AppColors.textSecondary),
+                    tooltip: 'New tab',
+                    onPressed: () => controller.addTab(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.strokeSoft),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                itemCount: tabs.length,
+                itemBuilder: (_, i) {
+                  final tab = tabs[i];
+                  final isActive = i == active;
+                  final subtitle = tab.isStart ? 'Erebrus home' : tab.url;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
+                      color: isActive ? AppColors.surface3 : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          controller.selectTab(i);
+                          Navigator.pop(ctx);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isActive ? AppColors.accent.withValues(alpha: 0.35) : AppColors.stroke,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: isActive ? AppColors.accent : AppColors.textMuted,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      tab.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: grotesk(
+                                        size: 14.5,
+                                        weight: FontWeight.w600,
+                                        color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: mono(size: 11, color: AppColors.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                                onPressed: () => controller.closeTab(i),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      }),
+    ),
+  );
+}
+
 class _CtlIcon extends StatelessWidget {
-  const _CtlIcon(this.icon, {required this.onTap});
+  const _CtlIcon(this.icon, {required this.onTap, this.enabled = true});
   final IconData icon;
   final VoidCallback onTap;
+  final bool enabled;
   @override
   Widget build(BuildContext context) {
     return VisibleIconButton(
@@ -447,6 +636,7 @@ class _CtlIcon extends StatelessWidget {
       size: 40,
       iconSize: 20,
       onTap: onTap,
+      enabled: enabled,
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
+import '../layout/desktop_layout.dart';
 import 'privacy_view.dart';
 import 'terms_view.dart';
 
@@ -20,7 +22,16 @@ class AboutView extends StatelessWidget {
           onPressed: () => Get.back(),
         ),
       ),
-      body: ListView(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = PlatformCapabilities.isDesktop
+              ? DesktopLayout.contentMaxWidth(windowWidth: constraints.maxWidth)
+              : constraints.maxWidth;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
         children: [
           const Center(
@@ -91,13 +102,18 @@ class AboutView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpace.xl),
-          Center(
+          const Center(
             child: Text(
-              '© ${DateTime.now().year} NetSepio',
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+              'Erebrus © 2026 NetSepio LLC. All rights reserved.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ),
         ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

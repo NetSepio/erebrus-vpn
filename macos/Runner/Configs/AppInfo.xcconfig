@@ -6,10 +6,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = erebrus_vpn
+PRODUCT_NAME = Erebrus VPN
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.vpn
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.erebrus. All rights reserved.
+PRODUCT_COPYRIGHT = Erebrus © 2026 NetSepio LLC. All rights reserved.

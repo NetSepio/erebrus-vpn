@@ -109,6 +109,8 @@ class SectionLabel extends StatelessWidget {
 abstract final class BrandAssets {
   static const appIcon = 'assets/icons/erebrus-vpn-icon-1024.png';
   static const glyphWhite = 'assets/icons/erebrus-vpn-glyph-white-1024.png';
+  static const trayIcon = 'assets/icons/erebrus-tray-64.png';
+  static const trayIconTemplate = 'assets/icons/erebrus-tray-template-64.png';
 }
 
 /// The real Erebrus app icon / glyph from bundled assets.

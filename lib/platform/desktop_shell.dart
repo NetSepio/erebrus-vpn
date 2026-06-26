@@ -1,9 +1,12 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../auth/wallet_auth_controller.dart';
+import '../theme/premium_widgets.dart';
 import '../vpn/singbox_engine.dart';
 import '../vpn/vpn_controller.dart';
 import '../vpn/vpn_models.dart';
@@ -33,11 +36,10 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
   Future<void> _initDesktop() async {
     await windowManager.ensureInitialized();
     const options = WindowOptions(
-      size: Size(420, 780),
-      minimumSize: Size(380, 640),
+      size: Size(880, 820),
+      minimumSize: Size(720, 640),
       center: true,
       title: 'Erebrus VPN',
-      titleBarStyle: TitleBarStyle.hidden,
     );
     windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.show();
@@ -45,7 +47,15 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
     });
     await windowManager.setPreventClose(true);
 
-    await trayManager.setIcon('assets/icons/tray_icon.png');
+    if (Platform.isMacOS) {
+      await trayManager.setIcon(
+        BrandAssets.trayIconTemplate,
+        isTemplate: true,
+        iconSize: 18,
+      );
+    } else {
+      await trayManager.setIcon(BrandAssets.trayIcon);
+    }
     await _syncTrayMenu();
   }
 
