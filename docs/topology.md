@@ -1,8 +1,10 @@
 # Erebrus VPN — network topology
 
-This document explains how traffic moves on Android when Erebrus is connected,
-what the `172.19.x.x` addresses mean, how **tunnel DNS** works, and how a
-node-side resolver (Pi-hole, AdGuard Home) fits in.
+How traffic moves when Erebrus is connected — focused on **Android** below.
+**iOS** uses a system-wide Network Extension (all apps routed; no per-app
+exclude like Android's `addDisallowedApplication`). See [STATUS.md](STATUS.md).
+
+Covers `172.19.x.x` tunnel DNS, routing, and node-side resolvers (Pi-hole, etc.).
 
 ## Two traffic paths
 
@@ -203,4 +205,5 @@ reconnects.
 | `lib/vpn/egress_ip_probe.dart` | Public IP check via local proxy |
 | `lib/view/browser/browser_controller.dart` | WebView proxy when connected |
 
-See also [ARCHITECTURE.md](ARCHITECTURE.md) and [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
+See also [ARCHITECTURE.md](ARCHITECTURE.md), [STEALTH_CLIENT.md](STEALTH_CLIENT.md),
+and [STATUS.md](STATUS.md).

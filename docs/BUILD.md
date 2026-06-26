@@ -18,8 +18,9 @@ flutter test         # expect: All tests passed!
 flutter run          # launches on a connected device / emulator
 ```
 
-At this point the app runs, the screens work, and you can move around. It
-**won't actually tunnel traffic yet** — that needs the native engine below.
+At this point the UI runs on every platform. **Tunnel traffic** needs the native
+engine below (Android/iOS: libbox; macOS: sing-box CLI; Win/Linux: not wired yet).
+See [STATUS.md](STATUS.md).
 
 ## 3. Build the native tunnel (`libbox`)
 
@@ -64,22 +65,20 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how a bundle becomes a live tunnel.
 ## macOS (menu bar + stealth)
 
 ```bash
-./scripts/build-libbox-macos.sh
+./scripts/setup-macos-dev.sh    # fetch sing-box CLI
 flutter run -d macos
 ```
 
-1. Build `Libbox.xcframework` (see table above).
-2. Open `macos/Runner.xcworkspace` in Xcode and add the **ErebrusTunnel**
-   Network Extension target (scaffold in `macos/ErebrusTunnel/`).
-3. Enable App Group + Network Extension entitlements on app + extension.
-4. Embed `Libbox.xcframework` in the extension target.
-5. For **tunnel testing**, set Debug entitlements to `Runner/DebugProfile.Tunnel.entitlements`
-   in Xcode (requires an Apple Development certificate). Unsigned debug builds use the
-   slimmer `DebugProfile.entitlements` so `flutter build macos` works without signing.
-6. Notarize for distribution outside the Mac App Store.
+**Unsigned dev (today):** the desktop runner uses the **sing-box CLI in proxy mode**
+— no libbox build required. Browser and in-app traffic can use the tunnel; other apps
+may not until a signed Network Extension ships.
 
-Auth on desktop uses **Reown** (wallets + social). Stealth modes use the same
-Dart `SingboxConfigBuilder` as mobile.
+**Signed system TUN (TODO):** build `Libbox.xcframework`, wire libbox into
+`macos/ErebrusTunnel/PacketTunnelProvider.swift`, add the NE target in Xcode
+(see `macos/ErebrusTunnel/README.md`). See [cert.md](cert.md) for signing.
+
+Auth on desktop uses **web login** (not Reown). Stealth configs use the same Dart
+`SingboxConfigBuilder` as mobile.
 
 ## Windows / Linux
 
@@ -119,3 +118,5 @@ Android. Details in [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
 | Builds but only works on some phones | Expected — `arm64-v8a` only. Use an arm64 device/emulator. |
 | `reality server is not included` | The `libbox.aar` was built without the REALITY tags — rebuild with the script (tags are set there). |
 | App connects then drops on strict Wi-Fi | That's the fallback working — it should re-establish on a stealth carrier; check the mode is **Auto** or **Stealth**. |
+| iOS connects then immediate error | Build libbox + run on a **physical device**; enable App Group + NE in Apple Developer portal. |
+| Stealth shows connected but no egress | Wait for stealth readiness probe; on node check `wg show` endpoint is `127.0.0.1:…` not the client IP. |

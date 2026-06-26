@@ -82,11 +82,15 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile
     private var stopping = false
+    /** Bumps on every start/stop so in-flight tunnel work can be abandoned safely. */
+    @Volatile
+    private var tunnelGeneration = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopTunnel()
+                tunnelGeneration += 1
+                mainHandler.post { stopTunnel() }
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -96,7 +100,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 val splitMode = intent.getStringExtra(EXTRA_SPLIT_MODE) ?: "exclude"
                 val splitPackages = intent.getStringArrayListExtra(EXTRA_SPLIT_PACKAGES) ?: arrayListOf()
                 SingboxBridge.setSplitTunnel(splitEnabled, splitMode, splitPackages)
-                startTunnel(config, name)
+                // Android requires startForeground within seconds of startForegroundService().
+                startForeground(NOTIF_ID, buildNotification(name))
+                val generation = ++tunnelGeneration
+                mainHandler.post {
+                    if (generation != tunnelGeneration) return@post
+                    startTunnel(config, name, generation)
+                }
             }
         }
         return START_NOT_STICKY
@@ -107,11 +117,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         super.onRevoke()
     }
 
-    private fun startTunnel(config: String, name: String) {
+    private fun startTunnel(config: String, name: String, generation: Int) {
+        if (generation != tunnelGeneration) return
         stopping = false
-        releaseTunnelResources()
-        SingboxBridge.emitStage("connecting")
         startForeground(NOTIF_ID, buildNotification(name))
+        releaseTunnelResources()
+        if (generation != tunnelGeneration) return
+        SingboxBridge.emitStage("connecting")
         android.util.Log.i("erebrus-singbox", "startTunnel name=$name bytes=${config.length}")
         try {
             val setup = SetupOptions().apply {
@@ -121,13 +133,22 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 fixAndroidStack = true
             }
             Libbox.setup(setup)
+            if (generation != tunnelGeneration) return
             val service = Libbox.newService(config, this)
             service.start()
+            if (generation != tunnelGeneration) {
+                try {
+                    service.close()
+                } catch (_: Exception) {
+                }
+                return
+            }
             box = service
             statsMonitor.start(service)
             tunnelActive = true
             SingboxBridge.emitStage("connected")
         } catch (e: Exception) {
+            if (generation != tunnelGeneration) return
             android.util.Log.e("erebrus-singbox", "startTunnel failed", e)
             SingboxBridge.emitStage("error")
             stopTunnel()
@@ -181,20 +202,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private fun stopTunnel() {
         if (stopping) return
         stopping = true
-        val run: () -> Unit = {
-            SingboxBridge.emitStage("disconnecting")
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            releaseTunnelResources()
-            stopping = false
-            stopSelf()
-            SingboxBridge.emitStage("disconnected")
-            android.util.Log.i("erebrus-singbox", "tunnel stopped")
-        }
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            run()
-        } else {
-            mainHandler.post(run)
-        }
+        SingboxBridge.emitStage("disconnecting")
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        releaseTunnelResources()
+        stopping = false
+        stopSelf()
+        SingboxBridge.emitStage("disconnected")
+        android.util.Log.i("erebrus-singbox", "tunnel stopped")
     }
 
     override fun onDestroy() {

@@ -74,18 +74,32 @@ colors; they pull from here.
 picker), `server_view`, `profile_view`, `settings_view` — tied together by
 `bottombar/main_shell.dart`, which `main.dart` launches.
 
-## The native tunnel (`android/.../com/erebrus/vpn/`)
+## The native tunnel
 
-The actual packet-moving lives in native code:
-- **`MainActivity`** wires the Flutter channels, handles the OS VPN-permission
-  prompt, and generates WireGuard keys (BouncyCastle x25519).
-- **`ErebrusVpnService`** is an Android `VpnService` that runs sing-box via
-  `libbox` and adopts the OS tunnel device.
-- **`SingboxBridge`** relays status/stats back up to Flutter.
+Mobile uses **libbox** inside an OS VPN slot; desktop uses the sing-box CLI until
+native plugins are wired. Platform matrix: [STATUS.md](STATUS.md).
 
-`libbox` is sing-box compiled for mobile; it isn't committed — you build it once
-(see [BUILD.md](BUILD.md)). The exact channel contract is in
-[STEALTH_CLIENT.md](STEALTH_CLIENT.md).
+### Android (`android/.../com/erebrus/vpn/`)
+
+- **`MainActivity`** — Flutter channels, VPN permission, WireGuard keygen.
+- **`ErebrusVpnService`** — `VpnService` + libbox; per-app split tunnel.
+- **`SingboxBridge`** — stage/stats EventChannels.
+
+### iOS (`ios/ErebrusTunnel/` + `ios/Runner/`)
+
+- **`TunnelManager`** — `NETunnelProviderManager` save/start/stop; observes `NEVPNStatus`.
+- **`PacketTunnelProvider`** — libbox service, TUN via `ExtensionPlatformInterface`,
+  `NWPathMonitor` for stealth carrier binding, stats → app group.
+- **`SingboxBridge`** (`SingboxPlugin.swift`) — same channel contract as Android.
+
+### macOS / Windows / Linux
+
+- **macOS:** `singbox_desktop_runner.dart` spawns the sing-box CLI (proxy mode).
+  Network Extension scaffold exists but libbox is not started in the extension yet.
+- **Windows / Linux:** channel stubs only — `start` does not run a tunnel yet.
+
+`libbox` binaries are not committed — build per platform ([BUILD.md](BUILD.md)).
+Channel contract: [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
 
 ## How it joins the network
 

@@ -1,11 +1,15 @@
-# ErebrusTunnel (macOS Network Extension)
+# ErebrusTunnel (macOS Network Extension) — TODO
 
-Scaffold for the Packet Tunnel Provider. Add this as an Xcode target:
+Scaffold for a signed system TUN. **Not wired to libbox yet** — unsigned macOS
+dev uses the sing-box CLI in proxy mode instead (`./scripts/setup-macos-dev.sh`).
 
-1. File → New → Target → **Network Extension** → **Packet Tunnel Provider**
-2. Product name: `ErebrusTunnel`, bundle id: `com.erebrus.vpn.ErebrusTunnel`
-3. Replace generated `PacketTunnelProvider.swift` with the file in this folder
-4. Set entitlements to `ErebrusTunnel.entitlements`
-5. Add `Shared/TunnelConstants.swift` to the extension target membership
-6. Embed `../Frameworks/Libbox.xcframework` (from `./scripts/build-libbox-macos.sh`)
-7. Enable App Group `group.com.erebrus.vpn` on app + extension
+To finish (mirror `ios/ErebrusTunnel/`):
+
+1. `./scripts/build-libbox-macos.sh`
+2. File → New → Target → **Network Extension** → Packet Tunnel Provider
+3. Product name `ErebrusTunnel`, bundle id `com.erebrus.vpn.ErebrusTunnel`
+4. Replace `PacketTunnelProvider.swift` with libbox startup (copy iOS implementation)
+5. Embed `macos/Frameworks/Libbox.xcframework`, App Group `group.com.erebrus.vpn`
+6. Debug signing: `Runner/DebugProfile.Tunnel.entitlements`
+
+See [docs/STATUS.md](../../docs/STATUS.md) and [docs/cert.md](../../docs/cert.md).

@@ -28,7 +28,7 @@ stream (12s connect budget per transport).
 
 | method | args | returns | notes |
 |---|---|---|---|
-| `prepare` | — | `bool` | Android: `VpnService.prepare`, return true if already/granted. iOS: no-op `true`. |
+| `prepare` | — | `bool` | Android: `VpnService.prepare`. iOS/macOS: `NETunnelProviderManager` profile setup. |
 | `start` | `{config: String, name: String}` | — | `config` is a full sing-box JSON; boot libbox with it. |
 | `stop` | — | — | tear down the tunnel. |
 | `stage` | — | `String` | one of `disconnected\|connecting\|connected\|disconnecting\|error`. |
@@ -41,36 +41,38 @@ stream (12s connect budget per transport).
 
 ## Native integration steps
 
-### Android (`android/app`)
-1. Add the sing-box `libbox` AAR (built via `gomobile bind -target=android` from
-   sing-box with tags `with_reality_server`-equivalent client tags, i.e.
-   `with_gvisor,with_quic,with_utls`). Place in `android/app/libs/`.
-2. A `VpnService` subclass that:
-   - on `start`: writes `config` to a temp file, calls `Libbox.newService(...)`
-     / `BoxService.start()`, and adopts the tun fd from `establish()`.
-   - bridges libbox's command-server stats → the stats EventChannel.
-   - emits stage transitions on the status EventChannel.
-3. `MainActivity` registers the MethodChannel and forwards to the service;
-   `prepare` calls `VpnService.prepare(this)` and resolves on the activity result.
+### Android (`android/app`) — shipped
 
-### macOS (`macos`)
-1. Build `Libbox.xcframework` via `./scripts/build-libbox-macos.sh`.
-2. `SingboxPlugin.swift` + `TunnelManager.swift` in the Runner target implement
-   the Flutter channels and drive `NETunnelProviderManager`.
-3. Add the **ErebrusTunnel** Packet Tunnel extension (see `macos/ErebrusTunnel/README.md`).
-4. App Group `group.com.erebrus.vpn` shares config between app and extension.
+1. Build `libbox.aar`: `./scripts/build-libbox.sh`.
+2. `ErebrusVpnService` — `Libbox.newService` + `VpnService` TUN, `NWPathMonitor`-equivalent
+   via `AndroidNetworkPlatform`, stats via `LibboxStatsMonitor`.
+3. `SingboxBridge` in `MainActivity` — channels, split-tunnel args, stage/stats events.
 
-### Windows / Linux
-1. Build libbox via `./scripts/build-libbox-windows.sh` or `build-libbox-linux.sh`.
-2. `windows/runner/singbox_plugin.cpp` and `linux/runner/singbox_plugin.cc` implement
-   the channel stubs — wire libbox + Wintun (Windows) or TUN (Linux) when linking.
+### iOS (`ios`) — shipped
 
-### iOS (`ios`)
-1. Add `Libbox.xcframework` (gomobile `-target=ios`).
-2. A Network Extension target (`NEPacketTunnelProvider`) that starts libbox with
-   the supplied config and serves the packet flow.
-3. The app group + `NETunnelProviderManager` wiring; `start`/`stop` toggle the
-   tunnel; stats read from the extension via the app group or libbox command client.
+1. Build `Libbox.xcframework`: `./scripts/build-libbox-ios.sh`.
+2. One-time Xcode wiring: `ruby ./scripts/setup-ios-tunnel.rb`.
+3. **ErebrusTunnel** (`NEPacketTunnelProvider`) — libbox v1.11 service + command server;
+   `ExtensionPlatformInterface` opens TUN; stats in app group `group.com.erebrus.vpn`.
+4. **Runner** — `TunnelManager.swift` + `SingboxPlugin.swift` drive `NETunnelProviderManager`.
+
+Requires physical device + Apple Developer App Group + Network Extension entitlements.
+See [BUILD.md](BUILD.md) and [STATUS.md](STATUS.md).
+
+### macOS (`macos`) — partial
+
+**Today (unsigned dev):** `SingboxDesktopRunner` runs the **sing-box CLI** in proxy mode
+(`./scripts/setup-macos-dev.sh`). Not the Network Extension.
+
+**TODO for system TUN:** Wire libbox into `macos/ErebrusTunnel/PacketTunnelProvider.swift`
+(same pattern as iOS), add NE target in Xcode, embed `macos/Frameworks/Libbox.xcframework`.
+`TunnelManager.swift` + channels exist but the extension is still a lifecycle stub.
+
+### Windows / Linux — not wired
+
+1. Build libbox: `./scripts/build-libbox-windows.sh` or `build-libbox-linux.sh`.
+2. **TODO:** Implement tunnel start in `windows/runner/singbox_plugin.cpp` and
+   `linux/runner/singbox_plugin.cc` (currently emit `error` on `start`).
 
 ## Wiring the gateway provisioner
 

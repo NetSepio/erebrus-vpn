@@ -449,6 +449,10 @@ class VpnController extends GetxController {
     int attempts = 8,
     Duration interval = const Duration(milliseconds: 500),
   }) async {
+    // Android: mixed-in may need a beat after native "connected" before 127.0.0.1:10808 accepts.
+    if (Platform.isAndroid) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
     for (var i = 0; i < attempts; i++) {
       final ip = await EgressIpProbe.fetch(
         timeout: const Duration(seconds: 4),

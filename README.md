@@ -26,9 +26,10 @@ flutter test         # run the tests (should pass)
 flutter run          # launch on a connected device or emulator
 ```
 
-> **Heads-up:** the app builds and runs the UI today, but **actually connecting
-> to a VPN needs one extra native step** (building the tunnel engine). It's a
-> one-time command — see **[docs/BUILD.md](docs/BUILD.md)**.
+> **Heads-up:** Android and iOS need a one-time **libbox** build before the tunnel
+> works (`./scripts/build-libbox.sh` or `build-libbox-ios.sh`). See
+> **[docs/BUILD.md](docs/BUILD.md)**. macOS uses the sing-box CLI for unsigned dev;
+> Windows/Linux tunnel plugins are not wired yet — see **[docs/STATUS.md](docs/STATUS.md)**.
 
 ## Where things live
 
@@ -39,7 +40,7 @@ flutter run          # launch on a connected device or emulator
 | `lib/vpn/` | The connection brain — picks the protocol and talks to the tunnel |
 | `android/` · `ios/` · `macos/` · `windows/` · `linux/` | Native tunnel + platform shells |
 | `lib/platform/` | Desktop menu-bar tray and platform routing |
-| `docs/` | Deeper explanations (read these when you want the "how") |
+| `docs/` | Deeper explanations — start with [STATUS.md](docs/STATUS.md) for platform parity |
 
 ## Learn more
 
@@ -50,11 +51,15 @@ flutter run          # launch on a connected device or emulator
   iOS notes, and troubleshooting.
 - **[docs/STEALTH_CLIENT.md](docs/STEALTH_CLIENT.md)** — the exact contract
   between the Flutter code and the native tunnel (for native contributors).
+- **[docs/STATUS.md](docs/STATUS.md)** — platform parity: what ships vs what's left.
 
 ## Status
 
-✅ UI, theming, and the connection logic are in place and tested.
-🚧 Next: build the native tunnel engine, then connect it to the Erebrus network
-(automatic via the gateway, or by pasting a node's config for quick testing).
+✅ **Android & iOS** — full libbox tunnel (WireGuard + stealth carriers), tested on device.
+✅ **macOS** — connect via sing-box CLI (proxy mode); signed system TUN still TODO.
+🚧 **Windows / Linux** — UI runs; native tunnel plugin not linked yet.
+🚧 **Production gateway** — manual credential import works; wire `VpnController.provisioner` for live accounts.
+
+See **[docs/STATUS.md](docs/STATUS.md)** for the full matrix.
 
 Questions or stuck? Open an issue — we'd rather help than have you guess. 💜
