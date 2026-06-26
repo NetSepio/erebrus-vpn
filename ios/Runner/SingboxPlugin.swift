@@ -128,12 +128,16 @@ private final class StatsStreamHandler: NSObject, FlutterStreamHandler {
   }
 
   private func emitStats() {
-    let defaults = UserDefaults(suiteName: TunnelConstants.appGroup)
+    let defaults = sharedAppGroupDefaults
     eventSink?([
-      "rx_bytes": defaults?.integer(forKey: TunnelConstants.StatsKeys.rxBytes) ?? 0,
-      "tx_bytes": defaults?.integer(forKey: TunnelConstants.StatsKeys.txBytes) ?? 0,
-      "downlink_bps": defaults?.integer(forKey: TunnelConstants.StatsKeys.downlinkBps) ?? 0,
-      "uplink_bps": defaults?.integer(forKey: TunnelConstants.StatsKeys.uplinkBps) ?? 0,
+      "rx_bytes": defaults.integer(forKey: TunnelConstants.StatsKeys.rxBytes),
+      "tx_bytes": defaults.integer(forKey: TunnelConstants.StatsKeys.txBytes),
+      "downlink_bps": defaults.integer(forKey: TunnelConstants.StatsKeys.downlinkBps),
+      "uplink_bps": defaults.integer(forKey: TunnelConstants.StatsKeys.uplinkBps),
     ])
+  }
+
+  private var sharedAppGroupDefaults: UserDefaults {
+    UserDefaults(suiteName: TunnelConstants.appGroup) ?? .standard
   }
 }
