@@ -105,7 +105,78 @@ class SectionLabel extends StatelessWidget {
       );
 }
 
-/// The Erebrus brand mark — an orange square rotated 45° (placeholder logo).
+/// Bundled Erebrus mark assets (see `pubspec.yaml` assets).
+abstract final class BrandAssets {
+  static const appIcon = 'assets/icons/erebrus-vpn-icon-1024.png';
+  static const glyphWhite = 'assets/icons/erebrus-vpn-glyph-white-1024.png';
+}
+
+/// The real Erebrus app icon / glyph from bundled assets.
+class BrandLogo extends StatelessWidget {
+  const BrandLogo({
+    super.key,
+    this.size = 28,
+    this.radius,
+    this.useWhiteGlyph = false,
+    this.showShadow = false,
+  });
+
+  final double size;
+  final double? radius;
+  final bool useWhiteGlyph;
+  final bool showShadow;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = radius ?? size * 0.28;
+    final asset = useWhiteGlyph ? BrandAssets.glyphWhite : BrandAssets.appIcon;
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(r),
+      child: Image.asset(
+        asset,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => _BrandLogoFallback(size: size, radius: r),
+      ),
+    );
+    if (!showShadow) return image;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(r),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.accent.withValues(alpha: 0.4),
+            blurRadius: size * 0.45,
+            spreadRadius: -size * 0.12,
+            offset: Offset(0, size * 0.18),
+          ),
+        ],
+      ),
+      child: image,
+    );
+  }
+}
+
+/// Fallback when the bundled icon cannot be loaded (dev / missing asset).
+class _BrandLogoFallback extends StatelessWidget {
+  const _BrandLogoFallback({required this.size, required this.radius});
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(radius)),
+      child: Center(child: BrandDiamond(size: size * 0.38, color: AppColors.onAccent, radius: 3)),
+    );
+  }
+}
+
+/// Legacy rotated-square mark — used only inside [BrandLogo] error fallback.
 class BrandDiamond extends StatelessWidget {
   const BrandDiamond({super.key, this.size = 14, this.color = AppColors.accent, this.radius = 2});
   final double size;
@@ -124,15 +195,17 @@ class BrandDiamond extends StatelessWidget {
   }
 }
 
-/// Brand lockup: diamond + tracked "EREBRUS" wordmark.
+/// Brand lockup: app icon + tracked "EREBRUS" wordmark.
 class BrandLockup extends StatelessWidget {
-  const BrandLockup({super.key});
+  const BrandLockup({super.key, this.logoSize = 22});
+  final double logoSize;
+
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const BrandDiamond(size: 14),
+        BrandLogo(size: logoSize, radius: logoSize * 0.28),
         const SizedBox(width: 9),
         Text('EREBRUS', style: mono(size: 13, weight: FontWeight.w600, color: AppColors.textPrimary, letterSpacing: 13 * 0.22)),
       ],
@@ -178,6 +251,93 @@ class SurfaceCard extends StatelessWidget {
     );
     if (onTap == null) return box;
     return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: box);
+  }
+}
+
+/// Bordered icon control — always visible on touch and desktop (no hover-only affordance).
+class VisibleIconButton extends StatelessWidget {
+  const VisibleIconButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.size = 36,
+    this.iconSize = 18,
+    this.busy = false,
+    this.enabled = true,
+    this.color = AppColors.textSecondary,
+    this.borderColor = AppColors.strokeHi,
+    this.backgroundColor,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final double size;
+  final double iconSize;
+  final bool busy;
+  final bool enabled;
+  final Color color;
+  final Color borderColor;
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = enabled && onTap != null && !busy;
+    return GestureDetector(
+      onTap: active ? onTap : null,
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: backgroundColor ?? AppColors.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: active ? borderColor : AppColors.stroke),
+        ),
+        child: busy
+            ? SizedBox(
+                width: iconSize,
+                height: iconSize,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Icon(icon, size: iconSize, color: active ? color : AppColors.textMuted),
+      ),
+    );
+  }
+}
+
+/// Compact text action chip — visible secondary CTA (not hover-only chevrons).
+class TextActionChip extends StatelessWidget {
+  const TextActionChip({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = accent ? AppColors.accent : AppColors.textSecondary;
+    final bg = accent ? AppColors.accent.withValues(alpha: 0.14) : AppColors.surface2;
+    final border = accent ? AppColors.accent.withValues(alpha: 0.35) : AppColors.strokeHi;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: border),
+        ),
+        child: Text(
+          label,
+          style: mono(size: 11, weight: FontWeight.w600, color: fg, letterSpacing: 11 * 0.05),
+        ),
+      ),
+    );
   }
 }
 

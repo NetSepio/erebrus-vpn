@@ -41,42 +41,23 @@ class LoginView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // header
                     Padding(
                       padding: const EdgeInsets.fromLTRB(0, 26, 0, 30),
                       child: Column(
                         children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              gradient: AppGradients.brand,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                    color: AppColors.accent.withValues(alpha: 0.6),
-                                    blurRadius: 30,
-                                    spreadRadius: -8,
-                                    offset: const Offset(0, 12)),
-                              ],
-                            ),
-                            child: const Center(child: BrandDiamond(size: 18, color: AppColors.onAccent, radius: 3)),
-                          ),
+                          const BrandLogo(size: 56, radius: 16, showShadow: true),
                           const SizedBox(height: 18),
                           Text('Welcome to Erebrus',
                               textAlign: TextAlign.center,
                               style: grotesk(size: 26, weight: FontWeight.w600, letterSpacing: -0.52)),
                           const SizedBox(height: 8),
                           SizedBox(
-                            width: 260,
+                            width: 280,
                             child: Text(
-                                solanaOnly
-                                    ? 'Sign in with your Solana wallet to spin up your private internet.'
-                                    : webLogin
-                                        ? 'Sign in through your browser to spin up your private internet.'
-                                        : 'Sign in to spin up your private internet.',
-                                textAlign: TextAlign.center,
-                                style: grotesk(size: 14.5, weight: FontWeight.w400, color: AppColors.textTertiary, height: 1.4)),
+                              'Sign in to enter your personal, private internet',
+                              textAlign: TextAlign.center,
+                              style: grotesk(size: 14.5, weight: FontWeight.w400, color: AppColors.textTertiary, height: 1.4),
+                            ),
                           ),
                         ],
                       ),
@@ -141,31 +122,6 @@ class LoginView extends StatelessWidget {
                             Text('Continue with Email', style: grotesk(size: 15, weight: FontWeight.w600)),
                           ],
                         ),
-                      ),
-                      const _AuthDivider(label: 'OR CONTINUE WITH'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _SocialButton(
-                              onTap: () => _signIn(auth),
-                              child: Text('G', style: mono(size: 19, weight: FontWeight.w600, color: AppColors.textPrimary, letterSpacing: 0)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _SocialButton(
-                              onTap: () => _signIn(auth),
-                              child: const Icon(Icons.apple, size: 24, color: AppColors.textPrimary),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _SocialButton(
-                              onTap: () => _signIn(auth),
-                              child: const _XMark(size: 18),
-                            ),
-                          ),
-                        ],
                       ),
                       const _AuthDivider(label: 'CONNECT A WALLET'),
                       _WalletButton(
@@ -248,28 +204,6 @@ class _OutlinedAuthButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-        ),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _SocialButton extends StatelessWidget {
-  const _SocialButton({required this.child, required this.onTap});
-  final Widget child;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 54,
-        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surface2,
           borderRadius: BorderRadius.circular(14),
@@ -569,27 +503,4 @@ class _PasteFromClipboardButton extends StatelessWidget {
   }
 }
 
-/// The X (formerly Twitter) wordmark glyph, drawn as two crossing strokes.
-class _XMark extends StatelessWidget {
-  const _XMark({this.size = 18});
-  final double size;
-  @override
-  Widget build(BuildContext context) => CustomPaint(size: Size(size, size), painter: _XPainter());
-}
 
-class _XPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = AppColors.textPrimary
-      ..strokeWidth = size.width * 0.13
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    final inset = size.width * 0.12;
-    canvas.drawLine(Offset(inset, inset), Offset(size.width - inset, size.height - inset), p);
-    canvas.drawLine(Offset(size.width - inset, inset), Offset(inset, size.height - inset), p);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

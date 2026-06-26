@@ -54,7 +54,7 @@ class _Splash extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            BrandDiamond(size: 26),
+            BrandLogo(size: 44, radius: 12, showShadow: true),
             SizedBox(height: 22),
             SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent)),
           ],

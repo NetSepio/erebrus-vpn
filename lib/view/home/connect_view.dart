@@ -307,7 +307,7 @@ class _ProtocolSegment extends StatelessWidget {
             style: mono(
               size: 12,
               weight: FontWeight.w600,
-              color: active ? AppColors.onAccent : AppColors.textTertiary,
+              color: active ? AppColors.onAccent : AppColors.textSecondary,
               letterSpacing: 12 * 0.05,
             ),
           ),
@@ -436,7 +436,7 @@ class _CenterDisk extends StatelessWidget {
       content = Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.power_settings_new, size: 40, color: AppColors.textDim),
+          Icon(Icons.power_settings_new, size: 40, color: AppColors.textSecondary),
           const SizedBox(height: 9),
           Text('TAP TO CONNECT', style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary, letterSpacing: 12 * 0.05)),
         ],
@@ -522,29 +522,69 @@ class _DataReadout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: const BoxDecoration(
         border: Border(
           top: BorderSide(color: AppColors.strokeSoft),
           bottom: BorderSide(color: AppColors.strokeSoft),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(child: _col('↓ DOWNLOAD', connected ? fmtData(stats.rxBytes) : '0 KB')),
-          Container(width: 1, height: 34, color: AppColors.strokeSoft),
-          Expanded(child: _col('↑ UPLOAD', connected ? fmtData(stats.txBytes) : '0 KB')),
-        ],
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _TrafficStat(
+                label: 'DOWNLOAD',
+                arrow: '↓',
+                value: connected ? fmtData(stats.rxBytes) : '0 KB',
+              ),
+            ),
+            const VerticalDivider(width: 1, thickness: 1, color: AppColors.strokeSoft),
+            Expanded(
+              child: _TrafficStat(
+                label: 'UPLOAD',
+                arrow: '↑',
+                value: connected ? fmtData(stats.txBytes) : '0 KB',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _col(String label, String value) {
+class _TrafficStat extends StatelessWidget {
+  const _TrafficStat({required this.label, required this.arrow, required this.value});
+  final String label;
+  final String arrow;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(label, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.08)),
-        const SizedBox(height: 3),
-        Text(value, style: mono(size: 15, weight: FontWeight.w600, color: AppColors.textPrimary)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(arrow, style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.08),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: mono(size: 15, weight: FontWeight.w600, color: AppColors.textPrimary),
+        ),
       ],
     );
   }
@@ -632,11 +672,13 @@ class _ServerCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(d.loadLabel, style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor)),
-              const SizedBox(height: 2),
-              Text(
-                d.isPlaceholder ? 'BROWSE ›' : 'CHANGE ›',
-                style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted),
+              if (d.showLoad)
+                Text(d.loadLabel, style: mono(size: 14, weight: FontWeight.w600, color: d.loadColor)),
+              if (d.showLoad) const SizedBox(height: 6),
+              TextActionChip(
+                label: d.isPlaceholder ? 'BROWSE' : 'CHANGE',
+                accent: true,
+                onTap: onTap,
               ),
             ],
           ),

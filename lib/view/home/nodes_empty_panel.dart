@@ -26,7 +26,7 @@ class NodesEmptyPanel extends StatelessWidget {
       title: loading ? 'Checking registry…' : 'No community nodes online',
       subtitle: loading
           ? 'Querying the Erebrus gateway for available servers'
-          : 'Operators register nodes on the NetSepio network. Pull refresh when one comes online.',
+          : 'Operators register nodes on the NetSepio network. Tap refresh when one comes online.',
       loading: loading,
       onRetry: onRetry,
     );

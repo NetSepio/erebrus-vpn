@@ -92,170 +92,186 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
   }
 
   void _goToStep(int index) {
-    // Dots jump to current or earlier steps only — not ahead.
     if (index < 0 || index >= _kSteps.length || index > _step) return;
     setState(() => _step = index);
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    // Swipe right → previous step (iOS-style back).
+    if (velocity > 280) _back();
   }
 
   @override
   Widget build(BuildContext context) {
     final step = _kSteps[_step];
-    return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.84),
-            radius: 1.15,
-            colors: [Color(0xFF1C1208), AppColors.bg],
-            stops: [0.0, 0.55],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // top bar
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
-                child: Row(
-                  children: [
-                    if (_canGoBack)
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _back,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.arrow_back, size: 18, color: AppColors.textSecondary),
-                            const SizedBox(width: 6),
-                            Text('Back',
-                                style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textSecondary)),
-                          ],
-                        ),
-                      )
-                    else
-                      const BrandLockup(),
-                    const Spacer(),
-                    if (!_isLast)
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: widget.onDone,
-                        child: Text('SKIP',
-                            style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 12 * 0.1)),
-                      ),
-                  ],
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_canGoBack) _back();
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragEnd: _onHorizontalDragEnd,
+        child: Scaffold(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, -0.84),
+                radius: 1.15,
+                colors: [Color(0xFF1C1208), AppColors.bg],
+                stops: [0.0, 0.55],
               ),
-              // mesh graphic
-              Expanded(
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: Listenable.merge([_float, _breathe]),
-                    builder: (context, child) {
-                      final dy = -7 * math.sin(_float.value * math.pi);
-                      final scale = 1 + 0.06 * (0.5 - 0.5 * math.cos(_breathe.value * math.pi));
-                      return Transform.translate(
-                        offset: Offset(0, dy),
-                        child: Transform.scale(scale: scale, child: child),
-                      );
-                    },
-                    child: SizedBox(
-                      width: 380,
-                      height: 380,
-                      child: Stack(
-                        alignment: Alignment.center,
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // top bar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
+                    child: Row(
+                      children: [
+                        if (_canGoBack)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _back,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.arrow_back, size: 18, color: AppColors.textSecondary),
+                                const SizedBox(width: 6),
+                                Text('Back',
+                                    style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          )
+                        else
+                          const BrandLockup(logoSize: 24),
+                        const Spacer(),
+                        if (!_isLast)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: widget.onDone,
+                            child: Text('SKIP',
+                                style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 12 * 0.1)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // mesh graphic
+                  Expanded(
+                    child: Center(
+                      child: AnimatedBuilder(
+                        animation: Listenable.merge([_float, _breathe]),
+                        builder: (context, child) {
+                          final dy = -7 * math.sin(_float.value * math.pi);
+                          final scale = 1 + 0.06 * (0.5 - 0.5 * math.cos(_breathe.value * math.pi));
+                          return Transform.translate(
+                            offset: Offset(0, dy),
+                            child: Transform.scale(scale: scale, child: child),
+                          );
+                        },
+                        child: SizedBox(
+                          width: 380,
+                          height: 380,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              _RingCircle(size: 380, color: AppColors.accent.withValues(alpha: 0.04)),
+                              _RingCircle(size: 300, color: AppColors.accent.withValues(alpha: 0.07)),
+                              CustomPaint(size: const Size(260, 260), painter: _MeshPainter()),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // text block
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 0, 28, 30),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      switchInCurve: Curves.easeOut,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(
+                          position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: Column(
+                        key: ValueKey(_step),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _RingCircle(size: 380, color: AppColors.accent.withValues(alpha: 0.04)),
-                          _RingCircle(size: 300, color: AppColors.accent.withValues(alpha: 0.07)),
-                          CustomPaint(size: const Size(260, 260), painter: _MeshPainter()),
+                          Text(step.tag,
+                              style: mono(size: 12, weight: FontWeight.w600, color: AppColors.accent, letterSpacing: 12 * 0.18)),
+                          const SizedBox(height: 16),
+                          Text(
+                            step.title,
+                            style: grotesk(size: 31, weight: FontWeight.w600, letterSpacing: -0.62, height: 1.12),
+                          ),
+                          const SizedBox(height: 14),
+                          if (step.body != null)
+                            Text(step.body!, style: grotesk(size: 15.5, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.55))
+                          else if (step.bullets != null)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final b in step.bullets!)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 11),
+                                    child: _Bullet(label: b),
+                                  ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
                   ),
-                ),
-              ),
-              // text block
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 0, 28, 30),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 350),
-                  switchInCurve: Curves.easeOut,
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: Column(
-                    key: ValueKey(_step),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(step.tag,
-                          style: mono(size: 12, weight: FontWeight.w600, color: AppColors.accent, letterSpacing: 12 * 0.18)),
-                      const SizedBox(height: 16),
-                      Text(
-                        step.title,
-                        style: grotesk(size: 31, weight: FontWeight.w600, letterSpacing: -0.62, height: 1.12),
-                      ),
-                      const SizedBox(height: 14),
-                      if (step.body != null)
-                        Text(step.body!, style: grotesk(size: 15.5, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.55))
-                      else if (step.bullets != null)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  // footer: dots + cta
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                    child: Row(
+                      children: [
+                        Row(
                           children: [
-                            for (final b in step.bullets!)
+                            for (var i = 0; i < _kSteps.length; i++)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 11),
-                                child: _Bullet(label: b),
+                                padding: const EdgeInsets.only(right: 7),
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => _goToStep(i),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    height: 6,
+                                    width: i == _step ? 22 : 6,
+                                    decoration: BoxDecoration(
+                                      color: i == _step
+                                          ? AppColors.accent
+                                          : i < _step
+                                              ? AppColors.accent.withValues(alpha: 0.45)
+                                              : Colors.white.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                ),
                               ),
                           ],
                         ),
-                    ],
-                  ),
-                ),
-              ),
-              // footer: dots + cta
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
-                child: Row(
-                  children: [
-                    Row(
-                      children: [
-                        for (var i = 0; i < _kSteps.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 7),
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => _goToStep(i),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                height: 6,
-                                width: i == _step ? 22 : 6,
-                                decoration: BoxDecoration(
-                                  color: i == _step
-                                      ? AppColors.accent
-                                      : i < _step
-                                          ? AppColors.accent.withValues(alpha: 0.45)
-                                          : Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                              ),
-                            ),
-                          ),
+                        const Spacer(),
+                        PrimaryButton(
+                          label: _isLast ? 'Get started' : 'Continue',
+                          trailingIcon: Icons.arrow_forward,
+                          onPressed: _next,
+                        ),
                       ],
                     ),
-                    const Spacer(),
-                    PrimaryButton(
-                      label: _isLast ? 'Get started' : 'Continue',
-                      trailingIcon: Icons.arrow_forward,
-                      onPressed: _next,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

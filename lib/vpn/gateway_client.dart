@@ -73,6 +73,14 @@ class GatewayClient {
     required String wgPublicKey,
     required String name,
   }) async {
+    // Reconnect: reuse the gateway client row + refresh credentials instead of
+    // minting a new peer id (avoids node UNIQUE wg_public_key collisions).
+    final existing = await fetchExistingClientBundle(
+      nodeId: nodeId,
+      wgPublicKey: wgPublicKey,
+    );
+    if (existing != null) return existing;
+
     try {
       final decoded = await _postJson('/api/v2/vpn/clients', {
         'name': name,
@@ -81,29 +89,26 @@ class GatewayClient {
       });
       return CredentialBundle.fromJson(_unwrapBundle(decoded));
     } on GatewayException catch (e) {
-      final lower = e.message.toLowerCase();
-      if (lower.contains('node unreachable') || lower.contains('no reachable api')) {
-        final reused = await _reuseExistingClient(
-          nodeId: nodeId,
-          wgPublicKey: wgPublicKey,
-        );
-        if (reused != null) return reused;
-      }
+      final reused = await fetchExistingClientBundle(
+        nodeId: nodeId,
+        wgPublicKey: wgPublicKey,
+      );
+      if (reused != null) return reused;
       rethrow;
     }
   }
 
-  /// If provisioning failed but a prior client row exists, re-fetch its bundle.
-  Future<CredentialBundle?> _reuseExistingClient({
+  /// Returns credentials for an existing gateway client row (same node + WG key).
+  Future<CredentialBundle?> fetchExistingClientBundle({
     required String nodeId,
     required String wgPublicKey,
   }) async {
     try {
       final clients = await listVpnClients();
       for (final c in clients) {
-        if (c.nodeId == nodeId && c.wgPublicKey == wgPublicKey) {
-          return fetchClientConfig(c.id);
-        }
+        if (c.nodeId != nodeId || c.wgPublicKey != wgPublicKey) continue;
+        if (c.status == 'deleting') continue;
+        return fetchClientConfig(c.id);
       }
     } catch (_) {}
     return null;

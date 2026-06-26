@@ -14,6 +14,7 @@ class GatewayController extends GetxController {
       : _client = client ?? GatewayClient(baseUrl: gatewayUrl);
 
   final GatewayClient _client;
+  GatewayClient get client => _client;
   final _bundleCache = CredentialCache();
 
   final nodes = <VpnNode>[].obs;
@@ -57,16 +58,26 @@ class GatewayController extends GetxController {
         );
         return bundle;
       } on GatewayException catch (e) {
-        final lower = e.message.toLowerCase();
-        if (lower.contains('node unreachable') || lower.contains('no reachable api')) {
-          final cached = await _bundleCache.read(
+        final cached = await _bundleCache.read(
+          nodeId: node.id,
+          wgPublicKey: wgPublicKey,
+        );
+        if (cached != null && cached.hasWireGuard && cached.hasStealth) {
+          debugPrint('[Gateway] using cached credential bundle for ${node.name}');
+          return cached;
+        }
+        final reused = await _client.fetchExistingClientBundle(
+          nodeId: node.id,
+          wgPublicKey: wgPublicKey,
+        );
+        if (reused != null) {
+          debugPrint('[Gateway] reusing existing VPN client for ${node.name}');
+          await _bundleCache.write(
             nodeId: node.id,
             wgPublicKey: wgPublicKey,
+            bundle: reused,
           );
-          if (cached != null && cached.hasWireGuard) {
-            debugPrint('[Gateway] using cached credential bundle for ${node.name}');
-            return cached;
-          }
+          return reused;
         }
         rethrow;
       }
@@ -82,7 +93,7 @@ class GatewayController extends GetxController {
     try {
       debugPrint('[Gateway] fetching nodes from ${gatewayUrl.value}');
       var list = await _client.fetchNodes();
-      list = list.where((n) => !n.isDraining && !n.isOffline).toList();
+      list = sortNodesForPicker(list.where((n) => !n.isDraining && !n.isOffline));
 
       if (list.isEmpty) {
         if (kDebugMode) {

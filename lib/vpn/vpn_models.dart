@@ -50,6 +50,12 @@ class VpnNode {
     this.accessMode = 'public',
     this.minTier = 0,
     this.latencyMs,
+    this.downloadMbps,
+    this.uploadMbps,
+    this.speedtestMeasuredAt,
+    this.orgName,
+    this.probeHost,
+    this.probePorts = const [],
   });
 
   final String id;
@@ -62,6 +68,12 @@ class VpnNode {
   final String accessMode;
   final int minTier;
   final int? latencyMs;
+  final double? downloadMbps;
+  final double? uploadMbps;
+  final int? speedtestMeasuredAt;
+  final String? orgName;
+  final String? probeHost;
+  final List<int> probePorts;
 
   bool get supportsStealth =>
       protocols.contains('vless-reality') || protocols.contains('hysteria2');
@@ -71,8 +83,33 @@ class VpnNode {
   bool get isPrivateAccess => accessMode.toLowerCase() == 'private';
   bool get requiresHigherTier => minTier > 0;
 
+  bool get hasLatency => latencyMs != null && latencyMs! > 0;
+  bool get hasDownloadMbps => downloadMbps != null && downloadMbps! > 0;
+  bool get hasUploadMbps => uploadMbps != null && uploadMbps! > 0;
+
+  /// Node-reported Cloudflare speedtest (node → internet), not phone → node.
+  bool get hasReportedSpeedtest =>
+      speedtestMeasuredAt != null &&
+      speedtestMeasuredAt! > 0 &&
+      (hasLatency || hasDownloadMbps || hasUploadMbps);
+
+  bool get canProbe => probeHost != null && probeHost!.isNotEmpty && probePorts.isNotEmpty;
+
+  String get protocolsLabel {
+    final parts = <String>[];
+    if (protocols.contains('wireguard')) parts.add('WG');
+    if (protocols.contains('vless-reality')) parts.add('VLESS');
+    if (protocols.contains('hysteria2')) parts.add('Hy2');
+    return parts.isEmpty ? 'VPN' : parts.join(' · ');
+  }
+
   factory VpnNode.fromJson(Map<String, dynamic> j) {
+    final caps = (j['capabilities'] as Map?)?.cast<String, dynamic>();
     final speedtest = (j['speedtest'] as Map?)?.cast<String, dynamic>();
+    final org = (j['org'] as Map?)?.cast<String, dynamic>();
+    final orgName = (org?['name'] ?? '').toString().trim();
+    final endpoints = (j['endpoints'] as Map?)?.cast<String, dynamic>();
+    final probe = _parseProbeTargets(endpoints);
     return VpnNode(
       id: (j['node_id'] ?? j['id'] ?? '').toString(),
       name: (j['name'] ?? 'Erebrus node').toString(),
@@ -81,11 +118,61 @@ class VpnNode {
       protocols: ((j['protocols'] as List?) ?? const []).map((e) => e.toString()).toList(),
       loadPct: (j['load_pct'] as num?)?.toDouble() ?? 0,
       status: (j['status'] ?? 'online').toString(),
-      accessMode: (j['access_mode'] ?? 'public').toString(),
+      accessMode: (j['access_mode'] ?? caps?['access_mode'] ?? 'public').toString(),
       minTier: (j['min_tier'] as num?)?.toInt() ?? 0,
       latencyMs: (speedtest?['latency_ms'] as num?)?.toInt(),
+      downloadMbps: (speedtest?['download_mbps'] as num?)?.toDouble(),
+      uploadMbps: (speedtest?['upload_mbps'] as num?)?.toDouble(),
+      speedtestMeasuredAt: (speedtest?['measured_at'] as num?)?.toInt(),
+      orgName: orgName.isEmpty ? null : orgName,
+      probeHost: probe.$1,
+      probePorts: probe.$2,
     );
   }
+
+  static (String?, List<int>) _parseProbeTargets(Map<String, dynamic>? endpoints) {
+    if (endpoints == null) return (null, const []);
+    final wg = (endpoints['wireguard'] as Map?)?.cast<String, dynamic>();
+    final vless = (endpoints['vless_reality'] as Map?)?.cast<String, dynamic>();
+    final hy2 = (endpoints['hysteria2'] as Map?)?.cast<String, dynamic>();
+    final host = (wg?['host'] ?? '').toString().trim();
+    final ports = <int>[];
+    void addPort(dynamic value) {
+      final port = (value as num?)?.toInt();
+      if (port != null && port > 0 && !ports.contains(port)) ports.add(port);
+    }
+    addPort(vless?['port']);
+    addPort(hy2?['port']);
+    addPort(wg?['port']);
+    return (host.isEmpty ? null : host, ports);
+  }
+}
+
+/// Sorts nodes for the picker: client ping (if measured) → load → name.
+List<VpnNode> sortNodesForPicker(
+  Iterable<VpnNode> nodes, {
+  Map<String, int>? clientPingMs,
+}) {
+  final list = nodes.toList();
+  list.sort((a, b) => _compareNodesForPicker(a, b, clientPingMs: clientPingMs));
+  return list;
+}
+
+int _clientPingSortKey(VpnNode node, Map<String, int>? clientPingMs) {
+  final ms = clientPingMs?[node.id];
+  if (ms == null || ms <= 0) return 1 << 20;
+  return ms;
+}
+
+int _compareNodesForPicker(VpnNode a, VpnNode b, {Map<String, int>? clientPingMs}) {
+  if (clientPingMs != null && clientPingMs.isNotEmpty) {
+    final ping = _clientPingSortKey(a, clientPingMs).compareTo(_clientPingSortKey(b, clientPingMs));
+    if (ping != 0) return ping;
+  }
+
+  final load = a.loadPct.compareTo(b.loadPct);
+  if (load != 0) return load;
+  return a.name.toLowerCase().compareTo(b.name.toLowerCase());
 }
 
 /// The unified credential bundle returned by the gateway when a VPN client is
@@ -288,6 +375,18 @@ class SingboxConfigBuilder {
     final extraRules =
         (profileRoute['rules'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
 
+    final outbounds =
+        ((profile['outbounds'] as List?)?.cast<Map<String, dynamic>>() ?? [])
+            .map((o) => Map<String, dynamic>.from(o))
+            .toList();
+    if (outbounds.isEmpty) {
+      outbounds.add({'type': 'direct', 'tag': 'direct'});
+    }
+    _patchStealthOutbounds(outbounds, transport, bundle);
+
+    // Dial the carrier (VLESS/Hy2) on the underlying network, not through the TUN.
+    final carrierHost = _carrierBypassHost(outbounds, transport, bundle);
+
     return _withClashApi({
       'log': {'level': 'info'},
       'dns': _dnsConfig(
@@ -297,14 +396,81 @@ class SingboxConfigBuilder {
       ),
       'inbounds': _inbounds(includeTun: useSystemTunnel),
       'endpoints': endpoints,
-      'outbounds': profile['outbounds'] ?? [
-        {'type': 'direct', 'tag': 'direct'},
-      ],
+      'outbounds': outbounds,
       'route': _route(
         finalTag: wgEndpointTag,
+        wgServerHost: carrierHost,
         extraRules: extraRules,
       ),
     });
+  }
+
+  /// Ensures carrier outbounds carry REALITY/TLS params (from [bundle.vlessUri]
+  /// when the cached profile is stale or incomplete).
+  static void _patchStealthOutbounds(
+    List<Map<String, dynamic>> outbounds,
+    Transport transport,
+    CredentialBundle bundle,
+  ) {
+    for (final ob in outbounds) {
+      final tag = ob['tag']?.toString() ?? '';
+      if (transport == Transport.vlessReality && tag == carrierVlessTag) {
+        _patchVlessFromUri(ob, bundle.vlessUri);
+      }
+    }
+  }
+
+  static void _patchVlessFromUri(Map<String, dynamic> outbound, String vlessUri) {
+    if (vlessUri.isEmpty) return;
+    final m = RegExp(r'^vless://([^@]+)@([^:/?#]+):(\d+)\?([^#]*)').firstMatch(vlessUri);
+    if (m == null) return;
+    final uuid = m.group(1) ?? '';
+    final host = m.group(2) ?? '';
+    final port = int.tryParse(m.group(3) ?? '') ?? 443;
+    final q = Uri.splitQueryString(m.group(4) ?? '');
+    if (uuid.isNotEmpty) outbound['uuid'] = uuid;
+    if (host.isNotEmpty) outbound['server'] = host;
+    outbound['server_port'] = port;
+    if (q['flow']?.isNotEmpty == true) outbound['flow'] = q['flow'];
+    final tls = Map<String, dynamic>.from(
+      (outbound['tls'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    tls['enabled'] = true;
+    tls['server_name'] = q['sni'] ?? tls['server_name'] ?? 'www.microsoft.com';
+    tls['utls'] = {
+      'enabled': true,
+      'fingerprint': q['fp'] ?? 'chrome',
+    };
+    final reality = Map<String, dynamic>.from(
+      (tls['reality'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+    if (q['pbk']?.isNotEmpty == true) reality['public_key'] = q['pbk'];
+    if (q['sid']?.isNotEmpty == true) reality['short_id'] = q['sid'];
+    reality['enabled'] = true;
+    tls['reality'] = reality;
+    outbound['tls'] = tls;
+  }
+
+  static String? _carrierBypassHost(
+    List<Map<String, dynamic>> outbounds,
+    Transport transport,
+    CredentialBundle bundle,
+  ) {
+    final tag = switch (transport) {
+      Transport.vlessReality => carrierVlessTag,
+      Transport.hysteria2 => carrierHy2Tag,
+      Transport.wireguard => null,
+    };
+    if (tag != null) {
+      for (final ob in outbounds) {
+        if (ob['tag'] == tag) {
+          final host = ob['server']?.toString() ?? '';
+          if (host.isNotEmpty) return host;
+        }
+      }
+    }
+    final (host, _) = _splitHostPort(bundle.endpoint);
+    return host.isNotEmpty ? host : null;
   }
 
   static bool get _isMacOS =>

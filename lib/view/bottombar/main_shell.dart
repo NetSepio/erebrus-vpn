@@ -141,7 +141,7 @@ class _NavBar extends StatelessWidget {
             children: List.generate(_items.length, (i) {
               final it = _items[i];
               final active = i == index;
-              final color = active ? AppColors.accent : AppColors.textDim;
+              final color = active ? AppColors.accent : AppColors.textSecondary;
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => onTap(i),

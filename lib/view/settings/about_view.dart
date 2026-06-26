@@ -24,16 +24,8 @@ class AboutView extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
         children: [
-          Center(
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                gradient: AppGradients.aurora,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: const Icon(Icons.shield_outlined, color: Colors.white, size: 36),
-            ),
+          const Center(
+            child: BrandLogo(size: 72, radius: 18, showShadow: true),
           ),
           const SizedBox(height: AppSpace.lg),
           Center(

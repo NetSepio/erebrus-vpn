@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../theme/app_theme.dart';
 import '../../vpn/gateway_controller.dart';
+import '../../vpn/node_probe.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'node_display.dart';
@@ -28,13 +29,32 @@ class _ServerSheet extends StatefulWidget {
 
 class _ServerSheetState extends State<_ServerSheet> {
   String _filter = 'all'; // all | public | private
+  Map<String, int> _clientPingMs = const {};
+  bool _probing = false;
+  int _probeGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    // Always hit the gateway when the sheet opens — node list is not cached locally.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Get.find<GatewayController>().refreshNodes();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final gateway = Get.find<GatewayController>();
+      await gateway.refreshNodes();
+      if (!mounted) return;
+      _startClientProbes(gateway.nodes);
+    });
+  }
+
+  Future<void> _startClientProbes(List<VpnNode> nodes) async {
+    final generation = ++_probeGeneration;
+    setState(() {
+      _probing = true;
+      _clientPingMs = const {};
+    });
+    final results = await NodeProbe.probeAll(nodes);
+    if (!mounted || generation != _probeGeneration) return;
+    setState(() {
+      _clientPingMs = results;
+      _probing = false;
     });
   }
 
@@ -49,6 +69,8 @@ class _ServerSheetState extends State<_ServerSheet> {
   Future<void> _refresh(GatewayController gateway) async {
     setState(() => _filter = 'all');
     await gateway.refreshNodes();
+    if (!mounted) return;
+    _startClientProbes(gateway.nodes);
   }
 
   @override
@@ -58,14 +80,25 @@ class _ServerSheetState extends State<_ServerSheet> {
 
     return Obx(() {
       final allNodes = gateway.nodes;
-      final nodes = allNodes.where(_matchesFilter).toList();
+      final nodes = sortNodesForPicker(
+        allNodes.where(_matchesFilter),
+        clientPingMs: _clientPingMs,
+      );
+      final subtitle = _probing
+          ? (_clientPingMs.isEmpty
+              ? 'MEASURING PING…'
+              : '${nodes.length} NODES · UPDATING PING')
+          : (_clientPingMs.isEmpty
+              ? '${allNodes.length} NODES · SORTED BY LOAD'
+              : (_filter == 'all'
+                  ? '${allNodes.length} NODES · SORTED BY PING'
+                  : '${nodes.length} OF ${allNodes.length} · SORTED BY PING'));
       final err = gateway.error.value;
       final warn = gateway.warning.value;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // header
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 14, 22, 12),
             child: Row(
@@ -76,9 +109,7 @@ class _ServerSheetState extends State<_ServerSheet> {
                     Text('Select node', style: grotesk(size: 18, weight: FontWeight.w600)),
                     const SizedBox(height: 2),
                     Text(
-                      _filter == 'all'
-                          ? '${allNodes.length} NODES ONLINE'
-                          : '${nodes.length} OF ${allNodes.length} NODES',
+                      subtitle,
                       style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04),
                     ),
                   ],
@@ -110,7 +141,6 @@ class _ServerSheetState extends State<_ServerSheet> {
               child: Text(warn, style: grotesk(size: 12, color: AppColors.warn)),
             ),
           ],
-          // search (decorative)
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
             child: Container(
@@ -129,7 +159,6 @@ class _ServerSheetState extends State<_ServerSheet> {
               ),
             ),
           ),
-          // filter chips
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
             child: Row(
@@ -142,14 +171,9 @@ class _ServerSheetState extends State<_ServerSheet> {
               ],
             ),
           ),
-          // node rows
           Flexible(
             child: nodes.isEmpty
-                ? _buildEmptyState(
-                    gateway: gateway,
-                    allNodes: allNodes,
-                    err: err,
-                  )
+                ? _buildEmptyState(gateway: gateway, allNodes: allNodes, err: err)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
                     itemCount: nodes.length,
@@ -161,6 +185,8 @@ class _ServerSheetState extends State<_ServerSheet> {
                         child: _NodeRow(
                           node: node,
                           selected: selected,
+                          clientPingMs: _clientPingMs[node.id],
+                          probing: _probing,
                           onTap: () => _select(vpn, node),
                         ),
                       );
@@ -200,7 +226,6 @@ class _ServerSheetState extends State<_ServerSheet> {
   void _select(VpnController vpn, VpnNode node) {
     Navigator.of(context).pop();
     if (vpn.isConnected) {
-      // Changing node while connected triggers a reconnect.
       vpn.connect(node: node);
     } else {
       vpn.selectNode(node);
@@ -209,63 +234,131 @@ class _ServerSheetState extends State<_ServerSheet> {
 }
 
 class _NodeRow extends StatelessWidget {
-  const _NodeRow({required this.node, required this.selected, required this.onTap});
+  const _NodeRow({
+    required this.node,
+    required this.selected,
+    required this.onTap,
+    this.clientPingMs,
+    this.probing = false,
+  });
   final VpnNode node;
   final bool selected;
+  final int? clientPingMs;
+  final bool probing;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final d = NodeDisplay.of(node);
+    final d = NodeDisplay.of(node, clientPingMs: clientPingMs);
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: selected ? AppColors.accent.withValues(alpha: 0.08) : AppColors.surface2,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.55) : AppColors.stroke),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(d.flag, style: const TextStyle(fontSize: 24, height: 1)),
-            const SizedBox(width: 13),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(d.name, style: mono(size: 13.5, weight: FontWeight.w600, color: AppColors.textPrimary)),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
+                  Text(
+                    d.orgName != null ? '${d.location} · ${d.orgName}' : d.location,
+                    style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textTertiary),
+                  ),
+                  const SizedBox(height: 6),
                   Wrap(
-                    spacing: 7,
+                    spacing: 6,
                     runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(d.location, style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textTertiary)),
-                      Container(width: 4, height: 4, decoration: BoxDecoration(color: d.networkColor, shape: BoxShape.circle)),
-                      Text(d.network, style: mono(size: 10.5, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                      _AccessPill(label: d.network, color: d.networkColor),
                       _AccessPill(label: d.accessLabel, color: d.accessColor),
-                      if (d.tierLabel != null)
-                        _AccessPill(label: d.tierLabel!, color: AppColors.warn),
-                      if (d.supportsStealth)
-                        Text('stealth', style: mono(size: 10.5, weight: FontWeight.w400, color: AppColors.textMuted)),
+                      if (d.tierLabel != null) _AccessPill(label: d.tierLabel!, color: AppColors.warn),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(d.loadLabel, style: mono(size: 13, weight: FontWeight.w600, color: d.loadColor)),
-                const SizedBox(height: 2),
-                Text('load', style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted)),
-              ],
-            ),
+            const SizedBox(width: 10),
+            _NodeMetrics(display: d, probing: probing),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NodeMetrics extends StatelessWidget {
+  const _NodeMetrics({required this.display, required this.probing});
+  final NodeDisplay display;
+  final bool probing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _MetricCell(
+              label: 'PING',
+              value: display.pingLabel(probing: probing),
+              valueColor: display.pingColor(probing: probing),
+            ),
+            const SizedBox(width: 10),
+            _MetricCell(
+              label: 'LOAD',
+              value: display.loadLabel,
+              valueColor: display.loadColor,
+            ),
+          ],
+        ),
+        if (display.showNodeSpeedtest) ...[
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MetricCell(label: '↓', value: display.downloadLabel),
+              const SizedBox(width: 10),
+              _MetricCell(label: '↑', value: display.uploadLabel),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MetricCell extends StatelessWidget {
+  const _MetricCell({required this.label, required this.value, this.valueColor});
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(label, style: mono(size: 9, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 0.4, height: 1)),
+        const SizedBox(width: 3),
+        Text(
+          value,
+          style: mono(size: 11.5, weight: FontWeight.w600, color: valueColor ?? AppColors.textPrimary, height: 1),
+        ),
+      ],
     );
   }
 }
@@ -300,12 +393,15 @@ class _FilterChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.strokeHi),
         ),
-        child: Text(label,
-            style: mono(
-                size: 11,
-                weight: FontWeight.w500,
-                color: active ? AppColors.accent : AppColors.textTertiary,
-                letterSpacing: 11 * 0.04)),
+        child: Text(
+          label,
+          style: mono(
+            size: 11,
+            weight: FontWeight.w500,
+            color: active ? AppColors.accent : AppColors.textTertiary,
+            letterSpacing: 11 * 0.04,
+          ),
+        ),
       ),
     );
   }

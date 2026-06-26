@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/premium_widgets.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'browser_controller.dart';
@@ -352,8 +353,8 @@ class _ControlBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _CtlIcon(Icons.arrow_back, color: AppColors.textDim, onTap: controller.goBack),
-          _CtlIcon(Icons.arrow_forward, color: AppColors.textDim, onTap: controller.goForward),
+          _CtlIcon(Icons.arrow_back, onTap: controller.goBack),
+          _CtlIcon(Icons.arrow_forward, onTap: controller.goForward),
           _CtlIcon(Icons.home_outlined, onTap: controller.goHome),
           Obx(() => Container(
                 constraints: const BoxConstraints(minWidth: 20),
@@ -375,16 +376,16 @@ class _ControlBar extends StatelessWidget {
 }
 
 class _CtlIcon extends StatelessWidget {
-  const _CtlIcon(this.icon, {this.color = AppColors.textTertiary, required this.onTap});
+  const _CtlIcon(this.icon, {required this.onTap});
   final IconData icon;
-  final Color color;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return VisibleIconButton(
+      icon: icon,
+      size: 40,
+      iconSize: 20,
       onTap: onTap,
-      child: Padding(padding: const EdgeInsets.all(6), child: Icon(icon, size: 20, color: color)),
     );
   }
 }

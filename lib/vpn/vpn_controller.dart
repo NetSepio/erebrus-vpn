@@ -241,7 +241,24 @@ class VpnController extends GetxController {
         return;
       }
       final keys = await _ensureWgKeys();
-      final bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
+      var bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
+
+      // Stealth needs a full sing-box profile; stale WG-only caches break REALITY.
+      if (mode.value != ConnectMode.wireguard &&
+          !bundle.hasStealth &&
+          Get.isRegistered<GatewayController>()) {
+        final gw = Get.find<GatewayController>();
+        debugPrint('[VPN] bundle missing stealth — refreshing from gateway');
+        try {
+          final fresh = await gw.client.fetchExistingClientBundle(
+            nodeId: target.id,
+            wgPublicKey: keys.public,
+          );
+          if (fresh != null && fresh.hasStealth) bundle = fresh;
+        } catch (e) {
+          debugPrint('[VPN] stealth bundle refresh failed: $e');
+        }
+      }
 
       // Filter candidate transports to what this node/bundle actually supports.
       final candidates = mode.value.transports.where((t) {
