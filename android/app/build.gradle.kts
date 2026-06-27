@@ -132,12 +132,15 @@ android {
                 .firstOrNull { it.first == "store" }
                 ?.second
 
-            if (variant.buildType == "release") {
-                when (flavorName) {
-                    "playstore" -> {
+            // Sign every local run (debug/profile/release) with the store release key.
+            when (flavorName) {
+                "playstore" -> {
+                    if (hasPlaystoreSigning) {
                         variant.signingConfig.setConfig(signingConfigs.getByName("playstoreRelease"))
                     }
-                    "dappstore" -> {
+                }
+                "dappstore" -> {
+                    if (hasDappstoreSigning) {
                         variant.signingConfig.setConfig(signingConfigs.getByName("dappstoreRelease"))
                     }
                 }
@@ -158,16 +161,36 @@ androidComponents {
     }
 }
 
-// Flutter looks for app-debug.apk when --flavor is omitted; flavored builds emit
-// app-playstore-debug.apk. Mirror the playstore debug artifact so IDE Run still works.
-tasks.configureEach {
-    if (name == "assemblePlaystoreDebug") {
-        doLast {
-            val flutterApkDir = layout.buildDirectory.dir("outputs/flutter-apk").get().asFile
-            val src = flutterApkDir.resolve("app-playstore-debug.apk")
-            val dst = flutterApkDir.resolve("app-debug.apk")
-            if (src.exists()) {
-                src.copyTo(dst, overwrite = true)
+// Flutter discovers APKs under outputs/flutter-apk/, but AGP writes flavored builds to
+// outputs/apk/<flavor>/<mode>/ first. Copy after assemble (doLast, registered in
+// afterEvaluate so it runs after the Flutter Gradle plugin). Prefer the AGP output path.
+fun mirrorApkToFlutterOutputs(flavor: String, buildType: String, extraNames: List<String>) {
+    val flutterApkDir = layout.buildDirectory.dir("outputs/flutter-apk").get().asFile
+    val apkDir = layout.buildDirectory.dir("outputs/apk/$flavor/$buildType").get().asFile
+    val flavoredName = "app-$flavor-$buildType.apk"
+    val src = listOf(apkDir.resolve(flavoredName), flutterApkDir.resolve(flavoredName))
+        .firstOrNull { it.isFile }
+        ?: return
+    flutterApkDir.mkdirs()
+    (listOf(flavoredName) + extraNames).distinct().forEach { name ->
+        val dest = flutterApkDir.resolve(name)
+        if (dest.absolutePath == src.absolutePath) return@forEach
+        runCatching { src.copyTo(dest, overwrite = true) }
+            .onFailure { logger.warn("APK mirror: could not copy to ${dest.name}: ${it.message}") }
+    }
+}
+
+afterEvaluate {
+    data class MirrorSpec(val assembleTask: String, val flavor: String, val buildType: String, val aliases: List<String>)
+
+    listOf(
+        MirrorSpec("assemblePlaystoreDebug", "playstore", "debug", listOf("app-debug.apk")),
+        MirrorSpec("assemblePlaystoreRelease", "playstore", "release", listOf("app-release.apk")),
+        MirrorSpec("assembleDappstoreRelease", "dappstore", "release", emptyList()),
+    ).forEach { spec ->
+        tasks.matching { it.name == spec.assembleTask }.configureEach {
+            doLast {
+                mirrorApkToFlutterOutputs(spec.flavor, spec.buildType, spec.aliases)
             }
         }
     }

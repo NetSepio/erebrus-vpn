@@ -2,9 +2,7 @@
 
 **Your internet, kept private — even when networks try to block you.**
 
-Erebrus is a privacy-first VPN built for the Erebrus network. Sign in with your
-crypto wallet (no passwords, no email), pick a server, and browse with a built-in
-private browser — all in one app.
+Erebrus is a privacy-first VPN built for the Erebrus network. Sign in with your email or wallet, pick a server, and browse with a built-in private browser — all in one app.
 
 Most VPNs stop working the moment a network decides to block them. Erebrus doesn't.
 When the normal connection is blocked, it quietly **disguises your traffic as

@@ -15,7 +15,7 @@ extension ConnectModeX on ConnectMode {
   String get blurb => switch (this) {
         ConnectMode.auto => 'Fastest path, falls back to stealth if blocked',
         ConnectMode.stealth => 'Disguises traffic as normal HTTPS / QUIC',
-        ConnectMode.wireguard => 'Classic WireGuard — fastest, most detectable',
+        ConnectMode.wireguard => 'Fast direct tunnel for normal use',
       };
 
   /// Ordered transports the controller tries for this mode.

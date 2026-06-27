@@ -114,6 +114,7 @@ class _SettingsViewState extends State<SettingsView> {
                   _GroupRow(
                     icon: Icons.shield_outlined,
                     title: 'Default protocol',
+                    subtitle: settings.defaultProtocol.value.blurb,
                     onTap: () => _pickProtocol(context, settings, vpn),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -129,12 +130,14 @@ class _SettingsViewState extends State<SettingsView> {
                   _GroupRow(
                     icon: Icons.power_settings_new,
                     title: 'Auto-connect',
+                    subtitle: 'Connect to your last server when the app opens',
                     trailing: EreToggle(value: settings.autoConnectOnLaunch.value, onChanged: settings.setAutoConnect),
                   ),
                   _RowDivider(),
                   _GroupRow(
                     icon: Icons.lock_outline,
                     title: 'Kill switch',
+                    subtitle: 'Block internet if the VPN drops unexpectedly',
                     trailing: EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch),
                   ),
                   if (PlatformCapabilities.supportsSplitTunnel) ...[
