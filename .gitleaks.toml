@@ -1,0 +1,13 @@
+# gitleaks — Erebrus VPN (Flutter)
+[extend]
+useDefault = true
+
+[allowlist]
+description = "env templates, docs, signing examples, and release key paths"
+paths = [
+  '''\.env\.example$''',
+  '''docs/.*''',
+  '''android/key\.properties\.example$''',
+  '''android/release-keys/.*''',
+  '''scripts/create-android-release-keystore\.sh$''',
+]
