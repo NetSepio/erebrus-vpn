@@ -167,7 +167,7 @@ class NodeDisplay {
 
     final peerIsLatest = peerAt != null && (beatAt == null || peerAt.isAfter(beatAt));
     final latestIso = peerIsLatest ? node.lastPeerHandshake : node.lastHeartbeat;
-    final latestAt = peerIsLatest ? peerAt! : beatAt!;
+    final latestAt = peerIsLatest ? peerAt : beatAt!;
     final window = peerIsLatest ? handshakeWindow : heartbeatWindow;
     final live = !node.isOffline && DateTime.now().toUtc().difference(latestAt.toUtc()) <= window;
     return (time: _relativeAgo(latestIso), live: live);

@@ -140,7 +140,7 @@ class BrandLogo extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => _BrandLogoFallback(size: size, radius: r),
+        errorBuilder: (_, _, _) => _BrandLogoFallback(size: size, radius: r),
       ),
     );
     if (!showShadow) return image;

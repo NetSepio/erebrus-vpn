@@ -12,7 +12,6 @@ class ErebrusSecureStorage {
 
   static const FlutterSecureStorage instance = FlutterSecureStorage(
     aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
       resetOnError: false,
       migrateOnAlgorithmChange: false,
     ),

@@ -17,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - run: cp .env.example .env
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable

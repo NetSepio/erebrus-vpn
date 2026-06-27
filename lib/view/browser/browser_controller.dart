@@ -21,8 +21,8 @@ class BrowserTab {
     required this.id,
     required this.url,
     this.title = 'New tab',
-    WebViewController? controller,
-  }) : _controller = controller;
+    this._controller,
+  }); // ignore: prefer_initializing_formals
 
   final String id;
   String url;

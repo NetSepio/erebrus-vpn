@@ -69,7 +69,7 @@ class GatewayController extends GetxController {
           bundle: bundle,
         );
         return bundle;
-      } on GatewayException catch (e) {
+      } on GatewayException {
         final cached = await _bundleCache.read(
           nodeId: node.id,
           wgPublicKey: wgPublicKey,

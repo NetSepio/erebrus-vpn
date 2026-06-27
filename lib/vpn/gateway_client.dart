@@ -10,9 +10,8 @@ export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodD
 
 /// Thin HTTP client for the Erebrus gateway discovery + provisioning APIs.
 class GatewayClient {
-  GatewayClient({String? baseUrl, String? bearerToken})
-      : _base = GatewayHttp.normalizeBase(baseUrl ?? resolveGatewayUrl()),
-        _bearerToken = bearerToken;
+  GatewayClient({String? baseUrl, this._bearerToken})
+      : _base = GatewayHttp.normalizeBase(baseUrl ?? resolveGatewayUrl());
 
   final Uri _base;
   String? _bearerToken;
@@ -72,7 +71,7 @@ class GatewayClient {
         'wg_public_key': wgPublicKey,
       });
       return CredentialBundle.fromJson(_unwrapBundle(decoded));
-    } on GatewayException catch (e) {
+    } on GatewayException {
       final reused = await fetchExistingClientBundle(
         nodeId: nodeId,
         wgPublicKey: wgPublicKey,

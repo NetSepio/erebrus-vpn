@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import '../../auth/gateway_auth_client.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/premium_widgets.dart';
 
 Future<void> showEmailLinkSheet(BuildContext context, WalletAuthController auth) async {
   if (!auth.isAuthenticated) {

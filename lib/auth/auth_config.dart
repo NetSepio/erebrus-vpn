@@ -1,4 +1,4 @@
-/// Config: project-root `.env` (bundled into the app) or `--dart-define-from-file`.
+// Config: project-root `.env` (bundled into the app) or `--dart-define-from-file`.
 
 /// Reown (WalletConnect) project id — Android / iOS wallet login.
 const kReownProjectId = String.fromEnvironment('REOWN_PROJECT_ID');
