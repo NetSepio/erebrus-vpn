@@ -159,6 +159,49 @@ void main() {
     expect(nodes.map((n) => n.id).toList(), ['c', 'b', 'a']);
   });
 
+  test('VpnNodeOrg parses the verification_status org shape', () {
+    final org = VpnNodeOrg.fromJson({
+      'id': '5de0115a-0000-0000-0000-000000000000',
+      'name': 'clawbrick',
+      'slug': 'clawbrick',
+      'plan': 'team',
+      'verification_status': 'verified',
+      'display_name': 'Clawbrick Labs',
+      'website_url': 'https://clawbrick.io',
+    });
+    expect(org.verified, isTrue);
+    expect(org.verificationStatus, 'verified');
+    expect(org.label, 'Clawbrick Labs');
+    expect(org.website, 'https://clawbrick.io');
+    expect(org.id, isNotNull);
+  });
+
+  test('VpnNodeOrg still parses the legacy verified/kind shape', () {
+    final org = VpnNodeOrg.fromJson({
+      'name': 'clawbrick',
+      'kind': 'team',
+      'verified': false,
+      'slug': 'clawbrick',
+    });
+    expect(org.verified, isFalse);
+    expect(org.kind, 'team');
+    expect(org.label, 'clawbrick'); // falls back to name when no display_name
+  });
+
+  test('VpnOrg parses the /orgs list shape', () {
+    final org = VpnOrg.fromJson({
+      'name': 'Clawbrick',
+      'slug': 'clawbrick',
+      'role': 'member',
+      'plan': 'team',
+      'verification_status': 'verified',
+    });
+    expect(org.slug, 'clawbrick');
+    expect(org.role, 'member');
+    expect(org.verified, isTrue);
+    expect(org.id, isNull); // omitted for non-privileged members
+  });
+
   test('GatewayClient defaults to production gateway', () {
     final c = GatewayClient(baseUrl: 'https://gateway.erebrus.io');
     expect(c.baseUrl, 'https://gateway.erebrus.io');

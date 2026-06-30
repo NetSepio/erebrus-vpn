@@ -177,12 +177,28 @@ class _ConnectViewState extends State<ConnectView> {
                 final display = registryEmpty
                     ? NodeDisplay.placeholder(registryError: gw.error.value != null)
                     : NodeDisplay.of(node, showActivity: true);
-                return _ServerCard(
-                  display: display,
-                  egressIp: _c.egressIp.value,
-                  egressLoading: _c.egressIpLoading.value,
-                  connected: _c.isConnected,
-                  onTap: widget.onOpenServers,
+                final showScope =
+                    gw.orgs.isNotEmpty || gw.selectedScope.value != null;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (showScope) ...[
+                      _ScopeStrip(
+                        label: gw.scopeLabel,
+                        isOrg: gw.selectedScope.value != null,
+                        verified: gw.activeOrg?.verified ?? false,
+                        onTap: widget.onOpenServers,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    _ServerCard(
+                      display: display,
+                      egressIp: _c.egressIp.value,
+                      egressLoading: _c.egressIpLoading.value,
+                      connected: _c.isConnected,
+                      onTap: widget.onOpenServers,
+                    ),
+                  ],
                 );
               }),
             ],
@@ -697,6 +713,71 @@ class _ServerCard extends StatelessWidget {
               ],
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact label above the server card showing which scope ("Public network"
+/// or an organization) the picker is browsing. Tapping opens the picker.
+class _ScopeStrip extends StatelessWidget {
+  const _ScopeStrip({
+    required this.label,
+    required this.isOrg,
+    required this.verified,
+    this.onTap,
+  });
+  final String label;
+  final bool isOrg;
+  final bool verified;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = isOrg ? AppColors.accent : AppColors.textTertiary;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Icon(isOrg ? Icons.apartment_rounded : Icons.public,
+              size: 13, color: accent),
+          const SizedBox(width: 7),
+          Text(
+            'VPN SOURCE',
+            style: mono(
+              size: 10,
+              weight: FontWeight.w500,
+              color: AppColors.textMuted,
+              letterSpacing: 10 * 0.06,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: grotesk(size: 12, weight: FontWeight.w600, color: accent),
+            ),
+          ),
+          if (verified) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.verified, size: 12, color: accent),
+          ],
+          const Spacer(),
+          Text(
+            'CHANGE',
+            style: mono(
+              size: 10,
+              weight: FontWeight.w600,
+              color: AppColors.accent,
+              letterSpacing: 10 * 0.06,
+            ),
+          ),
+          const SizedBox(width: 2),
+          const Icon(Icons.chevron_right, size: 14, color: AppColors.accent),
         ],
       ),
     );

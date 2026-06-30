@@ -31,7 +31,6 @@ class _ServerSheet extends StatefulWidget {
 }
 
 class _ServerSheetState extends State<_ServerSheet> {
-  String _filter = 'all'; // all | public | private
   Map<String, int> _clientPingMs = const {};
   bool _probing = false;
   int _probeGeneration = 0;
@@ -76,16 +75,14 @@ class _ServerSheetState extends State<_ServerSheet> {
     });
   }
 
-  bool _matchesFilter(VpnNode node) {
-    return switch (_filter) {
-      'private' => node.isPrivateAccess,
-      'public' => !node.isPrivateAccess,
-      _ => true,
-    };
+  Future<void> _selectScope(GatewayController gateway, String? slug) async {
+    if (gateway.selectedScope.value == slug) return;
+    await gateway.setScope(slug);
+    if (!mounted) return;
+    await _startClientProbes(gateway.nodes);
   }
 
   Future<void> _refresh(GatewayController gateway) async {
-    setState(() => _filter = 'all');
     await _refreshAndProbe();
   }
 
@@ -97,7 +94,7 @@ class _ServerSheetState extends State<_ServerSheet> {
     return Obx(() {
       final allNodes = gateway.nodes;
       final nodes = sortNodesForPicker(
-        allNodes.where(_matchesFilter),
+        allNodes,
         clientPingMs: _clientPingMs,
       );
       final subtitle = _probing
@@ -105,10 +102,8 @@ class _ServerSheetState extends State<_ServerSheet> {
               ? 'MEASURING PING…'
               : '${nodes.length} NODES · UPDATING PING')
           : (_clientPingMs.isEmpty
-              ? '${allNodes.length} NODES · SORTED BY LOAD'
-              : (_filter == 'all'
-                  ? '${allNodes.length} NODES · SORTED BY PING'
-                  : '${nodes.length} OF ${allNodes.length} · SORTED BY PING'));
+              ? '${nodes.length} NODES · SORTED BY LOAD'
+              : '${nodes.length} NODES · SORTED BY PING');
       final err = gateway.error.value;
       final warn = gateway.warning.value;
       return Column(
@@ -175,21 +170,36 @@ class _ServerSheetState extends State<_ServerSheet> {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-            child: Row(
-              children: [
-                for (final f in const [('all', 'ALL'), ('public', 'PUBLIC'), ('private', 'PRIVATE')])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FilterChip(label: f.$2, active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
-                  ),
-              ],
+          if (gateway.orgs.isNotEmpty || gateway.selectedScope.value != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                child: Row(
+                  children: [
+                    _ScopeChip(
+                      label: 'PUBLIC',
+                      active: gateway.selectedScope.value == null,
+                      onTap: () => _selectScope(gateway, null),
+                    ),
+                    for (final org in gateway.orgs)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _ScopeChip(
+                          label: org.name.toUpperCase(),
+                          active: gateway.selectedScope.value == org.slug,
+                          verified: org.verified,
+                          onTap: () => _selectScope(gateway, org.slug),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
           Flexible(
             child: nodes.isEmpty
-                ? _buildEmptyState(gateway: gateway, allNodes: allNodes, err: err)
+                ? _buildEmptyState(gateway: gateway, err: err)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
                     itemCount: nodes.length,
@@ -216,27 +226,26 @@ class _ServerSheetState extends State<_ServerSheet> {
 
   Widget _buildEmptyState({
     required GatewayController gateway,
-    required List<VpnNode> allNodes,
     required String? err,
   }) {
-    if (allNodes.isEmpty) {
-      if (gateway.loading.value) {
-        return NodesEmptyPanel.registryEmpty(loading: true);
-      }
-      if (err != null && err.isNotEmpty) {
-        return NodesEmptyPanel.registryError(
-          message: err,
-          gatewayUrl: gateway.gatewayUrl.value,
-          onRetry: () => _refresh(gateway),
-        );
-      }
-      return NodesEmptyPanel.registryEmpty(onRetry: () => _refresh(gateway));
+    // An org scope with no online nodes: distinct, actionable empty state.
+    if (gateway.selectedScope.value != null) {
+      return NodesEmptyPanel.orgEmpty(
+        orgName: gateway.scopeLabel,
+        onShowPublic: () => _selectScope(gateway, null),
+      );
     }
-    return NodesEmptyPanel.filteredEmpty(
-      filter: _filter,
-      totalOnline: allNodes.length,
-      onShowAll: () => setState(() => _filter = 'all'),
-    );
+    if (gateway.loading.value) {
+      return NodesEmptyPanel.registryEmpty(loading: true);
+    }
+    if (err != null && err.isNotEmpty) {
+      return NodesEmptyPanel.registryError(
+        message: err,
+        gatewayUrl: gateway.gatewayUrl.value,
+        onRetry: () => _refresh(gateway),
+      );
+    }
+    return NodesEmptyPanel.registryEmpty(onRetry: () => _refresh(gateway));
   }
 
   void _select(VpnController vpn, VpnNode node) {
@@ -284,10 +293,18 @@ class _NodeRow extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({required this.label, required this.active, required this.onTap});
+/// A scope chip in the node picker: "PUBLIC" or one per organization. Shows a
+/// verified mark for verified orgs.
+class _ScopeChip extends StatelessWidget {
+  const _ScopeChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    this.verified = false,
+  });
   final String label;
   final bool active;
+  final bool verified;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
@@ -300,14 +317,27 @@ class _FilterChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.strokeHi),
         ),
-        child: Text(
-          label,
-          style: mono(
-            size: 11,
-            weight: FontWeight.w500,
-            color: active ? AppColors.accent : AppColors.textTertiary,
-            letterSpacing: 11 * 0.04,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: mono(
+                size: 11,
+                weight: FontWeight.w500,
+                color: active ? AppColors.accent : AppColors.textTertiary,
+                letterSpacing: 11 * 0.04,
+              ),
+            ),
+            if (verified) ...[
+              const SizedBox(width: 5),
+              Icon(
+                Icons.verified,
+                size: 12,
+                color: active ? AppColors.accent : AppColors.textTertiary,
+              ),
+            ],
+          ],
         ),
       ),
     );

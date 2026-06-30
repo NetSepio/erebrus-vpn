@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../auth/wallet_auth_controller.dart';
 import 'credential_cache.dart';
@@ -11,6 +12,11 @@ import 'vpn_models.dart';
 import 'vpn_session_store.dart';
 
 /// Loads the gateway node list and wires [VpnController.provisioner].
+///
+/// Nodes are scoped: the default "Public network" scope shows the public
+/// discovery list (`GET /api/v2/nodes`); selecting an organization the user
+/// belongs to shows that org's nodes (incl. private) sourced from
+/// `GET /api/v2/operator/nodes`. The active scope is persisted across launches.
 class GatewayController extends GetxController {
   GatewayController({GatewayClient? client, String? gatewayUrl})
       : _client = client ?? GatewayClient(baseUrl: gatewayUrl);
@@ -19,11 +25,29 @@ class GatewayController extends GetxController {
   GatewayClient get client => _client;
   final _bundleCache = CredentialCache();
 
+  /// The active, scope-filtered node list the UI binds to.
   final nodes = <VpnNode>[].obs;
+
+  /// Organizations the signed-in user belongs to (empty when logged out).
+  final orgs = <VpnOrg>[].obs;
+
+  /// Active node scope: `null` = Public network, otherwise an org slug.
+  final selectedScope = RxnString();
+
   final loading = false.obs;
   final error = RxnString();
   final warning = RxnString();
   late final RxString gatewayUrl;
+
+  // Raw fetched buffers; [_applyActiveNodes] filters + sorts for display.
+  List<VpnNode> _publicNodes = const [];
+  Map<String, List<VpnNode>> _orgNodesBySlug = {};
+
+  // Last persisted scope choice (org slug) or null; restored once its org loads.
+  static const _kScopeKey = 'gateway.node_scope';
+  String? _persistedScope;
+  bool _scopeLoaded = false;
+
   Timer? _refreshTimer;
   static const _registryPollInterval = Duration(seconds: 30);
 
@@ -49,6 +73,25 @@ class GatewayController extends GetxController {
   void setBearerToken(String? token) => _client.setBearerToken(token);
 
   Future<void> clearLocalCaches() => _bundleCache.clearAll();
+
+  /// The org backing the active scope, or null when on the Public network.
+  VpnOrg? get activeOrg {
+    final slug = selectedScope.value;
+    if (slug == null) return null;
+    for (final o in orgs) {
+      if (o.slug == slug) return o;
+    }
+    return null;
+  }
+
+  /// Human label for the active scope ("Public network" or the org name).
+  String get scopeLabel => activeOrg?.name ?? 'Public network';
+
+  /// Online node count for a scope (`null` = public), used by the picker chips.
+  int nodeCountForScope(String? slug) {
+    final source = slug == null ? _publicNodes : (_orgNodesBySlug[slug] ?? const []);
+    return source.where((n) => !n.isDraining && !n.isOffline).length;
+  }
 
   void _wireProvisioner() {
     final vpn = Get.find<VpnController>();
@@ -97,58 +140,153 @@ class GatewayController extends GetxController {
   }
 
   /// Fetches the live node registry from the gateway (not cached locally).
+  /// Always refreshes the public pool; when authenticated, also refreshes the
+  /// caller's orgs and org-scoped nodes (best-effort).
   Future<void> refreshNodes({bool silent = false}) async {
     if (!silent) loading.value = true;
     error.value = null;
     if (!silent) warning.value = null;
-    final previous = List<VpnNode>.from(nodes);
+    await _ensureScopeLoaded();
+    final previousActive = List<VpnNode>.from(nodes);
     try {
       debugPrint('[Gateway] fetching nodes from ${gatewayUrl.value}');
-      var list = await _client.fetchNodes();
-      list = sortNodesForPicker(list.where((n) => !n.isDraining && !n.isOffline));
+      _publicNodes = await _client.fetchNodes();
 
-      if (list.isEmpty) {
+      // Org scope is best-effort: skipped when logged out, ignored on auth error.
+      await _refreshOrgScope();
+      _reconcileScope();
+
+      _applyActiveNodes();
+
+      if (nodes.isEmpty && selectedScope.value == null) {
         debugPrint('[Gateway] registry empty — 0 online nodes from API');
         warning.value = 'No servers available — try refresh again in a moment';
       }
 
-      nodes.assignAll(list);
-      nodes.refresh();
-      debugPrint('[Gateway] loaded ${list.length} node(s): ${list.map((n) => n.name).join(", ")}');
-      if (list.isNotEmpty) {
-        final n = list.first;
-        debugPrint(
-          '[Gateway] node meta: zone=${n.zone} org=${n.org?.name} '
-          'verified=${n.org?.verified} wallet=${n.walletAddress != null && n.walletAddress!.isNotEmpty}',
-        );
-      }
-      _reconcileSelection(list);
-      Get.find<VpnController>().reconcileNodeFromGateway();
+      debugPrint(
+        '[Gateway] loaded ${nodes.length} node(s) in scope "$scopeLabel"'
+        '${orgs.isNotEmpty ? " · ${orgs.length} org(s)" : ""}',
+      );
     } on GatewayException catch (e) {
       debugPrint('[Gateway] error: ${e.message}');
       error.value = '${e.message} · ${gatewayUrl.value}';
-      if (previous.isNotEmpty) {
-        warning.value = 'Showing last known servers — refresh failed';
-        nodes.assignAll(previous);
-        nodes.refresh();
-      } else {
-        nodes.clear();
-        _reconcileSelection(const []);
-      }
+      _restorePreviousOrClear(previousActive);
     } catch (e) {
       debugPrint('[Gateway] error: $e');
       error.value = e.toString();
-      if (previous.isNotEmpty) {
-        warning.value = 'Showing last known servers — refresh failed';
-        nodes.assignAll(previous);
-        nodes.refresh();
-      } else {
-        nodes.clear();
-        _reconcileSelection(const []);
-      }
+      _restorePreviousOrClear(previousActive);
     } finally {
       if (!silent) loading.value = false;
     }
+  }
+
+  /// Refreshes [orgs] and the per-org node buffer. Logged-out users (no bearer)
+  /// get empty results; transient auth/network errors keep the prior buffers.
+  Future<void> _refreshOrgScope() async {
+    try {
+      final fetchedOrgs = await _client.fetchOrgs();
+      final fetchedNodes = await _client.fetchOrgNodes();
+
+      final bySlug = <String, List<VpnNode>>{};
+      for (final n in fetchedNodes) {
+        final slug = n.org?.slug;
+        if (slug == null || slug.isEmpty) continue;
+        (bySlug[slug] ??= <VpnNode>[]).add(n);
+      }
+      _orgNodesBySlug = bySlug;
+
+      // Start from the authoritative /orgs list, then add any org that has nodes
+      // but wasn't returned by /orgs (synthesized from the node's org block), so
+      // a member always gets a chip for an org whose nodes they can reach.
+      final merged = <VpnOrg>[...fetchedOrgs];
+      final known = merged.map((o) => o.slug).toSet();
+      for (final entry in bySlug.entries) {
+        if (known.contains(entry.key)) continue;
+        final orgBlock = entry.value.first.org;
+        merged.add(VpnOrg(
+          name: orgBlock?.name ?? entry.key,
+          slug: entry.key,
+          verificationStatus: orgBlock?.verified == true
+              ? 'verified'
+              : orgBlock?.verificationStatus,
+        ));
+        known.add(entry.key);
+      }
+      orgs.assignAll(merged);
+    } catch (e) {
+      debugPrint('[Gateway] org scope unavailable: $e');
+    }
+  }
+
+  /// Restores a persisted scope once its org is available, and degrades to the
+  /// Public network when the active scope's org is no longer present.
+  void _reconcileScope() {
+    final available = <String>{
+      ..._orgNodesBySlug.keys,
+      ...orgs.map((o) => o.slug),
+    };
+    if (selectedScope.value == null &&
+        _persistedScope != null &&
+        available.contains(_persistedScope)) {
+      selectedScope.value = _persistedScope;
+    }
+    if (selectedScope.value != null && !available.contains(selectedScope.value)) {
+      selectedScope.value = null;
+    }
+  }
+
+  List<VpnNode> _scopeSource() {
+    final slug = selectedScope.value;
+    if (slug == null) return _publicNodes;
+    return _orgNodesBySlug[slug] ?? const [];
+  }
+
+  /// Recomputes [nodes] from the active scope, then reconciles VPN selection.
+  void _applyActiveNodes() {
+    final list = sortNodesForPicker(
+      _scopeSource().where((n) => !n.isDraining && !n.isOffline),
+    );
+    nodes.assignAll(list);
+    nodes.refresh();
+    _reconcileSelection(list);
+    if (Get.isRegistered<VpnController>()) {
+      Get.find<VpnController>().reconcileNodeFromGateway();
+    }
+  }
+
+  void _restorePreviousOrClear(List<VpnNode> previousActive) {
+    if (previousActive.isNotEmpty) {
+      warning.value = 'Showing last known servers — refresh failed';
+      nodes.assignAll(previousActive);
+      nodes.refresh();
+    } else {
+      nodes.clear();
+      _reconcileSelection(const []);
+    }
+  }
+
+  /// Switches the active node scope. `null` selects the Public network; a slug
+  /// selects that org's nodes. Persisted across launches.
+  Future<void> setScope(String? slug) async {
+    final normalized = (slug == null || slug.isEmpty) ? null : slug;
+    selectedScope.value = normalized;
+    _persistedScope = normalized;
+    _scopeLoaded = true;
+    warning.value = null;
+    final prefs = await SharedPreferences.getInstance();
+    if (normalized == null) {
+      await prefs.remove(_kScopeKey);
+    } else {
+      await prefs.setString(_kScopeKey, normalized);
+    }
+    _applyActiveNodes();
+  }
+
+  Future<void> _ensureScopeLoaded() async {
+    if (_scopeLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    _persistedScope = prefs.getString(_kScopeKey);
+    _scopeLoaded = true;
   }
 
   void _reconcileSelection(List<VpnNode> list) {
@@ -184,8 +322,12 @@ class GatewayController extends GetxController {
     }
   }
 
-  /// Clears VPN-side persisted state (bundles, session snapshot, WG keys).
+  /// Clears VPN-side persisted state (bundles, session snapshot, WG keys) and
+  /// resets scope back to the Public network (e.g. on logout).
   Future<void> resetVpnLocalState() async {
+    await setScope(null);
+    orgs.clear();
+    _orgNodesBySlug = {};
     await clearLocalCaches();
     await VpnSessionStore.clear();
     if (Get.isRegistered<VpnController>()) {

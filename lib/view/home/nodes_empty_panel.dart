@@ -48,18 +48,17 @@ class NodesEmptyPanel extends StatelessWidget {
     );
   }
 
-  factory NodesEmptyPanel.filteredEmpty({
-    required String filter,
-    required int totalOnline,
-    VoidCallback? onShowAll,
+  factory NodesEmptyPanel.orgEmpty({
+    required String orgName,
+    VoidCallback? onShowPublic,
   }) {
     return NodesEmptyPanel(
-      title: 'No $filter nodes',
-      subtitle: totalOnline == 0
-          ? 'No community nodes are online right now.'
-          : '$totalOnline node${totalOnline == 1 ? '' : 's'} online under ALL — switch filters to browse.',
-      onRetry: onShowAll,
-      actionLabel: 'SHOW ALL',
+      title: 'No nodes in $orgName',
+      subtitle:
+          'This organization has no online nodes yet. An org admin can enroll a node, '
+          'or switch to the Public network to browse community nodes.',
+      onRetry: onShowPublic,
+      actionLabel: 'PUBLIC NETWORK',
     );
   }
 

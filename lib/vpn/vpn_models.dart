@@ -37,37 +37,100 @@ extension TransportX on Transport {
       };
 }
 
-/// Org summary on gateway node discovery (`GET /api/v2/nodes`).
+/// Org summary embedded on gateway node discovery (`GET /api/v2/nodes`) and the
+/// operator node view (`GET /api/v2/operator/nodes`). Mirrors the gateway
+/// `orgSummary` shape (api/org_views.go): `verification_status` (string),
+/// `slug`, `display_name`, `description`, `website_url`, `plan`, and `id` (only
+/// present when the caller is org owner/admin).
 class VpnNodeOrg {
   const VpnNodeOrg({
     required this.name,
+    this.id,
     this.kind,
     this.verified = false,
+    this.verificationStatus,
     this.slug,
+    this.displayName,
     this.description,
     this.website,
+    this.plan,
   });
 
   final String name;
+  final String? id;
   final String? kind;
-  /// Always present when the org block exists; `false` is meaningful.
+  /// Derived from [verificationStatus] == 'verified'.
   final bool verified;
+  final String? verificationStatus;
   final String? slug;
+  final String? displayName;
   final String? description;
   final String? website;
+  final String? plan;
+
+  /// Preferred display label: `display_name` falls back to `name`.
+  String get label =>
+      (displayName != null && displayName!.isNotEmpty) ? displayName! : name;
 
   factory VpnNodeOrg.fromJson(Map<String, dynamic> j) {
-    final kind = (j['kind'] ?? '').toString().trim();
-    final slug = (j['slug'] ?? '').toString().trim();
-    final description = (j['description'] ?? '').toString().trim();
-    final website = (j['website'] ?? '').toString().trim();
+    String? str(String key) {
+      final v = (j[key] ?? '').toString().trim();
+      return v.isEmpty ? null : v;
+    }
+
+    final verificationStatus = str('verification_status');
     return VpnNodeOrg(
       name: (j['name'] ?? '').toString(),
-      kind: kind.isEmpty ? null : kind,
-      verified: j['verified'] == true,
-      slug: slug.isEmpty ? null : slug,
-      description: description.isEmpty ? null : description,
-      website: website.isEmpty ? null : website,
+      id: str('id'),
+      kind: str('kind'),
+      // Gateway sends `verification_status`; tolerate a legacy bool `verified`.
+      verified: verificationStatus == 'verified' || j['verified'] == true,
+      verificationStatus: verificationStatus,
+      slug: str('slug'),
+      displayName: str('display_name'),
+      description: str('description'),
+      // Gateway field is `website_url`; tolerate legacy `website`.
+      website: str('website_url') ?? str('website'),
+      plan: str('plan'),
+    );
+  }
+}
+
+/// An organization the signed-in user belongs to (`GET /api/v2/orgs`). The org
+/// UUID (`id`) is only returned to owner/admin members; [slug] is always present
+/// and is the stable key used to scope nodes to an org.
+class VpnOrg {
+  const VpnOrg({
+    required this.name,
+    required this.slug,
+    this.id,
+    this.role,
+    this.plan,
+    this.verificationStatus,
+  });
+
+  final String name;
+  final String slug;
+  final String? id;
+  final String? role;
+  final String? plan;
+  final String? verificationStatus;
+
+  bool get verified => verificationStatus == 'verified';
+
+  factory VpnOrg.fromJson(Map<String, dynamic> j) {
+    String? str(String key) {
+      final v = (j[key] ?? '').toString().trim();
+      return v.isEmpty ? null : v;
+    }
+
+    return VpnOrg(
+      name: (j['name'] ?? '').toString(),
+      slug: (j['slug'] ?? '').toString(),
+      id: str('id'),
+      role: str('role'),
+      plan: str('plan'),
+      verificationStatus: str('verification_status'),
     );
   }
 }

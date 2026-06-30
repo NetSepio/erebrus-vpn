@@ -41,6 +41,30 @@ class GatewayClient {
     throw lastError ?? GatewayException('Gateway registry not found at $baseUrl');
   }
 
+  /// Fetches the nodes belonging to every org the signed-in user is a member of
+  /// (`GET /api/v2/operator/nodes`). Includes private org nodes. Each node carries
+  /// an embedded `org` summary used to group nodes by organization. Requires a
+  /// bearer token; returns an empty list when unauthenticated.
+  Future<List<VpnNode>> fetchOrgNodes() async {
+    if (_bearerToken == null || _bearerToken!.isEmpty) return const [];
+    final decoded = await _getJson('/api/v2/operator/nodes');
+    return _parseNodes(decoded);
+  }
+
+  /// Fetches the organizations the signed-in user belongs to (`GET /api/v2/orgs`).
+  /// Requires a bearer token; returns an empty list when unauthenticated.
+  Future<List<VpnOrg>> fetchOrgs() async {
+    if (_bearerToken == null || _bearerToken!.isEmpty) return const [];
+    final decoded = await _getJson('/api/v2/orgs');
+    final list = decoded is List
+        ? decoded
+        : (decoded is Map ? (decoded['orgs'] as List?) : null) ?? const [];
+    return list
+        .map((e) => VpnOrg.fromJson(Map<String, dynamic>.from(e as Map)))
+        .where((o) => o.slug.isNotEmpty)
+        .toList();
+  }
+
   List<VpnNode> _parseNodes(dynamic decoded) {
     final list = decoded is List
         ? decoded
