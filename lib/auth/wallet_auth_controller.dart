@@ -15,6 +15,7 @@ import 'deep_link_handler.dart';
 import 'desktop_web_auth.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import 'social_login.dart';
 import 'user_profile.dart';
 import '../platform/platform_capabilities.dart';
 import 'solana_mobile_wallet.dart';
@@ -57,10 +58,20 @@ class WalletAuthController extends GetxController {
   final entitlementError = RxnString();
   final awaitingWebCallback = false.obs;
 
+  /// Which login methods the gateway has configured (loaded best-effort) and
+  /// whether Apple sign-in is usable on this device.
+  final authMethods = AuthMethods.unknown.obs;
+  final appleDeviceReady = false.obs;
+
   String? _token;
   String? _mwaAuthToken;
 
   final isSolanaMobileDevice = false.obs;
+
+  /// Native-login availability = gateway-configured AND app-side config present.
+  bool get emailLoginAvailable => authMethods.value.email;
+  bool get googleLoginAvailable => authMethods.value.google && googleSignInSupported;
+  bool get appleLoginAvailable => authMethods.value.apple && appleDeviceReady.value;
 
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled =>
@@ -73,6 +84,110 @@ class WalletAuthController extends GetxController {
   void onInit() {
     super.onInit();
     loadPersistedSession();
+    unawaited(loadAuthMethods());
+  }
+
+  /// Best-effort discovery of which login methods the gateway has configured, so
+  /// the UI hides providers whose secrets are absent (no errors). Also probes
+  /// native Apple availability. Failures leave the optimistic defaults.
+  Future<void> loadAuthMethods() async {
+    try {
+      authMethods.value = await _authClient.fetchAuthMethods();
+    } catch (e) {
+      debugPrint('[Auth] auth methods unavailable, using defaults: $e');
+    }
+    try {
+      appleDeviceReady.value = await appleSignInSupported();
+    } catch (_) {
+      appleDeviceReady.value = false;
+    }
+  }
+
+  /// Requests an email login code. Returns true when sent.
+  Future<bool> requestEmailLoginCode(String email) async {
+    authError.value = null;
+    try {
+      await _authClient.emailLoginStart(email.trim());
+      return true;
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    }
+    return false;
+  }
+
+  /// Verifies an email login code and signs in (creates the account if new).
+  Future<void> verifyEmailLoginCode({
+    required String email,
+    required String code,
+  }) async {
+    if (isAuthenticating.value) return;
+    isAuthenticating.value = true;
+    authError.value = null;
+    try {
+      final session = await _authClient.emailLoginVerify(email: email.trim(), code: code.trim());
+      await _persistSession(session, method: 'email');
+      await _afterLogin();
+      debugPrint('[Auth] email login OK');
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
+  /// Google sign-in via the native chooser → gateway session.
+  Future<void> signInWithGoogle() async {
+    if (isAuthenticating.value || !googleLoginAvailable) return;
+    isAuthenticating.value = true;
+    authError.value = null;
+    try {
+      final idToken = await googleIdToken();
+      if (idToken == null) return; // cancelled
+      final session = await _authClient.googleLogin(idToken);
+      await _persistSession(session, method: 'google');
+      await _afterLogin();
+      debugPrint('[Auth] google login OK');
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } on SocialLoginException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
+  /// Apple sign-in via the native flow → gateway session.
+  Future<void> signInWithApple() async {
+    if (isAuthenticating.value || !appleLoginAvailable) return;
+    isAuthenticating.value = true;
+    authError.value = null;
+    try {
+      final idToken = await appleIdToken();
+      if (idToken == null) return; // cancelled
+      final session = await _authClient.appleLogin(idToken);
+      await _persistSession(session, method: 'apple');
+      await _afterLogin();
+      debugPrint('[Auth] apple login OK');
+    } on AuthException catch (e) {
+      authError.value = e.message;
+    } on SocialLoginException catch (e) {
+      authError.value = e.message;
+    } catch (e) {
+      authError.value = e.toString();
+    } finally {
+      isAuthenticating.value = false;
+    }
+  }
+
+  Future<void> _afterLogin() async {
+    await refreshEntitlement();
+    await _refreshGatewayNodes();
   }
 
   @override
@@ -412,6 +527,7 @@ class WalletAuthController extends GetxController {
     final mwaToken = _mwaAuthToken;
     _token = null;
     _mwaAuthToken = null;
+    unawaited(googleSignOut()); // best-effort; lets the chooser reappear next time
     walletAddress.value = '';
     userId.value = '';
     role.value = '';
@@ -576,7 +692,7 @@ class WalletAuthController extends GetxController {
     if (isEntitled) return;
     if (entitlement.value.trialConsumed) {
       entitlementError.value =
-          'Your free trial has ended. Use the same wallet on erebrus.io to renew, or hold the gating NFT.';
+          'Your 7-day trial has ended. Contact support to upgrade your plan, or hold the access NFT to extend to 30 days.';
       return;
     }
 

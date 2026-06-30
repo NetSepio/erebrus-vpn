@@ -13,7 +13,8 @@ class EntitlementState {
   final bool entitled;
   final String status;
   final String? planId;
-  /// `trial` | `nft` | `admin` | `rank` | null
+  /// `trial` | `nft` | `plan` | `admin` | `rank` | null. `plan` = entitled via an
+  /// owned paid-plan org (ongoing; `periodEnd` is null).
   final String? source;
   final DateTime? periodEnd;
   final bool nftGatingEnabled;

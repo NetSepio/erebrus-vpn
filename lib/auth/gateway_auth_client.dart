@@ -100,6 +100,64 @@ class GatewayAuthClient {
     );
   }
 
+  /// `GET /api/v2/auth/methods` — which login methods the gateway has configured.
+  Future<AuthMethods> fetchAuthMethods() async {
+    final map = await _getJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/methods'),
+    );
+    return AuthMethods(
+      wallet: map['wallet'] != false,
+      email: map['email'] == true,
+      google: map['google'] == true,
+      apple: map['apple'] == true,
+    );
+  }
+
+  /// `POST /api/v2/auth/email/login/start` — send a login code to the email.
+  Future<void> emailLoginStart(String email) async {
+    await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/email/login/start'),
+      {'email': email},
+    );
+  }
+
+  /// `POST /api/v2/auth/email/login/verify` — verify the code, get a session.
+  Future<AuthSession> emailLoginVerify({
+    required String email,
+    required String code,
+  }) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/email/login/verify'),
+      {'email': email, 'code': code},
+    );
+    return _identitySession(map);
+  }
+
+  /// `POST /api/v2/auth/google` — exchange a Google id_token for a session.
+  Future<AuthSession> googleLogin(String idToken) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/google'),
+      {'id_token': idToken},
+    );
+    return _identitySession(map);
+  }
+
+  /// `POST /api/v2/auth/apple` — exchange an Apple id_token for a session.
+  Future<AuthSession> appleLogin(String idToken) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/auth/apple'),
+      {'id_token': idToken},
+    );
+    return _identitySession(map);
+  }
+
+  AuthSession _identitySession(Map<String, dynamic> map) => AuthSession(
+        token: (map['token'] ?? '').toString(),
+        userId: (map['user_id'] ?? '').toString(),
+        role: (map['role'] ?? 'user').toString(),
+        walletAddress: '',
+      );
+
   /// `GET /api/v2/subscriptions` — requires bearer token.
   Future<EntitlementState> fetchSubscription(String bearerToken) async {
     final map = await _getJson(
@@ -283,6 +341,24 @@ class AuthSession {
   final String userId;
   final String role;
   final String walletAddress;
+}
+
+/// Login methods the gateway has configured (`GET /api/v2/auth/methods`).
+class AuthMethods {
+  const AuthMethods({
+    this.wallet = true,
+    this.email = true,
+    this.google = false,
+    this.apple = false,
+  });
+  final bool wallet;
+  final bool email;
+  final bool google;
+  final bool apple;
+
+  /// Optimistic default before the gateway responds: wallet + email shown,
+  /// social providers stay hidden until confirmed (they also need app config).
+  static const unknown = AuthMethods();
 }
 
 class AuthException implements Exception {

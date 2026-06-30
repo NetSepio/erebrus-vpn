@@ -112,18 +112,48 @@ class LoginView extends StatelessWidget {
                         style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),
                       ),
                     ] else ...[
-                      _OutlinedAuthButton(
-                        onTap: () => _signIn(auth),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                      Obx(() {
+                        final emailOk = auth.emailLoginAvailable;
+                        final googleOk = auth.googleLoginAvailable;
+                        final appleOk = auth.appleLoginAvailable;
+                        if (!emailOk && !googleOk && !appleOk) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Icon(Icons.mail_outline, size: 20, color: AppColors.accent),
-                            const SizedBox(width: 11),
-                            Text('Continue with Email', style: grotesk(size: 15, weight: FontWeight.w600)),
+                            if (emailOk)
+                              _OutlinedAuthButton(
+                                onTap: () => _openEmailLogin(context, auth),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.mail_outline, size: 20, color: AppColors.accent),
+                                    const SizedBox(width: 11),
+                                    Text('Continue with Email', style: grotesk(size: 15, weight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                            if (googleOk) ...[
+                              const SizedBox(height: 11),
+                              _SocialAuthButton(
+                                label: 'Continue with Google',
+                                icon: Icons.g_mobiledata_rounded,
+                                onTap: auth.signInWithGoogle,
+                              ),
+                            ],
+                            if (appleOk) ...[
+                              const SizedBox(height: 11),
+                              _SocialAuthButton(
+                                label: 'Continue with Apple',
+                                icon: Icons.apple,
+                                onTap: auth.signInWithApple,
+                              ),
+                            ],
+                            const _AuthDivider(label: 'CONNECT A WALLET'),
                           ],
-                        ),
-                      ),
-                      const _AuthDivider(label: 'CONNECT A WALLET'),
+                        );
+                      }),
                       _WalletButton(
                         onTap: () => _signIn(auth),
                         gradient: AppGradients.solana,
@@ -191,6 +221,199 @@ class LoginView extends StatelessWidget {
 
   void _signIn(WalletAuthController auth) {
     auth.openSignIn();
+  }
+
+  void _openEmailLogin(BuildContext context, WalletAuthController auth) {
+    auth.authError.value = null;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        child: const _EmailLoginSheet(),
+      ),
+    );
+  }
+}
+
+class _SocialAuthButton extends StatelessWidget {
+  const _SocialAuthButton({required this.label, required this.icon, required this.onTap});
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return _OutlinedAuthButton(
+      onTap: onTap,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: AppColors.textPrimary),
+          const SizedBox(width: 11),
+          Text(label, style: grotesk(size: 15, weight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmailLoginSheet extends StatefulWidget {
+  const _EmailLoginSheet();
+  @override
+  State<_EmailLoginSheet> createState() => _EmailLoginSheetState();
+}
+
+class _EmailLoginSheetState extends State<_EmailLoginSheet> {
+  final _emailCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
+  bool _codeSent = false;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send(WalletAuthController auth) async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) return;
+    setState(() => _busy = true);
+    final ok = await auth.requestEmailLoginCode(email);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (ok) _codeSent = true;
+    });
+  }
+
+  Future<void> _verify(WalletAuthController auth) async {
+    setState(() => _busy = true);
+    await auth.verifyEmailLoginCode(email: _emailCtrl.text.trim(), code: _codeCtrl.text.trim());
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (auth.isAuthenticated) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Get.find<WalletAuthController>();
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: AppColors.strokeHi, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(_codeSent ? 'Enter your code' : 'Sign in with email',
+              style: grotesk(size: 19, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text(
+            _codeSent
+                ? 'We sent a 6-digit code to ${_emailCtrl.text.trim()}'
+                : "We'll email you a one-time code — no password.",
+            style: grotesk(size: 13, color: AppColors.textTertiary, height: 1.4),
+          ),
+          const SizedBox(height: 18),
+          if (!_codeSent) ...[
+            _SheetField(controller: _emailCtrl, hint: 'you@example.com', keyboardType: TextInputType.emailAddress, autofocus: true),
+            const SizedBox(height: 14),
+            _SheetPrimaryButton(label: 'Send code', busy: _busy, onTap: () => _send(auth)),
+          ] else ...[
+            _SheetField(controller: _codeCtrl, hint: '6-digit code', keyboardType: TextInputType.number, autofocus: true, letterSpacing: 6),
+            const SizedBox(height: 14),
+            _SheetPrimaryButton(label: 'Verify & sign in', busy: _busy, onTap: () => _verify(auth)),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _busy ? null : () => setState(() { _codeSent = false; _codeCtrl.clear(); }),
+              child: Text('← use a different email',
+                  textAlign: TextAlign.center, style: mono(size: 12, color: AppColors.textMuted)),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Obx(() {
+            final err = auth.authError.value;
+            if (err == null || err.isEmpty) return const SizedBox.shrink();
+            return Text(err,
+                textAlign: TextAlign.center,
+                style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger));
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetField extends StatelessWidget {
+  const _SheetField({
+    required this.controller,
+    required this.hint,
+    this.keyboardType,
+    this.autofocus = false,
+    this.letterSpacing,
+  });
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType? keyboardType;
+  final bool autofocus;
+  final double? letterSpacing;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        autofocus: autofocus,
+        style: grotesk(size: 15, weight: FontWeight.w500, letterSpacing: letterSpacing ?? 0),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: grotesk(size: 15, color: AppColors.textMuted),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetPrimaryButton extends StatelessWidget {
+  const _SheetPrimaryButton({required this.label, required this.busy, required this.onTap});
+  final String label;
+  final bool busy;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(14)),
+        child: busy
+            ? const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onAccent))
+            : Text(label, style: grotesk(size: 15, weight: FontWeight.w600, color: AppColors.onAccent)),
+      ),
+    );
   }
 }
 

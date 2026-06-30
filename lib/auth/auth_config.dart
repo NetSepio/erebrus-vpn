@@ -6,6 +6,21 @@ const kReownProjectId = String.fromEnvironment('REOWN_PROJECT_ID');
 /// True when [kReownProjectId] was passed via `--dart-define` / `.env`.
 bool get hasReownProjectId => kReownProjectId.isNotEmpty;
 
+/// Google Sign-In **server** (web) client id — its audience must be listed in the
+/// gateway's `GOOGLE_CLIENT_IDS`. Absent => Google sign-in is hidden (no native
+/// call, no error).
+const kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+bool get hasGoogleSignIn => kGoogleServerClientId.isNotEmpty;
+
+/// Apple Sign-In Services id + redirect, needed only for the web/Android relay
+/// flow; on iOS/macOS native Apple sign-in uses the app's capability instead.
+/// Absent (and not on Apple platforms) => Apple sign-in is hidden.
+const kAppleServiceId = String.fromEnvironment('APPLE_SERVICE_ID');
+const kAppleRedirectUri = String.fromEnvironment(
+  'APPLE_REDIRECT_URI',
+  defaultValue: 'https://gateway.erebrus.io/api/v2/auth/apple/callback',
+);
+
 /// Erebrus webapp origin for desktop browser sign-in (override in .env for local dev).
 const kErebrusWebOrigin = String.fromEnvironment(
   'EREBRUS_WEB_ORIGIN',
