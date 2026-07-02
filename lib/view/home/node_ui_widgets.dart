@@ -20,7 +20,9 @@ class NodeCompactRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = display;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      // `start` avoids tight cross-axis constraints on [Expanded] children when a
+      // sibling (e.g. the flag column) is shorter than the main text/metrics block.
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         NodeFlagColumn(flag: d.flag, regionLabel: d.regionCompact),
         const SizedBox(width: 13),

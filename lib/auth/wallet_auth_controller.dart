@@ -272,8 +272,8 @@ class WalletAuthController extends GetxController {
       metadata: PairingMetadata(
         name: 'Erebrus VPN',
         description: 'Private, stealth-capable DePIN VPN',
-        url: kErebrusSiteUrl,
-        icons: [kErebrusSiteIcon],
+        url: RuntimeConfig.erebrusSiteUrl,
+        icons: [RuntimeConfig.erebrusSiteIcon],
         redirect: const Redirect(
           native: kErebrusNativeRedirect,
           universal: kErebrusUniversalRedirect,
@@ -299,7 +299,8 @@ class WalletAuthController extends GetxController {
       final packageInfo = await PackageInfo.fromPlatform();
       final relayOrigin = packageInfo.packageName;
       debugPrint(
-        '[Reown] initializing AppKit (project $projectHint, relay origin $relayOrigin)',
+        '[Reown] initializing AppKit (project $projectHint, relay origin $relayOrigin, '
+        'icon ${RuntimeConfig.erebrusSiteIcon})',
       );
       await appKitModal!.init();
       appKitModal!.onModalConnect.subscribe(_onModalConnect);
@@ -326,7 +327,7 @@ class WalletAuthController extends GetxController {
     if (!usesWebLogin) return;
     DeepLinkHandler.bind(this);
     DeepLinkHandler.checkInitialLink();
-    debugPrint('[Auth] desktop web-login ready — origin $kErebrusWebOrigin');
+    debugPrint('[Auth] desktop web-login ready — origin ${RuntimeConfig.erebrusWebOrigin}');
   }
 
   /// Opens MWA on Solana Mobile, browser on desktop, Reown modal on other mobile.

@@ -10,6 +10,7 @@ import 'package:solana_mobile_client/solana_mobile_client.dart';
 import '../platform/platform_capabilities.dart';
 import 'auth_config.dart';
 import 'gateway_auth_client.dart';
+import 'runtime_config.dart';
 
 bool? _solanaMobileDeviceCache;
 
@@ -94,9 +95,18 @@ Future<MwaSignInResult> mwaSignIn({
 
     // Reuse a stored authorization when we have one; otherwise authorize fresh.
     // NB: iconUri MUST be relative to identityUri (MWA spec) — an absolute icon
-    // URL makes the wallet reject the authorization.
-    final identityUri = Uri.parse(kErebrusSiteUrl);
+    // URL makes the wallet reject the authorization. Keep identity at `/vpn/`
+    // and icon as `logo.png` (not `vpn/logo.png` from the site root).
+    final identityUri = Uri.parse(RuntimeConfig.erebrusMwaIdentityUrl);
     final iconUri = Uri.parse(kErebrusMwaIconRelative);
+    final resolvedIcon = identityUri.resolveUri(iconUri);
+    debugPrint('[MWA] identity=$identityUri icon=$iconUri resolved=$resolvedIcon');
+    if (RuntimeConfig.erebrusWebOrigin != RuntimeConfig.erebrusWalletOrigin) {
+      debugPrint(
+        '[MWA] EREBRUS_WEB_ORIGIN is local dev — wallet icon uses '
+        '${RuntimeConfig.erebrusWalletOrigin} instead',
+      );
+    }
     AuthorizationResult? auth;
     if (storedAuthToken != null && storedAuthToken.isNotEmpty) {
       auth = await client.reauthorize(

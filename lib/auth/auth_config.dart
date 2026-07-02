@@ -21,11 +21,16 @@ const kAppleRedirectUri = String.fromEnvironment(
   defaultValue: 'https://gateway.erebrus.io/api/v2/auth/apple/callback',
 );
 
-/// Erebrus webapp origin for desktop browser sign-in (override in .env for local dev).
+/// Erebrus webapp origin (`EREBRUS_WEB_ORIGIN` in `.env` / `--dart-define`).
+/// Wallet logo + MWA identity derive `{origin}/vpn/logo.png` from this value.
 const kErebrusWebOrigin = String.fromEnvironment(
   'EREBRUS_WEB_ORIGIN',
   defaultValue: 'https://erebrus.io',
 );
+
+/// Production origin used when [kErebrusWebOrigin] points at localhost — wallets
+/// must fetch `…/vpn/logo.png` over public HTTPS, not loopback.
+const kErebrusProductionOrigin = 'https://erebrus.io';
 
 /// Webapp route that performs wallet auth and redirects with a PASETO token.
 const kErebrusDesktopAuthPath = '/auth';
@@ -38,15 +43,30 @@ const kErebrusAuthCallback = 'erebrusvpn://auth';
 /// Gateway chain identifier for Solana wallet login.
 const kSolanaChain = 'sol';
 
-/// Public site + wallet redirect metadata (must match Reown Cloud allow-list).
-const kErebrusSiteUrl = 'https://erebrus.io/';
-const kErebrusSiteIcon = 'https://erebrus.io/favicon.ico';
+/// VPN app path on the erebrus site (`/vpn/logo.png`, `/vpn/`, …).
+const kErebrusVpnBasePath = '/vpn';
+const kErebrusVpnLogoFile = 'logo.png';
+const kErebrusVpnLogoPath = '$kErebrusVpnBasePath/$kErebrusVpnLogoFile';
 
-/// Mobile Wallet Adapter requires the identity icon to be a **relative** path
-/// (relative to the identity URI) — wallets reject an absolute icon URL and the
-/// authorization fails. Reown/WalletConnect, by contrast, wants the absolute
-/// [kErebrusSiteIcon]. Keep these separate.
-const kErebrusMwaIconRelative = 'favicon.ico';
+String _erebrusOriginBase(String webOrigin) =>
+    webOrigin.replaceAll(RegExp(r'/+$'), '');
+
+/// Trailing-slash site URL for WalletConnect / Reown metadata (`url` field).
+String erebrusSiteUrlFromOrigin(String webOrigin) =>
+    '${_erebrusOriginBase(webOrigin)}/';
+
+/// Absolute HTTPS icon for Reown / WalletConnect pairing metadata.
+String erebrusSiteIconFromOrigin(String webOrigin) =>
+    '${_erebrusOriginBase(webOrigin)}$kErebrusVpnLogoPath';
+
+/// MWA identity URI — the `/vpn/` base so the icon can be a simple filename
+/// (`logo.png`), matching the `favicon.ico` pattern wallets expect.
+String erebrusMwaIdentityUrlFromOrigin(String webOrigin) =>
+    '${_erebrusOriginBase(webOrigin)}$kErebrusVpnBasePath/';
+
+/// Mobile Wallet Adapter icon filename relative to [erebrusMwaIdentityUrlFromOrigin]
+/// (resolves to `{origin}/vpn/logo.png`). Wallets reject absolute icon URLs.
+const kErebrusMwaIconRelative = kErebrusVpnLogoFile;
 
 /// Native deep link — wallets return here after connect/sign (`erebrusvpn://…`).
 const kErebrusNativeRedirect = 'erebrusvpn://';

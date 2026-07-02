@@ -17,7 +17,41 @@ class RuntimeConfig {
 
   static String get gatewayUrl => _values['GATEWAY_URL'] ?? '';
 
-  static String get erebrusWebOrigin => _values['EREBRUS_WEB_ORIGIN'] ?? '';
+  /// Erebrus webapp origin for desktop browser sign-in (`.env` may use localhost).
+  static String get erebrusWebOrigin =>
+      _firstNonEmpty([_values['EREBRUS_WEB_ORIGIN'], kErebrusWebOrigin]);
+
+  /// Origin for Reown / MWA pairing metadata and `{origin}/vpn/logo.png`.
+  /// Localhost [erebrusWebOrigin] is ignored — wallets cannot reach loopback.
+  static String get erebrusWalletOrigin {
+    final origin = erebrusWebOrigin;
+    if (_isUnreachableWalletOrigin(origin)) {
+      return kErebrusProductionOrigin;
+    }
+    return origin;
+  }
+
+  /// WalletConnect / Reown metadata `url`.
+  static String get erebrusSiteUrl => erebrusSiteUrlFromOrigin(erebrusWalletOrigin);
+
+  /// Reown modal + WalletConnect pairing icon (`{origin}/vpn/logo.png`).
+  static String get erebrusSiteIcon => erebrusSiteIconFromOrigin(erebrusWalletOrigin);
+
+  /// MWA authorize identity URI (`{origin}/vpn/` + relative `logo.png`).
+  static String get erebrusMwaIdentityUrl =>
+      erebrusMwaIdentityUrlFromOrigin(erebrusWalletOrigin);
+
+  static bool _isUnreachableWalletOrigin(String origin) {
+    final host = Uri.tryParse(origin)?.host.toLowerCase() ?? '';
+    if (host.isEmpty) return true;
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '0.0.0.0' ||
+        host.endsWith('.local') ||
+        host.startsWith('10.') ||
+        host.startsWith('192.168.') ||
+        host.startsWith('172.');
+  }
 
   static Future<void> load() async {
     if (kReownProjectId.isNotEmpty) {

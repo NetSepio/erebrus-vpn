@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../../auth/auth_config.dart';
+import '../../auth/runtime_config.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
@@ -106,7 +106,7 @@ class LoginView extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'Opens $kErebrusWebOrigin in your browser.\n'
+                        'Opens ${RuntimeConfig.erebrusWebOrigin} in your browser.\n'
                         'After you sign in, you\'ll return here automatically.',
                         textAlign: TextAlign.center,
                         style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),

@@ -632,7 +632,7 @@ class _ServerCard extends StatelessWidget {
           ? AppColors.warn.withValues(alpha: 0.35)
           : AppColors.stroke,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (d.isPlaceholder) ...[
             Container(

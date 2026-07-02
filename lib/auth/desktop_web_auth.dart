@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'auth_config.dart';
+import 'runtime_config.dart';
 import '../platform/platform_capabilities.dart';
 
 /// Parsed `erebrusvpn://auth` callback from the Erebrus webapp.
@@ -46,7 +47,7 @@ class DesktopWebAuth {
   static String buildLoginUrl() {
     final state = _newState();
     _pendingState = state;
-    return Uri.parse('$kErebrusWebOrigin$kErebrusDesktopAuthPath').replace(
+    return Uri.parse('${RuntimeConfig.erebrusWebOrigin}$kErebrusDesktopAuthPath').replace(
       queryParameters: {
         'redirect_uri': kErebrusAuthCallback,
         'state': state,
