@@ -177,16 +177,17 @@ class _ConnectViewState extends State<ConnectView> {
                 final display = registryEmpty
                     ? NodeDisplay.placeholder(registryError: gw.error.value != null)
                     : NodeDisplay.of(node, showActivity: true);
-                final showScope =
-                    gw.orgs.isNotEmpty || gw.selectedScope.value != null;
+                // Reflect the selected node's source (public vs its org/workspace).
+                final org = node?.org;
+                final showScope = gw.orgs.isNotEmpty || org != null;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (showScope) ...[
                       _ScopeStrip(
-                        label: gw.scopeLabel,
-                        isOrg: gw.selectedScope.value != null,
-                        verified: gw.activeOrg?.verified ?? false,
+                        label: org?.name ?? 'Public network',
+                        isOrg: org != null,
+                        verified: org?.verified ?? false,
                         onTap: widget.onOpenServers,
                       ),
                       const SizedBox(height: 8),

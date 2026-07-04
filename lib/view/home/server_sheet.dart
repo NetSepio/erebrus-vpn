@@ -20,7 +20,7 @@ Future<void> showServerSheet(BuildContext context) {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.6),
-    builder: (_) => const SheetFrame(maxHeightFactor: 0.78, child: _ServerSheet()),
+    builder: (_) => const SheetFrame(maxHeightFactor: 0.82, child: _ServerSheet()),
   );
 }
 
@@ -31,6 +31,16 @@ class _ServerSheet extends StatefulWidget {
 }
 
 class _ServerSheetState extends State<_ServerSheet> {
+  int _tab = 0; // 0 = Public, 1 = Private
+
+  // Public filters.
+  String? _pubRegion; // null = all
+
+  // Private filters.
+  String? _privType; // null | erebrus | shield | sentinel
+  String? _privWorkspace; // null = all; else org slug
+  String? _privRegion;
+
   Map<String, int> _clientPingMs = const {};
   bool _probing = false;
   int _probeGeneration = 0;
@@ -75,15 +85,35 @@ class _ServerSheetState extends State<_ServerSheet> {
     });
   }
 
-  Future<void> _selectScope(GatewayController gateway, String? slug) async {
-    if (gateway.selectedScope.value == slug) return;
-    await gateway.setScope(slug);
-    if (!mounted) return;
-    await _startClientProbes(gateway.nodes);
+  Future<void> _refresh() => _refreshAndProbe();
+
+  // ── filtering ────────────────────────────────────────
+
+  List<VpnNode> _publicList(GatewayController gateway) {
+    final list = gateway.publicNodes.where(
+      (n) => _pubRegion == null || n.region.toUpperCase() == _pubRegion,
+    );
+    return sortNodesForPicker(list, clientPingMs: _clientPingMs);
   }
 
-  Future<void> _refresh(GatewayController gateway) async {
-    await _refreshAndProbe();
+  List<VpnNode> _privateList(GatewayController gateway) {
+    final list = gateway.orgNodes.where((n) {
+      if (_privType != null && n.deploymentProfile.toLowerCase() != _privType) return false;
+      if (_privWorkspace != null && n.org?.slug != _privWorkspace) return false;
+      if (_privRegion != null && n.region.toUpperCase() != _privRegion) return false;
+      return true;
+    });
+    return sortNodesForPicker(list, clientPingMs: _clientPingMs);
+  }
+
+  List<String> _regionsOf(Iterable<VpnNode> nodes) {
+    final set = <String>{};
+    for (final n in nodes) {
+      final r = n.region.trim().toUpperCase();
+      if (r.isNotEmpty) set.add(r);
+    }
+    final out = set.toList()..sort();
+    return out;
   }
 
   @override
@@ -92,116 +122,92 @@ class _ServerSheetState extends State<_ServerSheet> {
     final vpn = Get.find<VpnController>();
 
     return Obx(() {
-      final allNodes = gateway.nodes;
-      final nodes = sortNodesForPicker(
-        allNodes,
-        clientPingMs: _clientPingMs,
-      );
+      final isPublic = _tab == 0;
+      final nodes = isPublic ? _publicList(gateway) : _privateList(gateway);
+      final total = isPublic ? gateway.publicNodes.length : gateway.orgNodes.length;
       final subtitle = _probing
-          ? (_clientPingMs.isEmpty
-              ? 'MEASURING PING…'
-              : '${nodes.length} NODES · UPDATING PING')
-          : (_clientPingMs.isEmpty
-              ? '${nodes.length} NODES · SORTED BY LOAD'
-              : '${nodes.length} NODES · SORTED BY PING');
+          ? 'MEASURING PING…'
+          : '${nodes.length}${nodes.length != total ? ' OF $total' : ''} NODES · '
+              '${_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING'}';
       final err = gateway.error.value;
       final warn = gateway.warning.value;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 12),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Select node', style: grotesk(size: 18, weight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Obx(() {
-                  final busy = gateway.loading.value;
-                  return GestureDetector(
-                    onTap: busy ? null : () => _refresh(gateway),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
-                            )
-                          : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
-                    ),
-                  );
-                }),
-                SheetCloseButton(onTap: () => Navigator.of(context).pop()),
-              ],
-            ),
-          ),
-          if (warn != null && warn.isNotEmpty && allNodes.isNotEmpty) ...[
+          _Header(subtitle: subtitle, onClose: () => Navigator.of(context).pop(), onRefresh: _refresh),
+          if (warn != null && warn.isNotEmpty && total > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
               child: Text(warn, style: grotesk(size: 12, color: AppColors.warn)),
             ),
-          ],
+
+          // Public / Private tabs.
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.stroke),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, size: 18, color: AppColors.textMuted),
-                  const SizedBox(width: 10),
-                  Text('Search nodes, cities…', style: grotesk(size: 13.5, weight: FontWeight.w400, color: AppColors.textMuted)),
-                ],
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TabButton(
+                    label: 'PUBLIC',
+                    icon: Icons.public,
+                    active: isPublic,
+                    onTap: () => setState(() => _tab = 0),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TabButton(
+                    label: 'PRIVATE',
+                    icon: Icons.apartment_rounded,
+                    active: !isPublic,
+                    onTap: () => setState(() => _tab = 1),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (gateway.orgs.isNotEmpty || gateway.selectedScope.value != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                child: Row(
-                  children: [
-                    _ScopeChip(
-                      label: 'PUBLIC',
-                      active: gateway.selectedScope.value == null,
-                      onTap: () => _selectScope(gateway, null),
-                    ),
-                    for (final org in gateway.orgs)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: _ScopeChip(
-                          label: org.name.toUpperCase(),
-                          active: gateway.selectedScope.value == org.slug,
-                          verified: org.verified,
-                          onTap: () => _selectScope(gateway, org.slug),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+
+          // Filters for the active tab.
+          if (isPublic)
+            _FilterChips(
+              options: [const _Opt(null, 'ALL'), for (final r in _regionsOf(gateway.publicNodes)) _Opt(r, r)],
+              selected: _pubRegion,
+              onSelect: (v) => setState(() => _pubRegion = v),
+            )
+          else ...[
+            _FilterChips(
+              options: const [
+                _Opt(null, 'ALL TYPES'),
+                _Opt('erebrus', 'STANDARD'),
+                _Opt('shield', 'SHIELD'),
+                _Opt('sentinel', 'SENTINEL'),
+              ],
+              selected: _privType,
+              onSelect: (v) => setState(() => _privType = v),
             ),
+            if (gateway.orgs.length > 1)
+              _FilterChips(
+                options: [
+                  const _Opt(null, 'ALL WORKSPACES'),
+                  for (final o in gateway.orgs) _Opt(o.slug, o.name.toUpperCase()),
+                ],
+                selected: _privWorkspace,
+                onSelect: (v) => setState(() => _privWorkspace = v),
+              ),
+            _FilterChips(
+              options: [const _Opt(null, 'ALL REGIONS'), for (final r in _regionsOf(gateway.orgNodes)) _Opt(r, r)],
+              selected: _privRegion,
+              onSelect: (v) => setState(() => _privRegion = v),
+            ),
+          ],
+
           Flexible(
             child: nodes.isEmpty
-                ? _buildEmptyState(gateway: gateway, err: err)
+                ? _emptyState(gateway: gateway, isPublic: isPublic, err: err)
                 : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 28),
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 28),
                     itemCount: nodes.length,
                     itemBuilder: (_, i) {
                       final node = nodes[i];
@@ -213,6 +219,7 @@ class _ServerSheetState extends State<_ServerSheet> {
                           selected: selected,
                           clientPingMs: _clientPingMs[node.id],
                           probing: _probing,
+                          showType: !isPublic,
                           onTap: () => _select(vpn, node),
                         ),
                       );
@@ -224,28 +231,45 @@ class _ServerSheetState extends State<_ServerSheet> {
     });
   }
 
-  Widget _buildEmptyState({
-    required GatewayController gateway,
-    required String? err,
-  }) {
-    // An org scope with no online nodes: distinct, actionable empty state.
-    if (gateway.selectedScope.value != null) {
-      return NodesEmptyPanel.orgEmpty(
-        orgName: gateway.scopeLabel,
-        onShowPublic: () => _selectScope(gateway, null),
+  Widget _emptyState({required GatewayController gateway, required bool isPublic, required String? err}) {
+    if (!isPublic) {
+      if (gateway.orgs.isEmpty) {
+        return const NodesEmptyPanel(
+          title: 'No private nodes',
+          subtitle: "You're not in any organization yet. Private nodes appear here once you own or "
+              'join an org that has enrolled nodes.',
+        );
+      }
+      if (gateway.orgNodes.isEmpty) {
+        return const NodesEmptyPanel(
+          title: 'No nodes in your organizations',
+          subtitle: 'An org admin can enroll a Standard, Shield or Sentinel node — it will show up here.',
+        );
+      }
+      return NodesEmptyPanel(
+        title: 'No matching nodes',
+        subtitle: 'No private nodes match these filters.',
+        actionLabel: 'CLEAR FILTERS',
+        onRetry: () => setState(() {
+          _privType = null;
+          _privWorkspace = null;
+          _privRegion = null;
+        }),
       );
     }
-    if (gateway.loading.value) {
-      return NodesEmptyPanel.registryEmpty(loading: true);
+    if (_pubRegion != null && gateway.publicNodes.isNotEmpty) {
+      return NodesEmptyPanel(
+        title: 'No nodes in $_pubRegion',
+        subtitle: 'No public nodes in this region right now.',
+        actionLabel: 'ALL REGIONS',
+        onRetry: () => setState(() => _pubRegion = null),
+      );
     }
+    if (gateway.loading.value) return NodesEmptyPanel.registryEmpty(loading: true);
     if (err != null && err.isNotEmpty) {
-      return NodesEmptyPanel.registryError(
-        message: err,
-        gatewayUrl: gateway.gatewayUrl.value,
-        onRetry: () => _refresh(gateway),
-      );
+      return NodesEmptyPanel.registryError(message: err, gatewayUrl: gateway.gatewayUrl.value, onRetry: _refresh);
     }
-    return NodesEmptyPanel.registryEmpty(onRetry: () => _refresh(gateway));
+    return NodesEmptyPanel.registryEmpty(onRetry: _refresh);
   }
 
   void _select(VpnController vpn, VpnNode node) {
@@ -258,6 +282,146 @@ class _ServerSheetState extends State<_ServerSheet> {
   }
 }
 
+class _Header extends StatelessWidget {
+  const _Header({required this.subtitle, required this.onClose, required this.onRefresh});
+  final String subtitle;
+  final VoidCallback onClose;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final gateway = Get.find<GatewayController>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 12),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Select node', style: grotesk(size: 18, weight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04)),
+            ],
+          ),
+          const Spacer(),
+          Obx(() {
+            final busy = gateway.loading.value;
+            return GestureDetector(
+              onTap: busy ? null : () => onRefresh(),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: busy
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
+                    : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+              ),
+            );
+          }),
+          SheetCloseButton(onTap: onClose),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  const _TabButton({required this.label, required this.icon, required this.active, required this.onTap});
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? AppColors.accent.withValues(alpha: 0.16) : AppColors.surface2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.stroke),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: active ? AppColors.accent : AppColors.textTertiary),
+            const SizedBox(width: 8),
+            Text(label,
+                style: mono(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: active ? AppColors.accent : AppColors.textTertiary,
+                    letterSpacing: 12 * 0.05)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A filter dimension: a horizontally-scrollable row of single-select chips.
+class _Opt {
+  const _Opt(this.value, this.label);
+  final String? value;
+  final String label;
+}
+
+class _FilterChips extends StatelessWidget {
+  const _FilterChips({required this.options, required this.selected, required this.onSelect});
+  final List<_Opt> options;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        child: Row(
+          children: [
+            for (final o in options)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _Chip(label: o.label, active: selected == o.value, onTap: () => onSelect(o.value)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? AppColors.accent.withValues(alpha: 0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.strokeHi),
+        ),
+        child: Text(label,
+            style: mono(
+                size: 11,
+                weight: FontWeight.w500,
+                color: active ? AppColors.accent : AppColors.textTertiary,
+                letterSpacing: 11 * 0.04)),
+      ),
+    );
+  }
+}
+
 class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.node,
@@ -265,11 +429,13 @@ class _NodeRow extends StatelessWidget {
     required this.onTap,
     this.clientPingMs,
     this.probing = false,
+    this.showType = false,
   });
   final VpnNode node;
   final bool selected;
   final int? clientPingMs;
   final bool probing;
+  final bool showType;
   final VoidCallback onTap;
 
   @override
@@ -284,61 +450,42 @@ class _NodeRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.55) : AppColors.stroke),
         ),
-        child: NodeCompactRow(
-          display: d,
-          metrics: NodeMetricsColumn(display: d, probing: probing),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            NodeCompactRow(display: d, metrics: NodeMetricsColumn(display: d, probing: probing)),
+            if (showType && !node.deploymentProfile.toLowerCase().startsWith('erebrus')) ...[
+              const SizedBox(height: 8),
+              Row(children: [_TypeBadge(node: node)]),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-/// A scope chip in the node picker: "PUBLIC" or one per organization. Shows a
-/// verified mark for verified orgs.
-class _ScopeChip extends StatelessWidget {
-  const _ScopeChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
-    this.verified = false,
-  });
-  final String label;
-  final bool active;
-  final bool verified;
-  final VoidCallback onTap;
+class _TypeBadge extends StatelessWidget {
+  const _TypeBadge({required this.node});
+  final VpnNode node;
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? AppColors.accent.withValues(alpha: 0.16) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.strokeHi),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: mono(
-                size: 11,
-                weight: FontWeight.w500,
-                color: active ? AppColors.accent : AppColors.textTertiary,
-                letterSpacing: 11 * 0.04,
-              ),
-            ),
-            if (verified) ...[
-              const SizedBox(width: 5),
-              Icon(
-                Icons.verified,
-                size: 12,
-                color: active ? AppColors.accent : AppColors.textTertiary,
-              ),
-            ],
-          ],
-        ),
+    final color = node.isSentinel ? AppColors.accent : AppColors.success;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(node.isSentinel ? Icons.gpp_good : Icons.shield_outlined, size: 11, color: color),
+          const SizedBox(width: 5),
+          Text(node.nodeTypeLabel.toUpperCase(),
+              style: mono(size: 9.5, weight: FontWeight.w600, color: color, letterSpacing: 9.5 * 0.06)),
+        ],
       ),
     );
   }
