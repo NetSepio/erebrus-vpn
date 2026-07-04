@@ -106,6 +106,40 @@ class _ServerSheetState extends State<_ServerSheet> {
     return sortNodesForPicker(list, clientPingMs: _clientPingMs);
   }
 
+  /// Groups private nodes under their org (workspace), ordered by the org list.
+  /// Returns a flat item list of [_OrgHeader] section headers and [VpnNode]s.
+  List<Object> _groupByOrg(GatewayController gateway, List<VpnNode> nodes) {
+    final byOrg = <String, List<VpnNode>>{};
+    for (final n in nodes) {
+      (byOrg[n.org?.slug ?? ''] ??= <VpnNode>[]).add(n);
+    }
+    final ordered = <String>[];
+    for (final o in gateway.orgs) {
+      if (byOrg.containsKey(o.slug)) ordered.add(o.slug);
+    }
+    for (final s in byOrg.keys) {
+      if (!ordered.contains(s)) ordered.add(s);
+    }
+    final items = <Object>[];
+    for (final slug in ordered) {
+      final group = byOrg[slug]!;
+      VpnOrg? org;
+      for (final o in gateway.orgs) {
+        if (o.slug == slug) {
+          org = o;
+          break;
+        }
+      }
+      items.add(_OrgHeader(
+        name: org?.name ?? group.first.org?.name ?? 'Organization',
+        count: group.length,
+        verified: org?.verified ?? group.first.org?.verified ?? false,
+      ));
+      items.addAll(group);
+    }
+    return items;
+  }
+
   List<String> _regionsOf(Iterable<VpnNode> nodes) {
     final set = <String>{};
     for (final n in nodes) {
@@ -123,11 +157,13 @@ class _ServerSheetState extends State<_ServerSheet> {
 
     return Obx(() {
       final isPublic = _tab == 0;
-      final nodes = isPublic ? _publicList(gateway) : _privateList(gateway);
+      final nodeList = isPublic ? _publicList(gateway) : _privateList(gateway);
+      // Public: flat list. Private: grouped under org (workspace) headers.
+      final items = isPublic ? nodeList.cast<Object>() : _groupByOrg(gateway, nodeList);
       final total = isPublic ? gateway.publicNodes.length : gateway.orgNodes.length;
       final subtitle = _probing
           ? 'MEASURING PING…'
-          : '${nodes.length}${nodes.length != total ? ' OF $total' : ''} NODES · '
+          : '${nodeList.length}${nodeList.length != total ? ' OF $total' : ''} NODES · '
               '${_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING'}';
       final err = gateway.error.value;
       final warn = gateway.warning.value;
@@ -204,13 +240,17 @@ class _ServerSheetState extends State<_ServerSheet> {
           ],
 
           Flexible(
-            child: nodes.isEmpty
+            child: nodeList.isEmpty
                 ? _emptyState(gateway: gateway, isPublic: isPublic, err: err)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(18, 4, 18, 28),
-                    itemCount: nodes.length,
+                    itemCount: items.length,
                     itemBuilder: (_, i) {
-                      final node = nodes[i];
+                      final item = items[i];
+                      if (item is _OrgHeader) {
+                        return _OrgSectionHeader(header: item);
+                      }
+                      final node = item as VpnNode;
                       final selected = vpn.selectedNode.value?.id == node.id;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
@@ -417,6 +457,44 @@ class _Chip extends StatelessWidget {
                 weight: FontWeight.w500,
                 color: active ? AppColors.accent : AppColors.textTertiary,
                 letterSpacing: 11 * 0.04)),
+      ),
+    );
+  }
+}
+
+class _OrgHeader {
+  const _OrgHeader({required this.name, required this.count, required this.verified});
+  final String name;
+  final int count;
+  final bool verified;
+}
+
+class _OrgSectionHeader extends StatelessWidget {
+  const _OrgSectionHeader({required this.header});
+  final _OrgHeader header;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
+      child: Row(
+        children: [
+          const Icon(Icons.apartment_rounded, size: 13, color: AppColors.textTertiary),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(header.name.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: mono(size: 11, weight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 11 * 0.06)),
+          ),
+          if (header.verified) ...[
+            const SizedBox(width: 5),
+            const Icon(Icons.verified, size: 12, color: AppColors.accent),
+          ],
+          const SizedBox(width: 8),
+          Text('${header.count}', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted)),
+          const SizedBox(width: 10),
+          Expanded(child: Container(height: 1, color: AppColors.stroke)),
+        ],
       ),
     );
   }
