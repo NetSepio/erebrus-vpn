@@ -83,6 +83,11 @@ class _ConnectViewState extends State<ConnectView> {
   }
 
   void _onDialTap() {
+    // Tapping the dial mid-connect aborts the attempt (Stealth can take a while).
+    if (_c.stage.value == VpnStage.connecting) {
+      _c.cancelConnect();
+      return;
+    }
     final auth = _auth;
     if (auth != null && !auth.isEntitled) {
       final ent = auth.entitlement.value;
@@ -94,6 +99,18 @@ class _ConnectViewState extends State<ConnectView> {
     }
     _c.error.value = null;
     _c.toggle();
+  }
+
+  /// What the dial says while the tunnel is being established.
+  String? _connectingLabel(VpnStage stage) {
+    if (stage == VpnStage.disconnecting) return 'STOPPING…';
+    if (stage != VpnStage.connecting) return null;
+    return switch (_c.activeTransport.value) {
+      null => 'SECURING…',
+      Transport.wireguard => 'WIREGUARD HANDSHAKE…',
+      Transport.vlessReality => 'STEALTH HANDSHAKE…',
+      Transport.hysteria2 => 'QUIC HANDSHAKE…',
+    };
   }
 
   void _setProtocol(ConnectMode m) {
@@ -118,6 +135,7 @@ class _ConnectViewState extends State<ConnectView> {
               Obx(() => _StatusHeader(
                     stage: _c.stage.value,
                     blocking: _c.killSwitchBlocking.value,
+                    healthy: _c.tunnelHealthy.value,
                     onDiagnostics: widget.onOpenDiagnostics,
                   )),
               const SizedBox(height: 16),
@@ -142,14 +160,44 @@ class _ConnectViewState extends State<ConnectView> {
                     final stage = _c.stage.value;
                     final blocking = _c.killSwitchBlocking.value;
                     final err = _c.error.value;
+                    final transport = _c.activeTransport.value;
+                    final stealthWait = stage == VpnStage.connecting &&
+                        transport != null &&
+                        transport != Transport.wireguard;
+                    final stalled = stage == VpnStage.connected && !_c.tunnelHealthy.value;
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ConnectDial(
                           stage: blocking ? VpnStage.error : stage,
                           durationLabel: _fmtDur(_elapsed),
-                          onTap: _c.isBusy ? null : _onDialTap,
+                          connectingLabel: _connectingLabel(stage),
+                          // Connecting stays tappable: it cancels. Only a
+                          // disconnect in flight is uninterruptible.
+                          onTap: stage == VpnStage.disconnecting ? null : _onDialTap,
                         ),
+                        if (stealthWait) ...[
+                          const SizedBox(height: 14),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Disguising traffic — this can take up to a minute on strict networks.',
+                              textAlign: TextAlign.center,
+                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.textMuted),
+                            ),
+                          ),
+                        ],
+                        if (stalled) ...[
+                          const SizedBox(height: 14),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              'Tunnel is up but nothing is getting through — tap the dial to disconnect, then reconnect (try Stealth).',
+                              textAlign: TextAlign.center,
+                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
+                            ),
+                          ),
+                        ],
                         if (err != null && err.isNotEmpty) ...[
                           const SizedBox(height: 14),
                           Padding(
@@ -228,9 +276,15 @@ String fmtData(int bytes) {
 }
 
 class _StatusHeader extends StatelessWidget {
-  const _StatusHeader({required this.stage, required this.blocking, this.onDiagnostics});
+  const _StatusHeader({
+    required this.stage,
+    required this.blocking,
+    this.healthy = true,
+    this.onDiagnostics,
+  });
   final VpnStage stage;
   final bool blocking;
+  final bool healthy;
   final VoidCallback? onDiagnostics;
 
   @override
@@ -238,9 +292,9 @@ class _StatusHeader extends StatelessWidget {
     final label = blocking
         ? 'TRAFFIC BLOCKED'
         : switch (stage) {
-            VpnStage.connected => 'PROTECTED',
+            VpnStage.connected => healthy ? 'PROTECTED' : 'TUNNEL STALLED',
             VpnStage.connecting => 'SECURING TUNNEL',
-            VpnStage.disconnecting => 'SECURING TUNNEL',
+            VpnStage.disconnecting => 'DISCONNECTING',
             VpnStage.error => 'NOT CONNECTED',
             _ => 'NOT CONNECTED',
           };
@@ -337,9 +391,18 @@ class _ProtocolSegment extends StatelessWidget {
 
 /// The 240×240 connect dial with offline / connecting / connected states.
 class ConnectDial extends StatefulWidget {
-  const ConnectDial({super.key, required this.stage, required this.durationLabel, this.onTap});
+  const ConnectDial({
+    super.key,
+    required this.stage,
+    required this.durationLabel,
+    this.connectingLabel,
+    this.onTap,
+  });
   final VpnStage stage;
   final String durationLabel;
+
+  /// Status text while connecting/disconnecting (e.g. "STEALTH HANDSHAKE…").
+  final String? connectingLabel;
   final VoidCallback? onTap;
 
   @override
@@ -405,7 +468,12 @@ class _ConnectDialState extends State<ConnectDial> with TickerProviderStateMixin
               ),
             ],
             // center disk
-            _CenterDisk(stage: widget.stage, durationLabel: widget.durationLabel),
+            _CenterDisk(
+              stage: widget.stage,
+              durationLabel: widget.durationLabel,
+              connectingLabel: widget.connectingLabel,
+              cancellable: widget.stage == VpnStage.connecting && widget.onTap != null,
+            ),
           ],
         ),
       ),
@@ -414,9 +482,16 @@ class _ConnectDialState extends State<ConnectDial> with TickerProviderStateMixin
 }
 
 class _CenterDisk extends StatelessWidget {
-  const _CenterDisk({required this.stage, required this.durationLabel});
+  const _CenterDisk({
+    required this.stage,
+    required this.durationLabel,
+    this.connectingLabel,
+    this.cancellable = false,
+  });
   final VpnStage stage;
   final String durationLabel;
+  final String? connectingLabel;
+  final bool cancellable;
 
   @override
   Widget build(BuildContext context) {
@@ -447,7 +522,15 @@ class _CenterDisk extends StatelessWidget {
         children: [
           const Icon(Icons.power_settings_new, size: 40, color: AppColors.accent),
           const SizedBox(height: 9),
-          Text('SECURING…', style: mono(size: 12, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 12 * 0.05)),
+          Text(
+            connectingLabel ?? 'SECURING…',
+            textAlign: TextAlign.center,
+            style: mono(size: 12, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 12 * 0.05),
+          ),
+          if (cancellable) ...[
+            const SizedBox(height: 5),
+            Text('TAP TO CANCEL', style: mono(size: 10, weight: FontWeight.w500, color: AppColors.textTertiary, letterSpacing: 10 * 0.08)),
+          ],
         ],
       );
     } else {

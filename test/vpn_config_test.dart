@@ -111,6 +111,56 @@ void main() {
     expect(bypass['ip_cidr'], ['209.50.50.202/32']);
   });
 
+  test('bracketed IPv6 endpoint keeps the address intact and uses /128 bypass', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    final wg = (json['wireguard'] as Map).cast<String, dynamic>();
+    wg['endpoint'] = '[2001:db8::1]:51820';
+    final b = CredentialBundle.fromJson(json);
+    final cfg = SingboxConfigBuilder.build(
+        bundle: b, transport: Transport.wireguard, clientPrivateKey: 'PRIV');
+    final peer = ((cfg['endpoints'] as List).first as Map)['peers'][0] as Map;
+    expect(peer['address'], '2001:db8::1');
+    expect(peer['port'], 51820);
+    final rules = (cfg['route'] as Map)['rules'] as List;
+    final bypass = rules.firstWhere((r) => (r as Map).containsKey('ip_cidr')) as Map;
+    expect(bypass['ip_cidr'], ['2001:db8::1/128']); // /32 would be a huge v6 prefix
+  });
+
+  test('bare IPv6 endpoint (no port) is not truncated at the last colon', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    final wg = (json['wireguard'] as Map).cast<String, dynamic>();
+    wg['endpoint'] = '2001:db8::1';
+    final b = CredentialBundle.fromJson(json);
+    final cfg = SingboxConfigBuilder.build(
+        bundle: b, transport: Transport.wireguard, clientPrivateKey: 'PRIV');
+    final peer = ((cfg['endpoints'] as List).first as Map)['peers'][0] as Map;
+    expect(peer['address'], '2001:db8::1');
+    expect(peer['port'], 51820); // default WG port
+  });
+
+  test('stealth DNS bootstrap covers only the carrier host, not the WG endpoint', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    final wg = (json['wireguard'] as Map).cast<String, dynamic>();
+    // Distinct hostnames: the WG endpoint host is never dialed in stealth
+    // (inner peer is the node loopback), so it must not leak into bootstrap.
+    wg['endpoint'] = 'wg.example.com:51820';
+    // _patchVlessFromUri re-applies the URI host, so keep it consistent.
+    json['vless_uri'] = 'vless://uuid@carrier.example.com:8443?security=reality#node';
+    final ob = ((json['singbox_profile'] as Map)['outbounds'] as List).cast<Map>();
+    for (final o in ob) {
+      if (o['tag'] == 'carrier-vless') o['server'] = 'carrier.example.com';
+    }
+    final b = CredentialBundle.fromJson(json);
+    final cfg = SingboxConfigBuilder.build(
+        bundle: b, transport: Transport.vlessReality, clientPrivateKey: 'PRIV');
+    final dnsRules = ((cfg['dns'] as Map)['rules'] as List?)?.cast<Map>() ?? const [];
+    final bootstrapDomains = dnsRules
+        .where((r) => r['server'] == 'dns-direct')
+        .expand((r) => (r['domain'] as List).cast<String>())
+        .toList();
+    expect(bootstrapDomains, ['carrier.example.com']);
+  });
+
   test('hostname server bypass uses domain rule, not ip_cidr', () {
     final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
     final wg = (json['wireguard'] as Map).cast<String, dynamic>();
@@ -130,7 +180,7 @@ void main() {
     );
     final rules = (cfg['route'] as Map)['rules'] as List;
     final bypass = rules.firstWhere(
-      (r) => (r as Map).containsKey('domain') || (r as Map).containsKey('ip_cidr'),
+      (r) => (r as Map).containsKey('domain') || r.containsKey('ip_cidr'),
     ) as Map;
     expect(bypass['domain'], ['us01.erebrus.io']);
     expect(bypass.containsKey('ip_cidr'), isFalse);

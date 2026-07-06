@@ -51,12 +51,20 @@ class VpnController extends GetxController {
   final egressIp = RxnString();
   final egressIpLoading = false.obs;
 
+  /// False when the tunnel is up but repeated egress probes fail (TUN captures
+  /// traffic while the inner WireGuard/carrier is dead — "connected, no internet").
+  final tunnelHealthy = true.obs;
+
   StreamSubscription<VpnStage>? _stageSub;
   StreamSubscription<VpnStats>? _statsSub;
+  Worker? _healthWorker;
+  Timer? _healthTimer;
+  int _egressFailures = 0;
   bool _wasConnected = false;
   bool _userDisconnecting = false;
   bool _syncingNative = false;
   bool _connectInProgress = false;
+  bool _cancelRequested = false;
 
   static const _kWgPrivate = 'erebrus_wg_private';
   static const _kWgPublic = 'erebrus_wg_public';
@@ -70,6 +78,15 @@ class VpnController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Health monitoring follows the UI stage regardless of which path set it
+    // (engine event, connect() success, or syncWithNative()).
+    _healthWorker = ever<VpnStage>(stage, (s) {
+      if (s == VpnStage.connected) {
+        _startHealthMonitor();
+      } else {
+        _stopHealthMonitor();
+      }
+    });
     _stageSub = _engine.onStage.listen((s) {
       if (killSwitchBlocking.value && s == VpnStage.connected) {
         stage.value = VpnStage.error;
@@ -77,6 +94,17 @@ class VpnController extends GetxController {
       }
       // During connect(), hold the UI on "connecting" until egress is verified.
       if (_connectInProgress && s == VpnStage.connected) return;
+      // A TUN that comes up late — after connect() already failed and showed an
+      // error — is a zombie from an abandoned attempt: tear it down instead of
+      // flipping the UI to "connected" on a tunnel nobody verified.
+      if (s == VpnStage.connected &&
+          !_wasConnected &&
+          !_syncingNative &&
+          stage.value == VpnStage.error) {
+        debugPrint('[VPN] late connected event after failed connect — stopping zombie tunnel');
+        unawaited(_engine.stop().catchError((_) {}));
+        return;
+      }
       stage.value = s;
       if (s == VpnStage.connected) {
         _wasConnected = true;
@@ -192,6 +220,8 @@ class VpnController extends GetxController {
   void onClose() {
     _stageSub?.cancel();
     _statsSub?.cancel();
+    _healthWorker?.dispose();
+    _healthTimer?.cancel();
     super.onClose();
   }
 
@@ -227,6 +257,7 @@ class VpnController extends GetxController {
     }
     _userDisconnecting = false;
     _connectInProgress = true;
+    _cancelRequested = false;
     _wasConnected = false;
     if (killSwitchBlocking.value) {
       await _engine.stop().catchError((_) {});
@@ -248,6 +279,10 @@ class VpnController extends GetxController {
       }
       final keys = await _ensureWgKeys();
       var bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
+      if (_cancelRequested) {
+        await _finishCancelled();
+        return;
+      }
 
       // Stealth needs a full sing-box profile; stale WG-only caches break REALITY.
       if (mode.value != ConnectMode.wireguard &&
@@ -287,9 +322,11 @@ class VpnController extends GetxController {
           : await SingboxConfigBuilder.resolveDialHosts(bundle);
 
       for (var i = 0; i < candidates.length; i++) {
+        if (_cancelRequested) break;
         final t = candidates[i];
         try {
           if (i > 0) await _ensureTunnelStopped();
+          if (_cancelRequested) break;
           stage.value = VpnStage.connecting;
           final config = SingboxConfigBuilder.build(
             bundle: bundle,
@@ -328,6 +365,7 @@ class VpnController extends GetxController {
             final ready = t == Transport.wireguard
                 ? await _waitWireGuardReady()
                 : await _waitStealthReady();
+            if (_cancelRequested) break;
             if (!ready) {
               debugPrint('[VPN] ${t.label} tunnel up but no egress — trying next transport');
               await _ensureTunnelStopped();
@@ -356,18 +394,31 @@ class VpnController extends GetxController {
           debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
         }
         _wasConnected = false;
+        if (_cancelRequested) break;
         await _ensureTunnelStopped();
       }
       _wasConnected = false;
+      if (_cancelRequested) {
+        await _finishCancelled();
+        return;
+      }
       await _engine.stop().catchError((_) {});
       error.value = await _connectFailureMessage();
       stage.value = VpnStage.error;
     } on GatewayException catch (e) {
       _wasConnected = false;
+      if (_cancelRequested) {
+        await _finishCancelled();
+        return;
+      }
       error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
     } catch (e) {
       _wasConnected = false;
+      if (_cancelRequested) {
+        await _finishCancelled();
+        return;
+      }
       error.value = friendlyGatewayError(e, nodeName: target.name);
       stage.value = VpnStage.error;
     } finally {
@@ -375,8 +426,29 @@ class VpnController extends GetxController {
     }
   }
 
+  /// User-initiated abort of an in-flight [connect] — stops the engine and
+  /// returns the UI to disconnected without surfacing an error.
+  Future<void> cancelConnect() async {
+    if (!_connectInProgress) return;
+    debugPrint('[VPN] connect cancelled by user');
+    _cancelRequested = true;
+    await _engine.stop().catchError((_) {});
+  }
+
+  /// Cleanup shared by every cancelled-connect exit path.
+  Future<void> _finishCancelled() async {
+    await _engine.stop().catchError((_) {});
+    await _ensureTunnelStopped();
+    activeTransport.value = null;
+    error.value = null;
+    stage.value = VpnStage.disconnected;
+    debugPrint('[VPN] connect aborted — back to disconnected');
+  }
+
   Future<void> disconnect() async {
     _userDisconnecting = true;
+    // Also aborts any connect() still running its transport loop.
+    _cancelRequested = true;
     killSwitchBlocking.value = false;
     stage.value = VpnStage.disconnecting;
     await _syncAppProxy(enabled: false);
@@ -422,10 +494,61 @@ class VpnController extends GetxController {
     egressIpLoading.value = true;
     try {
       final ip = await EgressIpProbe.fetch(useTunnelProxy: true);
-      if (isConnected) egressIp.value = ip;
+      if (isConnected) _recordEgressResult(ip);
       debugPrint('[VPN] egress IP probe → ${ip ?? "failed"}');
     } finally {
       egressIpLoading.value = false;
+    }
+  }
+
+  // ── Tunnel health monitor ─────────────────────────────────────────────
+  // Native reports "connected" when the OS TUN opens, not when the inner
+  // WireGuard handshake completes (see ErebrusVpnService.openTun). connect()
+  // verifies egress before celebrating, but syncWithNative() and long-lived
+  // sessions have no such gate — so re-probe periodically and flag the
+  // "TUN up, nothing flows" state instead of showing PROTECTED forever.
+
+  void _startHealthMonitor() {
+    _egressFailures = 0;
+    tunnelHealthy.value = true;
+    _scheduleHealthCheck(const Duration(seconds: 45));
+  }
+
+  void _stopHealthMonitor() {
+    _healthTimer?.cancel();
+    _healthTimer = null;
+    _egressFailures = 0;
+    tunnelHealthy.value = true;
+  }
+
+  void _scheduleHealthCheck(Duration delay) {
+    _healthTimer?.cancel();
+    _healthTimer = Timer(delay, () async {
+      if (!isConnected || killSwitchBlocking.value) return;
+      final ip = await EgressIpProbe.fetch(
+        timeout: const Duration(seconds: 6),
+        useTunnelProxy: true,
+      );
+      if (!isConnected) return;
+      _recordEgressResult(ip);
+      // Re-check quickly while degraded so recovery/confirmation is prompt.
+      _scheduleHealthCheck(Duration(seconds: _egressFailures > 0 ? 10 : 45));
+    });
+  }
+
+  void _recordEgressResult(String? ip) {
+    if (ip != null) {
+      if (!tunnelHealthy.value) debugPrint('[VPN] tunnel egress recovered');
+      _egressFailures = 0;
+      tunnelHealthy.value = true;
+      egressIp.value = ip;
+      return;
+    }
+    _egressFailures += 1;
+    if (_egressFailures == 1) _scheduleHealthCheck(const Duration(seconds: 10));
+    if (_egressFailures >= 2 && tunnelHealthy.value) {
+      tunnelHealthy.value = false;
+      debugPrint('[VPN] tunnel up but egress failing — flagging unhealthy');
     }
   }
 
@@ -478,6 +601,7 @@ class VpnController extends GetxController {
     final host = SingboxConfigBuilder.localProxyHost;
     final port = SingboxConfigBuilder.localProxyPort;
     for (var i = 0; i < attempts; i++) {
+      if (_cancelRequested) return false;
       try {
         final socket = await Socket.connect(
           host,
@@ -497,12 +621,13 @@ class VpnController extends GetxController {
 
   Future<bool> _waitTunnelEgress({
     required String label,
-    int attempts = 12,
+    int attempts = 8,
     Duration interval = const Duration(milliseconds: 500),
   }) async {
     for (var i = 0; i < attempts; i++) {
+      if (_cancelRequested) return false;
       final ip = await EgressIpProbe.fetch(
-        timeout: const Duration(seconds: 5),
+        timeout: const Duration(seconds: 4),
         useTunnelProxy: true,
       );
       if (ip != null) {
@@ -517,15 +642,18 @@ class VpnController extends GetxController {
   /// Direct WireGuard: TUN may be up before UDP handshake completes — verify egress.
   Future<bool> _waitWireGuardReady() async {
     if (Platform.isAndroid && !await _waitLocalMixedProxy(attempts: 24)) return false;
-    return _waitTunnelEgress(label: 'WireGuard', attempts: 10);
+    return _waitTunnelEgress(label: 'WireGuard', attempts: 6);
   }
 
   /// Stealth: wait for mixed-in, then carrier + inner WG, before showing connected.
+  /// Probes run in parallel with a hard 4s cap each, so the worst case here is
+  /// ~36s before falling through to the next transport (was minutes when the
+  /// probe timeout leaked — see EgressIpProbe._get).
   Future<bool> _waitStealthReady() async {
     if (!await _waitLocalMixedProxy()) return false;
     // Carrier (VLESS/Hy2) and loopback WG peer need a beat after mixed-in is up.
     await Future<void>.delayed(const Duration(milliseconds: 800));
-    return _waitTunnelEgress(label: 'Stealth', attempts: 18, interval: const Duration(milliseconds: 600));
+    return _waitTunnelEgress(label: 'Stealth', attempts: 8);
   }
 
   /// Fully tears down the native tunnel before the next transport attempt.
@@ -578,6 +706,7 @@ class VpnController extends GetxController {
       await startFuture;
       final deadline = DateTime.now().add(timeout);
       while (DateTime.now().isBefore(deadline)) {
+        if (_cancelRequested) return false;
         if (completer.isCompleted) return await completer.future;
         final now = await _engine.stage();
         if (now == VpnStage.connected) return true;

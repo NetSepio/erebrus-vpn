@@ -61,8 +61,33 @@ natively — the private key never leaves the phone).
 **`vpn_controller.dart`** — the GetX state machine the UI binds to. It:
 1. ensures a device WireGuard keypair exists (stored in secure storage),
 2. provisions a client (via an injected `provisioner` — see below),
-3. tries each transport for the chosen mode, giving each a connect budget before
-   falling through to the next.
+3. pre-resolves hostname endpoints to IPv4 (`resolveDialHosts`) so WireGuard
+   can handshake without tunnel DNS,
+4. tries each transport for the chosen mode, giving each a connect budget before
+   falling through to the next,
+5. lets the user **cancel** an in-flight connect (`cancelConnect` — the dial
+   and the desktop tray call it while "SECURING").
+
+### "Connected" is a two-phase truth
+
+The native layer reports `connected` as soon as the **OS TUN opens** — before
+the WireGuard/carrier handshake finishes (on Android this is `openTun`; iOS is
+equivalent). A TUN that is up with a dead tunnel behind it means "key icon
+shown, no internet". The controller therefore treats native `connected` as
+*phase one* and gates the UI on *phase two*:
+
+- **During connect:** hold "connecting" until the local mixed proxy
+  (`127.0.0.1:10808`) accepts TCP **and** an egress probe returns a public IP.
+  Only then does the UI say PROTECTED.
+- **While connected:** a health monitor re-probes egress every 45s (10s when
+  degraded). Two consecutive failures set `tunnelHealthy=false` and the UI
+  shows "TUNNEL STALLED" with recovery hints — including after
+  `syncWithNative()` adopts an already-running native tunnel on app resume.
+- **After a failed connect:** a late native `connected` event is a zombie from
+  an abandoned attempt and is stopped, not trusted.
+
+`EgressIpProbe` probes `https://1.1.1.1/cdn-cgi/trace` (IP literal — immune to
+tunnel-DNS failures), ipify and ifconfig.me in parallel under a hard timeout.
 
 ## The UI (`lib/view/`, `lib/theme/`)
 

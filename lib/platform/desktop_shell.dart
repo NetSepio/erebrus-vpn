@@ -105,6 +105,11 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
   Future<void> _toggleConnection() async {
     if (!Get.isRegistered<VpnController>()) return;
     final vpn = Get.find<VpnController>();
+    if (vpn.stage.value == VpnStage.connecting) {
+      await vpn.cancelConnect();
+      await _syncTrayMenu();
+      return;
+    }
     if (vpn.isBusy) return;
     final auth = Get.isRegistered<WalletAuthController>()
         ? Get.find<WalletAuthController>()
@@ -140,7 +145,11 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
       VpnStage.error => 'Error',
       _ => 'Disconnected',
     };
-    final actionLabel = stage == VpnStage.connected ? 'Disconnect' : 'Connect';
+    final actionLabel = switch (stage) {
+      VpnStage.connected => 'Disconnect',
+      VpnStage.connecting => 'Cancel',
+      _ => 'Connect',
+    };
 
     await trayManager.setToolTip('Erebrus VPN — $statusLabel');
     await trayManager.setContextMenu(Menu(

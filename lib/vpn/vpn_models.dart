@@ -642,9 +642,10 @@ class SingboxConfigBuilder {
     final bypassHost = carrierHost == null
         ? null
         : _peerHost(carrierHost, resolvedHosts);
-    final (wgHost, _) = _splitHostPort(bundle.endpoint);
+    // Only the carrier host is dialed on the physical network in stealth — the
+    // inner WG peer is the node-local loopback, so bundle.endpoint's host never
+    // needs a bootstrap resolver here.
     final bootstrapDomains = <String>{
-      if (wgHost.isNotEmpty && !_isIpLiteral(wgHost)) wgHost,
       if (carrierHost != null &&
           carrierHost.isNotEmpty &&
           !_isIpLiteral(carrierHost))
@@ -824,7 +825,8 @@ class SingboxConfigBuilder {
 
   static Map<String, dynamic> _directBypassRule(String host) {
     if (_isIpLiteral(host)) {
-      return {'ip_cidr': ['$host/32'], 'outbound': 'direct'};
+      final cidr = host.contains(':') ? '$host/128' : '$host/32';
+      return {'ip_cidr': [cidr], 'outbound': 'direct'};
     }
     return {'domain': [host], 'outbound': 'direct'};
   }
@@ -857,6 +859,19 @@ class SingboxConfigBuilder {
       };
 
   static (String, int) _splitHostPort(String hostPort) {
+    // Bracketed IPv6 with port: [2001:db8::1]:51820
+    final v6 = RegExp(r'^\[([^\]]+)\]:(\d+)$').firstMatch(hostPort);
+    if (v6 != null) {
+      return (v6.group(1)!, int.tryParse(v6.group(2)!) ?? 51820);
+    }
+    if (hostPort.startsWith('[') && hostPort.endsWith(']')) {
+      return (hostPort.substring(1, hostPort.length - 1), 51820);
+    }
+    // Bare IPv6 (multiple colons, no brackets) has no port to split off —
+    // lastIndexOf(':') would otherwise truncate the address.
+    if (hostPort.indexOf(':') != hostPort.lastIndexOf(':')) {
+      return (hostPort, 51820);
+    }
     final i = hostPort.lastIndexOf(':');
     if (i < 0) return (hostPort, 51820);
     final host = hostPort.substring(0, i);
