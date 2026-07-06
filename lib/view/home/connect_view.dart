@@ -89,11 +89,14 @@ class _ConnectViewState extends State<ConnectView> {
       return;
     }
     final auth = _auth;
-    if (auth != null && !auth.isEntitled) {
+    final node = _c.selectedNode.value;
+    if (auth != null && !auth.canConnectVpn(node)) {
       final ent = auth.entitlement.value;
-      _c.error.value = ent.trialConsumed
-          ? 'Trial ended — renew on erebrus.io with the same wallet'
-          : 'Start your free trial in Settings to connect';
+      _c.error.value = node?.isPrivateAccess == true && ent.orgMember == false
+          ? 'Accept your workspace invite to connect to private org nodes'
+          : ent.trialConsumed
+              ? 'Trial ended — renew on erebrus.io with the same wallet'
+              : 'Start your free trial in Settings to connect';
       widget.onGoSettings?.call();
       return;
     }

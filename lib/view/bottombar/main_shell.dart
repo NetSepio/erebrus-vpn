@@ -84,7 +84,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       return;
     }
     if (!settings.autoConnectOnLaunch.value) return;
-    if (!auth.sessionReady.value || !auth.isEntitled) return;
+    if (!auth.sessionReady.value || !auth.canConnectVpn(vpn.selectedNode.value)) return;
     if (vpn.isConnected || vpn.isBusy || vpn.killSwitchBlocking.value) return;
     if (vpn.selectedNode.value == null) return;
     _autoConnectAttempted = true;

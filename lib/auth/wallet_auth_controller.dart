@@ -20,6 +20,7 @@ import 'user_profile.dart';
 import '../platform/platform_capabilities.dart';
 import 'solana_mobile_wallet.dart';
 import '../vpn/gateway_controller.dart';
+import '../vpn/vpn_models.dart';
 import '../vpn/vpn_controller.dart';
 
 /// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
@@ -76,6 +77,16 @@ class WalletAuthController extends GetxController {
   bool get isAuthenticated => _token != null && _token!.isNotEmpty;
   bool get isEntitled =>
       entitlement.value.entitled || role.value == 'admin';
+
+  /// Whether the user may connect to the currently selected node.
+  bool canConnectVpn(VpnNode? node) {
+    if (isEntitled) return true;
+    if (node == null || !node.isPrivateAccess) return false;
+    if (entitlement.value.orgMember) return true;
+    if (!Get.isRegistered<GatewayController>()) return false;
+    final gw = Get.find<GatewayController>();
+    return gw.orgNodes.any((n) => n.id == node.id);
+  }
   bool get usesReown => PlatformCapabilities.usesReown;
   bool get usesWebLogin => PlatformCapabilities.usesWebLogin;
   String? get bearerToken => _token;

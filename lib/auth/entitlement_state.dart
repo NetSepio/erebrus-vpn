@@ -8,6 +8,7 @@ class EntitlementState {
     this.periodEnd,
     this.nftGatingEnabled = false,
     this.trialConsumed = false,
+    this.orgMember = false,
   });
 
   final bool entitled;
@@ -20,6 +21,8 @@ class EntitlementState {
   final bool nftGatingEnabled;
   /// True when the wallet has already used its one-time v2 trial.
   final bool trialConsumed;
+  /// Active member of at least one workspace (private org node access).
+  final bool orgMember;
 
   static const none = EntitlementState(entitled: false);
 
@@ -40,6 +43,7 @@ class EntitlementState {
       periodEnd: periodEnd,
       nftGatingEnabled: j['nft_gating'] == true,
       trialConsumed: j['trial_consumed'] == true,
+      orgMember: j['org_member'] == true,
     );
   }
 
