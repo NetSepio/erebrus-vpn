@@ -67,6 +67,16 @@ class SingboxEngine {
   /// Desktop-only hint when [prepare] returns false (e.g. missing sing-box CLI).
   String? get desktopPrepareError => _useDesktopRunner ? _desktop.lastError : null;
 
+  /// Native sing-box start failure (Android/iOS), when the tunnel errors before connect.
+  Future<String?> lastTunnelError() async {
+    if (_useDesktopRunner) return _desktop.lastError;
+    try {
+      return await _method.invokeMethod<String>('lastError');
+    } on PlatformException {
+      return null;
+    }
+  }
+
   Future<bool> prepare() async {
     if (_useDesktopRunner) return _desktop.prepare();
     try {

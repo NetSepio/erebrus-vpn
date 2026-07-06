@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import 'gateway_http.dart';
+
 /// User-facing connection modes shown in the UI.
 enum ConnectMode { auto, stealth, wireguard }
 
@@ -470,6 +472,40 @@ class SingboxConfigBuilder {
     return out;
   }
 
+  /// Resolves dial hostnames to IPv4 so WireGuard can handshake before tunnel DNS
+  /// (hostname → dns-remote → wg-out chicken-and-egg on Android).
+  static Future<Map<String, String>> resolveDialHosts(CredentialBundle bundle) async {
+    final hosts = <String>{};
+    final (wgHost, _) = _splitHostPort(bundle.endpoint);
+    if (wgHost.isNotEmpty && !_isIpLiteral(wgHost)) hosts.add(wgHost);
+
+    for (final t in Transport.values) {
+      if (t == Transport.wireguard) continue;
+      final target = bundle.dialTarget(t);
+      final (h, _) = _splitHostPort(target);
+      if (h.isNotEmpty && !_isIpLiteral(h)) hosts.add(h);
+    }
+
+    final out = <String, String>{};
+    for (final host in hosts) {
+      try {
+        final ips = await GatewayHttp.resolveHost(host);
+        if (ips.isNotEmpty) {
+          out[host] = ips.first.address;
+          debugPrint('[VPN] resolved dial host $host → ${ips.first.address}');
+        }
+      } catch (e) {
+        debugPrint('[VPN] dial host resolve failed for $host: $e');
+      }
+    }
+    return out;
+  }
+
+  static String _peerHost(String host, Map<String, String>? resolvedHosts) {
+    if (host.isEmpty) return host;
+    return resolvedHosts?[host] ?? host;
+  }
+
   /// Returns a complete sing-box config map for [transport]. [clientPrivateKey]
   /// is the base64 WireGuard private key generated and stored on-device.
   static Map<String, dynamic> build({
@@ -479,6 +515,8 @@ class SingboxConfigBuilder {
     /// When false (desktop CLI / unsigned macOS), only the local mixed proxy
     /// inbound is used — no TUN (avoids needing root). Pair with system HTTP proxy.
     bool useSystemTunnel = true,
+    /// Hostname → IPv4 from [resolveDialHosts]; avoids WG handshake DNS deadlock.
+    Map<String, String>? resolvedHosts,
   }) {
     if (!bundle.hasWireGuard) {
       throw StateError('credential bundle is missing wireguard fields');
@@ -488,6 +526,7 @@ class SingboxConfigBuilder {
         bundle: bundle,
         clientPrivateKey: clientPrivateKey,
         useSystemTunnel: useSystemTunnel,
+        resolvedHosts: resolvedHosts,
       );
     }
     return _buildStealth(
@@ -495,6 +534,7 @@ class SingboxConfigBuilder {
       transport: transport,
       clientPrivateKey: clientPrivateKey,
       useSystemTunnel: useSystemTunnel,
+      resolvedHosts: resolvedHosts,
     );
   }
 
@@ -503,8 +543,10 @@ class SingboxConfigBuilder {
     required CredentialBundle bundle,
     required String clientPrivateKey,
     bool useSystemTunnel = true,
+    Map<String, String>? resolvedHosts,
   }) {
     final (host, port) = _splitHostPort(bundle.endpoint);
+    final peerHost = _peerHost(host, resolvedHosts);
     final clientAddr =
         bundle.address.contains('/') ? bundle.address : '${bundle.address}/32';
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
@@ -515,6 +557,7 @@ class SingboxConfigBuilder {
         remoteServer: dnsServer,
         wgTag: wgEndpointTag,
         tunInbound: useSystemTunnel,
+        bootstrapDomains: host != peerHost ? [host] : const [],
       ),
       'inbounds': _inbounds(includeTun: useSystemTunnel),
       'outbounds': [
@@ -529,7 +572,7 @@ class SingboxConfigBuilder {
           'mtu': 1280,
           'peers': [
             {
-              'address': host,
+              'address': peerHost,
               'port': port,
               'public_key': bundle.serverPublicKey,
               'allowed_ips': ['0.0.0.0/0', '::/0'],
@@ -538,7 +581,7 @@ class SingboxConfigBuilder {
           ],
         },
       ],
-      'route': _route(finalTag: wgEndpointTag, wgServerHost: host),
+      'route': _route(finalTag: wgEndpointTag, wgServerHost: peerHost),
     });
   }
 
@@ -548,6 +591,7 @@ class SingboxConfigBuilder {
     required Transport transport,
     required String clientPrivateKey,
     bool useSystemTunnel = true,
+    Map<String, String>? resolvedHosts,
   }) {
     final profile =
         jsonDecode(jsonEncode(bundle.singboxProfile)) as Map<String, dynamic>;
@@ -591,10 +635,21 @@ class SingboxConfigBuilder {
     if (!outbounds.any((o) => o['tag'] == 'direct')) {
       outbounds.add({'type': 'direct', 'tag': 'direct'});
     }
-    _patchStealthOutbounds(outbounds, transport, bundle);
+    _patchStealthOutbounds(outbounds, transport, bundle, resolvedHosts: resolvedHosts);
 
     // Dial the carrier (VLESS/Hy2) on the underlying network, not through the TUN.
     final carrierHost = _carrierBypassHost(outbounds, transport, bundle);
+    final bypassHost = carrierHost == null
+        ? null
+        : _peerHost(carrierHost, resolvedHosts);
+    final (wgHost, _) = _splitHostPort(bundle.endpoint);
+    final bootstrapDomains = <String>{
+      if (wgHost.isNotEmpty && !_isIpLiteral(wgHost)) wgHost,
+      if (carrierHost != null &&
+          carrierHost.isNotEmpty &&
+          !_isIpLiteral(carrierHost))
+        carrierHost,
+    };
 
     return _withClashApi({
       'log': {'level': 'info'},
@@ -602,13 +657,14 @@ class SingboxConfigBuilder {
         remoteServer: dnsServer,
         wgTag: wgEndpointTag,
         tunInbound: useSystemTunnel,
+        bootstrapDomains: bootstrapDomains.toList(),
       ),
       'inbounds': _inbounds(includeTun: useSystemTunnel),
       'endpoints': endpoints,
       'outbounds': outbounds,
       'route': _route(
         finalTag: wgEndpointTag,
-        wgServerHost: carrierHost,
+        wgServerHost: bypassHost ?? carrierHost,
         extraRules: extraRules,
       ),
     });
@@ -619,12 +675,17 @@ class SingboxConfigBuilder {
   static void _patchStealthOutbounds(
     List<Map<String, dynamic>> outbounds,
     Transport transport,
-    CredentialBundle bundle,
-  ) {
+    CredentialBundle bundle, {
+    Map<String, String>? resolvedHosts,
+  }) {
     for (final ob in outbounds) {
       final tag = ob['tag']?.toString() ?? '';
       if (transport == Transport.vlessReality && tag == carrierVlessTag) {
         _patchVlessFromUri(ob, bundle.vlessUri);
+      }
+      final server = ob['server']?.toString() ?? '';
+      if (server.isNotEmpty) {
+        ob['server'] = _peerHost(server, resolvedHosts);
       }
     }
   }
@@ -689,6 +750,7 @@ class SingboxConfigBuilder {
     required String remoteServer,
     required String wgTag,
     required bool tunInbound,
+    List<String> bootstrapDomains = const [],
   }) {
     if (tunInbound && _isMacOS) {
       return {
@@ -703,10 +765,19 @@ class SingboxConfigBuilder {
         'strategy': 'prefer_ipv4',
       };
     }
+    // Mobile TUN: bootstrap resolver on the underlying network so peer hostnames
+    // can be resolved before the WireGuard endpoint is up.
+    final servers = <Map<String, dynamic>>[
+      {'tag': 'dns-direct', 'address': '1.1.1.1', 'detour': 'direct'},
+      {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
+    ];
+    final rules = <Map<String, dynamic>>[
+      for (final domain in bootstrapDomains)
+        if (domain.isNotEmpty) {'domain': [domain], 'server': 'dns-direct'},
+    ];
     return {
-      'servers': [
-        {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
-      ],
+      'servers': servers,
+      if (rules.isNotEmpty) 'rules': rules,
       'final': 'dns-remote',
       'strategy': 'prefer_ipv4',
     };
@@ -736,6 +807,28 @@ class SingboxConfigBuilder {
     return inbounds;
   }
 
+  /// sing-box `ip_cidr` rules require literal IPs; hostnames must use `domain`.
+  static bool _isIpLiteral(String host) {
+    if (host.contains(':')) {
+      // IPv6 — reject zone id and bracketed forms.
+      final h = host.replaceAll(RegExp(r'^\[|\]$'), '');
+      return RegExp(r'^[0-9a-fA-F:.]+$').hasMatch(h);
+    }
+    final parts = host.split('.');
+    if (parts.length != 4) return false;
+    return parts.every((p) {
+      final n = int.tryParse(p);
+      return n != null && n >= 0 && n <= 255;
+    });
+  }
+
+  static Map<String, dynamic> _directBypassRule(String host) {
+    if (_isIpLiteral(host)) {
+      return {'ip_cidr': ['$host/32'], 'outbound': 'direct'};
+    }
+    return {'domain': [host], 'outbound': 'direct'};
+  }
+
   /// Local/bypass rules that must run before [final]. Tunnel DNS capture comes
   /// first so queries to [tunDnsAddress] reach sing-box's DNS module locally.
   /// (sing-box config action name: `hijack-dns`.)
@@ -747,10 +840,7 @@ class SingboxConfigBuilder {
     if (wgServerHost != null &&
         wgServerHost.isNotEmpty &&
         wgServerHost != '127.0.0.1') {
-      rules.insert(0, {
-        'ip_cidr': ['$wgServerHost/32'],
-        'outbound': 'direct',
-      });
+      rules.insert(0, _directBypassRule(wgServerHost));
     }
     return rules;
   }

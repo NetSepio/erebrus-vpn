@@ -19,6 +19,10 @@ object SingboxBridge {
     @Volatile var stage: String = "disconnected"
         private set
 
+    /** Last sing-box start failure (surfaced to Flutter for connect errors). */
+    @Volatile var lastError: String? = null
+        private set
+
     @Volatile var splitTunnelEnabled: Boolean = false
         private set
 
@@ -54,7 +58,12 @@ object SingboxBridge {
 
     fun emitStage(newStage: String) {
         stage = newStage
+        if (newStage != "error") lastError = null
         main.post { statusSink?.success(newStage) }
+    }
+
+    fun setLastError(message: String?) {
+        lastError = message?.takeIf { it.isNotBlank() }
     }
 
     fun emitStats(rx: Long, tx: Long, uplinkBps: Long, downlinkBps: Long) {

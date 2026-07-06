@@ -102,6 +102,7 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(stage)
                 }
+                "lastError" -> result.success(SingboxBridge.lastError)
                 "genWgKeys" -> result.success(generateWireGuardKeyPair())
                 "setAppProxy" -> {
                     val host = call.argument<String>("host") ?: "127.0.0.1"

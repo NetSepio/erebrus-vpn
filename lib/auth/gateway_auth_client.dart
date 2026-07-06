@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,8 @@ import '../vpn/gateway_http.dart';
 class GatewayAuthClient {
   GatewayAuthClient({String? gatewayUrl})
       : _base = GatewayHttp.normalizeBase(gatewayUrl ?? resolveGatewayUrl());
+
+  static const _requestTimeout = Duration(seconds: 20);
 
   final Uri _base;
 
@@ -126,9 +129,10 @@ class GatewayAuthClient {
     required String email,
     required String code,
   }) async {
+    final normalizedCode = code.replaceAll(RegExp(r'\D'), '');
     final map = await _postJson(
       GatewayHttp.apiUri(_base, path: '/api/v2/auth/email/login/verify'),
-      {'email': email, 'code': code},
+      {'email': email.trim(), 'code': normalizedCode},
     );
     return _identitySession(map);
   }
@@ -247,16 +251,20 @@ class GatewayAuthClient {
   Future<dynamic> _getDecoded(Uri uri, {String? bearerToken}) async {
     final client = GatewayHttp.createClient();
     try {
-      final req = await client.getUrl(uri);
+      final req = await client.getUrl(uri).timeout(_requestTimeout);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken);
-      final res = await req.close();
-      final text = await utf8.decodeStream(res);
+      final res = await req.close().timeout(_requestTimeout);
+      final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
       }
       return jsonDecode(text);
     } on SocketException catch (e) {
       throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
+    } on TimeoutException {
+      throw AuthException(
+        'Gateway request timed out — check your connection and try again',
+      );
     } finally {
       client.close(force: true);
     }
@@ -274,13 +282,13 @@ class GatewayAuthClient {
   }) async {
     final client = GatewayHttp.createClient();
     try {
-      final req = await client.patchUrl(uri);
+      final req = await client.patchUrl(uri).timeout(_requestTimeout);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken, jsonBody: true);
       final encoded = jsonEncode(body);
       req.contentLength = utf8.encode(encoded).length;
       req.write(encoded);
-      final res = await req.close();
-      final text = await utf8.decodeStream(res);
+      final res = await req.close().timeout(_requestTimeout);
+      final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
       }
@@ -290,6 +298,10 @@ class GatewayAuthClient {
       return const {};
     } on SocketException catch (e) {
       throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
+    } on TimeoutException {
+      throw AuthException(
+        'Gateway request timed out — check your connection and try again',
+      );
     } finally {
       client.close(force: true);
     }
@@ -302,13 +314,13 @@ class GatewayAuthClient {
   }) async {
     final client = GatewayHttp.createClient();
     try {
-      final req = await client.postUrl(uri);
+      final req = await client.postUrl(uri).timeout(_requestTimeout);
       GatewayHttp.applyHeaders(req, bearerToken: bearerToken, jsonBody: true);
       final encoded = jsonEncode(body);
       req.contentLength = utf8.encode(encoded).length;
       req.write(encoded);
-      final res = await req.close();
-      final text = await utf8.decodeStream(res);
+      final res = await req.close().timeout(_requestTimeout);
+      final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
       }
@@ -318,6 +330,10 @@ class GatewayAuthClient {
       return const {};
     } on SocketException catch (e) {
       throw AuthException(_networkErrorMessage(e.message, gateway: baseUrl));
+    } on TimeoutException {
+      throw AuthException(
+        'Gateway request timed out — check your connection and try again',
+      );
     } finally {
       client.close(force: true);
     }

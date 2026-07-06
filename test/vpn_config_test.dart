@@ -92,4 +92,47 @@ void main() {
     expect(b.dialTarget(Transport.vlessReality), '203.0.113.10:8443');
     expect(b.dialTarget(Transport.hysteria2), '203.0.113.10:4443');
   });
+
+  test('resolved hostname dials IPv4 peer and ip_cidr bypass', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    final wg = (json['wireguard'] as Map).cast<String, dynamic>();
+    wg['endpoint'] = 'us01.erebrus.io:51820';
+    final b = CredentialBundle.fromJson(json);
+    final cfg = SingboxConfigBuilder.build(
+      bundle: b,
+      transport: Transport.wireguard,
+      clientPrivateKey: 'PRIV',
+      resolvedHosts: {'us01.erebrus.io': '209.50.50.202'},
+    );
+    final peer = ((cfg['endpoints'] as List).first as Map)['peers'][0] as Map;
+    expect(peer['address'], '209.50.50.202');
+    final rules = (cfg['route'] as Map)['rules'] as List;
+    final bypass = rules.firstWhere((r) => (r as Map).containsKey('ip_cidr')) as Map;
+    expect(bypass['ip_cidr'], ['209.50.50.202/32']);
+  });
+
+  test('hostname server bypass uses domain rule, not ip_cidr', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    final wg = (json['wireguard'] as Map).cast<String, dynamic>();
+    wg['endpoint'] = 'us01.erebrus.io:51820';
+    json['vless_uri'] = 'vless://uuid@us01.erebrus.io:8443?security=reality#node';
+    json['hysteria2_uri'] = 'hysteria2://pw@us01.erebrus.io:4443?#node';
+    final ob = ((json['singbox_profile'] as Map)['outbounds'] as List).cast<Map>();
+    for (final o in ob) {
+      if (o['tag'] == 'carrier-vless') o['server'] = 'us01.erebrus.io';
+      if (o['tag'] == 'carrier-hysteria2') o['server'] = 'us01.erebrus.io';
+    }
+    final b = CredentialBundle.fromJson(json);
+    final cfg = SingboxConfigBuilder.build(
+      bundle: b,
+      transport: Transport.vlessReality,
+      clientPrivateKey: 'PRIV',
+    );
+    final rules = (cfg['route'] as Map)['rules'] as List;
+    final bypass = rules.firstWhere(
+      (r) => (r as Map).containsKey('domain') || (r as Map).containsKey('ip_cidr'),
+    ) as Map;
+    expect(bypass['domain'], ['us01.erebrus.io']);
+    expect(bypass.containsKey('ip_cidr'), isFalse);
+  });
 }

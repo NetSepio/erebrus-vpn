@@ -123,17 +123,29 @@ class WalletAuthController extends GetxController {
     required String code,
   }) async {
     if (isAuthenticating.value) return;
+    final normalized = code.replaceAll(RegExp(r'\D'), '');
+    if (normalized.length < 4) {
+      authError.value = 'Enter the full code from your email';
+      return;
+    }
     isAuthenticating.value = true;
     authError.value = null;
     try {
-      final session = await _authClient.emailLoginVerify(email: email.trim(), code: code.trim());
+      final session = await _authClient.emailLoginVerify(
+        email: email.trim(),
+        code: normalized,
+      );
       await _persistSession(session, method: 'email');
       await _afterLogin();
-      debugPrint('[Auth] email login OK');
+      debugPrint('[Auth] email login OK user=${session.userId}');
     } on AuthException catch (e) {
       authError.value = e.message;
+      debugPrint('[Auth] email verify failed: ${e.message}');
+    } on TimeoutException {
+      authError.value = 'Sign-in timed out — check your connection and try again';
     } catch (e) {
       authError.value = e.toString();
+      debugPrint('[Auth] email verify error: $e');
     } finally {
       isAuthenticating.value = false;
     }
@@ -772,7 +784,10 @@ class WalletAuthController extends GetxController {
 
     final address = await _solanaAddress(modal);
     if (address == null || address.isEmpty) {
-      authError.value = 'Connect a Solana wallet';
+      authError.value =
+          'Connect a Solana wallet (Phantom, Solflare, etc.). '
+          'For email sign-in, use Continue with Email on the login screen — '
+          'the wallet modal email option does not sign you into Erebrus.';
       return;
     }
 

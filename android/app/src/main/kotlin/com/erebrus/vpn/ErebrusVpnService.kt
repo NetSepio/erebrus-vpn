@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import java.util.concurrent.Executors
 import io.nekohasekai.libbox.libbox.BoxService
 import io.nekohasekai.libbox.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.libbox.Libbox
@@ -80,6 +81,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     private var tunInterface: ParcelFileDescriptor? = null
     private val statsMonitor = LibboxStatsMonitor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    /** libbox start/stop is blocking — never run it on the main looper (ANR + frozen Flutter). */
+    private val tunnelExecutor = Executors.newSingleThreadExecutor()
     @Volatile
     private var stopping = false
     /** Bumps on every start/stop so in-flight tunnel work can be abandoned safely. */
@@ -90,7 +93,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         when (intent?.action) {
             ACTION_STOP -> {
                 tunnelGeneration += 1
-                mainHandler.post { stopTunnel() }
+                tunnelExecutor.execute { stopTunnel() }
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -103,8 +106,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 // Android requires startForeground within seconds of startForegroundService().
                 startForeground(NOTIF_ID, buildNotification(name))
                 val generation = ++tunnelGeneration
-                mainHandler.post {
-                    if (generation != tunnelGeneration) return@post
+                tunnelExecutor.execute {
+                    if (generation != tunnelGeneration) return@execute
                     startTunnel(config, name, generation)
                 }
             }
@@ -123,6 +126,7 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         startForeground(NOTIF_ID, buildNotification(name))
         releaseTunnelResources()
         if (generation != tunnelGeneration) return
+        SingboxBridge.setLastError(null)
         SingboxBridge.emitStage("connecting")
         android.util.Log.i("erebrus-singbox", "startTunnel name=$name bytes=${config.length}")
         try {
@@ -135,7 +139,6 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             Libbox.setup(setup)
             if (generation != tunnelGeneration) return
             val service = Libbox.newService(config, this)
-            service.start()
             if (generation != tunnelGeneration) {
                 try {
                     service.close()
@@ -143,15 +146,36 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 }
                 return
             }
+            // Hold the service before start() so stop/retry can close it while start blocks.
             box = service
-            statsMonitor.start(service)
-            tunnelActive = true
-            SingboxBridge.emitStage("connected")
+            // service.start() blocks until outbounds initialise (WG handshake, etc.).
+            // openTun() marks connected as soon as the OS VPN iface is up; run start on a
+            // side thread so the tunnel executor stays free for stop/transport retries.
+            Thread {
+                try {
+                    if (generation != tunnelGeneration) return@Thread
+                    service.start()
+                    if (generation != tunnelGeneration) return@Thread
+                    statsMonitor.start(service)
+                    android.util.Log.i("erebrus-singbox", "libbox service.start() returned")
+                } catch (e: Exception) {
+                    if (generation != tunnelGeneration) return@Thread
+                    android.util.Log.e("erebrus-singbox", "service.start failed", e)
+                    mainHandler.post {
+                        SingboxBridge.setLastError(e.message ?: e.toString())
+                        releaseTunnelResources()
+                        SingboxBridge.emitStage("error")
+                    }
+                }
+            }.start()
         } catch (e: Exception) {
             if (generation != tunnelGeneration) return
             android.util.Log.e("erebrus-singbox", "startTunnel failed", e)
+            SingboxBridge.setLastError(e.message ?: e.toString())
+            releaseTunnelResources()
+            // Keep the foreground service alive so transport retries can ACTION_START
+            // in-place — stopSelf here races startForegroundService and crashes the app.
             SingboxBridge.emitStage("error")
-            stopTunnel()
         }
     }
 
@@ -212,9 +236,13 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
     }
 
     override fun onDestroy() {
-        if (box != null || tunInterface != null) {
-            releaseTunnelResources()
+        tunnelGeneration += 1
+        tunnelExecutor.execute {
+            if (box != null || tunInterface != null) {
+                releaseTunnelResources()
+            }
         }
+        tunnelExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -244,6 +272,11 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             ?: throw IllegalStateException("VpnService.Builder.establish() returned null")
         tunInterface?.close()
         tunInterface = pfd
+        // TUN is up — report connected immediately. service.start() may still be
+        // waiting on WireGuard handshake; Flutter must not spin until that returns.
+        tunnelActive = true
+        SingboxBridge.emitStage("connected")
+        android.util.Log.i("erebrus-singbox", "TUN established fd=${pfd.fd}")
         return pfd.fd
     }
 

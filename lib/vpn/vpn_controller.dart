@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, Socket;
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -75,6 +75,8 @@ class VpnController extends GetxController {
         stage.value = VpnStage.error;
         return;
       }
+      // During connect(), hold the UI on "connecting" until egress is verified.
+      if (_connectInProgress && s == VpnStage.connected) return;
       stage.value = s;
       if (s == VpnStage.connected) {
         _wasConnected = true;
@@ -210,6 +212,10 @@ class VpnController extends GetxController {
   /// Connects to [node] (or the currently selected node) using the current mode,
   /// trying each candidate transport in order until one connects.
   Future<void> connect({VpnNode? node}) async {
+    if (_connectInProgress) {
+      debugPrint('[VPN] connect already in progress — ignoring duplicate request');
+      return;
+    }
     final target = node ?? selectedNode.value;
     if (target == null) {
       error.value = 'Select a node first';
@@ -276,8 +282,15 @@ class VpnController extends GetxController {
         '${candidates.map((t) => t.label).join(' → ')}',
       );
 
-      for (final t in candidates) {
+      final resolvedHosts = PlatformCapabilities.isDesktop
+          ? const <String, String>{}
+          : await SingboxConfigBuilder.resolveDialHosts(bundle);
+
+      for (var i = 0; i < candidates.length; i++) {
+        final t = candidates[i];
         try {
+          if (i > 0) await _ensureTunnelStopped();
+          stage.value = VpnStage.connecting;
           final config = SingboxConfigBuilder.build(
             bundle: bundle,
             transport: t,
@@ -286,6 +299,7 @@ class VpnController extends GetxController {
             // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
             // egress probe (explicit 127.0.0.1:10808) works.
             useSystemTunnel: !PlatformCapabilities.isDesktop,
+            resolvedHosts: resolvedHosts,
           );
           activeTransport.value = t;
           final srv = bundle.serverPublicKey;
@@ -294,24 +308,38 @@ class VpnController extends GetxController {
             '[VPN] trying ${t.label} → ${bundle.dialTarget(t)} '
             '(wg ${bundle.address}, srv $srvShort)',
           );
-          final ok = await _armAndStart(
+          var ok = await _armAndStart(
             _engine.start(
               jsonEncode(config),
               profileName: 'Erebrus · ${target.name}',
               splitTunnel: _splitTunnelConfig(),
             ),
           );
+          if (!ok) {
+            // Native tunnel may be up while EventChannel/method-channel was blocked (e.g. main-thread ANR).
+            final native = await _engine.stage().catchError((_) => VpnStage.disconnected);
+            if (native == VpnStage.connected) {
+              ok = true;
+              debugPrint('[VPN] ${t.label} native connected (stage event missed)');
+            }
+          }
           debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
-          if (ok && t != Transport.wireguard) {
-            final ready = await _waitStealthReady();
+          if (ok) {
+            final ready = t == Transport.wireguard
+                ? await _waitWireGuardReady()
+                : await _waitStealthReady();
             if (!ready) {
-              debugPrint('[VPN] ${t.label} tunnel not ready — trying next transport');
-              await _engine.stop().catchError((_) {});
+              debugPrint('[VPN] ${t.label} tunnel up but no egress — trying next transport');
+              await _ensureTunnelStopped();
               continue;
             }
           }
           if (ok) {
             _wasConnected = true;
+            stage.value = VpnStage.connected;
+            error.value = null;
+            unawaited(_syncAppProxy(enabled: true));
+            unawaited(_probeEgressIp());
             debugPrint(
               '[VPN] connected · mode=${mode.value.label} · transport=${t.label} · '
               'config=${t == Transport.wireguard ? "direct-wg" : "stealth-singbox"}',
@@ -328,12 +356,11 @@ class VpnController extends GetxController {
           debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
         }
         _wasConnected = false;
-        await _engine.stop().catchError((_) {});
+        await _ensureTunnelStopped();
       }
       _wasConnected = false;
-      error.value = _engine.desktopPrepareError ??
-          SingboxDesktopRunner.instance.lastError ??
-          'Could not connect — run ./scripts/setup-macos-dev.sh, then try Stealth or another server';
+      await _engine.stop().catchError((_) {});
+      error.value = await _connectFailureMessage();
       stage.value = VpnStage.error;
     } on GatewayException catch (e) {
       _wasConnected = false;
@@ -443,49 +470,125 @@ class VpnController extends GetxController {
 
   Future<void> toggle() => isConnected ? disconnect() : connect();
 
-  /// Stealth carriers need a moment after sing-box starts before the inner WG
-  /// handshake succeeds; probe egress before declaring connect success.
-  Future<bool> _waitStealthReady({
-    int attempts = 8,
+  /// Waits until the local sing-box mixed inbound accepts TCP (egress probe target).
+  Future<bool> _waitLocalMixedProxy({
+    int attempts = 40,
+    Duration interval = const Duration(milliseconds: 250),
+  }) async {
+    final host = SingboxConfigBuilder.localProxyHost;
+    final port = SingboxConfigBuilder.localProxyPort;
+    for (var i = 0; i < attempts; i++) {
+      try {
+        final socket = await Socket.connect(
+          host,
+          port,
+          timeout: const Duration(milliseconds: 200),
+        );
+        await socket.close();
+        debugPrint('[VPN] mixed proxy ready at $host:$port');
+        return true;
+      } catch (_) {
+        if (i + 1 < attempts) await Future<void>.delayed(interval);
+      }
+    }
+    debugPrint('[VPN] mixed proxy not ready at $host:$port');
+    return false;
+  }
+
+  Future<bool> _waitTunnelEgress({
+    required String label,
+    int attempts = 12,
     Duration interval = const Duration(milliseconds: 500),
   }) async {
-    // Android: mixed-in may need a beat after native "connected" before 127.0.0.1:10808 accepts.
-    if (Platform.isAndroid) {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-    }
     for (var i = 0; i < attempts; i++) {
       final ip = await EgressIpProbe.fetch(
-        timeout: const Duration(seconds: 4),
+        timeout: const Duration(seconds: 5),
         useTunnelProxy: true,
       );
-      if (ip != null) return true;
+      if (ip != null) {
+        debugPrint('[VPN] $label egress ready → $ip');
+        return true;
+      }
       if (i + 1 < attempts) await Future<void>.delayed(interval);
     }
     return false;
   }
 
+  /// Direct WireGuard: TUN may be up before UDP handshake completes — verify egress.
+  Future<bool> _waitWireGuardReady() async {
+    if (Platform.isAndroid && !await _waitLocalMixedProxy(attempts: 24)) return false;
+    return _waitTunnelEgress(label: 'WireGuard', attempts: 10);
+  }
+
+  /// Stealth: wait for mixed-in, then carrier + inner WG, before showing connected.
+  Future<bool> _waitStealthReady() async {
+    if (!await _waitLocalMixedProxy()) return false;
+    // Carrier (VLESS/Hy2) and loopback WG peer need a beat after mixed-in is up.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    return _waitTunnelEgress(label: 'Stealth', attempts: 18, interval: const Duration(milliseconds: 600));
+  }
+
+  /// Fully tears down the native tunnel before the next transport attempt.
+  Future<void> _ensureTunnelStopped() async {
+    final now = await _engine.stage().catchError((_) => VpnStage.disconnected);
+    if (now == VpnStage.disconnected) return;
+    await _engine.stop().catchError((_) {});
+    for (var i = 0; i < 50; i++) {
+      final s = await _engine.stage().catchError((_) => VpnStage.disconnected);
+      if (s == VpnStage.disconnected) return;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    debugPrint('[VPN] stop: timed out waiting for disconnected before transport retry');
+  }
+
   /// Subscribes before [startFuture] completes so fast native errors are not missed.
+  /// Also polls native [stage] because Android starts the tunnel asynchronously
+  /// after the method channel returns and the EventChannel "connected" event can
+  /// be missed, leaving the UI stuck on "connecting" while the OS VPN is up.
+  Future<String> _connectFailureMessage() async {
+    final native = await _engine.lastTunnelError();
+    if (native != null && native.isNotEmpty) {
+      if (native.contains('ParsePrefix') || native.contains('ipcidr')) {
+        return 'VPN config error — update the Erebrus app to the latest build';
+      }
+      final short = native.length > 160 ? '${native.substring(0, 160)}…' : native;
+      return 'Could not connect — $short';
+    }
+    final desktop = _engine.desktopPrepareError ?? SingboxDesktopRunner.instance.lastError;
+    if (desktop != null && desktop.isNotEmpty) {
+      return 'Could not connect — $desktop';
+    }
+    if (PlatformCapabilities.isDesktop) {
+      return 'Could not connect — run ./scripts/setup-macos-dev.sh, then try Stealth or another server';
+    }
+    return 'Could not connect — try WireGuard or Stealth mode, or pick another server';
+  }
+
   Future<bool> _armAndStart(
     Future<void> startFuture, {
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     final completer = Completer<bool>();
     late StreamSubscription<VpnStage> sub;
-    final timer = Timer(timeout, () {
-      if (!completer.isCompleted) completer.complete(false);
-    });
     sub = _engine.onStage.listen((s) {
       if (s == VpnStage.connected && !completer.isCompleted) completer.complete(true);
       if (s == VpnStage.error && !completer.isCompleted) completer.complete(false);
     });
     try {
       await startFuture;
-      final now = await _engine.stage();
-      if (now == VpnStage.connected) return true;
-      if (now == VpnStage.error) return false;
-      return await completer.future;
+      final deadline = DateTime.now().add(timeout);
+      while (DateTime.now().isBefore(deadline)) {
+        if (completer.isCompleted) return await completer.future;
+        final now = await _engine.stage();
+        if (now == VpnStage.connected) return true;
+        if (now == VpnStage.error) return false;
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      final finalStage = await _engine.stage().catchError((_) => VpnStage.disconnected);
+      if (finalStage == VpnStage.connected) return true;
+      debugPrint('[VPN] _armAndStart timed out after ${timeout.inSeconds}s (native=${finalStage.name})');
+      return false;
     } finally {
-      timer.cancel();
       await sub.cancel();
     }
   }
