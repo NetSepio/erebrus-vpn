@@ -8,7 +8,10 @@ echo "=== ADB devices ==="
 adb devices
 
 ip_check() {
-  adb shell "curl -s --max-time 12 https://api.ipify.org 2>/dev/null" \
+  # IP-literal endpoint first: it answers even when DNS through a stalled
+  # tunnel is dead (the common "connected but no internet" state).
+  adb shell "curl -s --max-time 8 https://1.1.1.1/cdn-cgi/trace 2>/dev/null" | grep '^ip=' \
+    || adb shell "curl -s --max-time 12 https://api.ipify.org 2>/dev/null" \
     || adb shell "wget -qO- https://api.ipify.org 2>/dev/null" \
     || echo "(curl/wget unavailable in adb shell)"
 }
@@ -22,8 +25,10 @@ echo "=== VPN active? ==="
 adb shell dumpsys connectivity 2>/dev/null | grep -i "VPN\|tun" | head -5 || true
 
 echo ""
-echo "=== Erebrus logcat (last 30 lines) ==="
-adb logcat -d -s erebrus-singbox:* 2>/dev/null | tail -30 || true
+echo "=== Erebrus logcat: engine + Dart [VPN]/[Auth] (last 40 lines) ==="
+adb logcat -d 2>/dev/null \
+  | grep -E 'erebrus-singbox|flutter.*\[VPN\]|flutter.*\[Auth\]' \
+  | tail -40 || true
 
 echo ""
 echo "Tip: connect VPN in the app, then re-run: ip_check"

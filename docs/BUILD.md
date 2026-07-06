@@ -35,9 +35,12 @@ All scripts share pinned versions via `scripts/libbox-common.sh`
 | Android arm64 | `./scripts/build-libbox.sh` | `android/app/libs/libbox.aar` |
 | iOS device + sim | `./scripts/build-libbox-ios.sh` | `ios/Frameworks/Libbox.xcframework` |
 | macOS M + Intel | `./scripts/build-libbox-macos.sh` | `macos/Frameworks/Libbox.xcframework` |
-| Windows x64 + arm64 | `./scripts/build-libbox-windows.sh` | `windows/native/libbox/libbox.dll` |
-| Linux x64 + arm64 | `./scripts/build-libbox-linux.sh` | `linux/native/libbox/libbox.so` |
-| All | `./scripts/build-libbox-all.sh` | all of the above |
+| All of the above | `./scripts/build-libbox-all.sh` | Android + iOS + macOS |
+
+Windows and Linux have **no libbox** — `gomobile bind` only targets
+android/ios/macos. Desktop tunnels through the sing-box CLI instead
+(`./scripts/fetch-singbox-cli.sh`); the `build-libbox-{windows,linux}.sh`
+scripts are fail-fast placeholders that explain this.
 
 Android example:
 
@@ -100,9 +103,10 @@ probe, live stats (Clash API), web wallet login, gateway node list + provision.
 The in-app browser and system browsers use the tunnel while connected. Close the
 window to **minimize to tray**; use tray → Quit to exit fully.
 
-**Optional later:** wire `libbox` + TUN into `singbox_plugin` for system-wide VPN
-without the CLI (`./scripts/build-libbox-windows.sh`, Wintun / `cap_net_admin`).
-Not required for proxy-mode MVP.
+**Optional later:** system-wide VPN without the CLI would need a `go build
+-buildmode=c-shared` libbox shim (gomobile cannot target Windows/Linux) plus
+Wintun / `cap_net_admin` TUN wiring in `singbox_plugin`. Not required for the
+proxy-mode MVP.
 
 ## iOS
 

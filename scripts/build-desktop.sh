@@ -47,9 +47,10 @@ package_windows() {
   fi
   local tag="${1:-local}"
   mkdir -p dist
-  local out="dist/erebrus-vpn-windows-${tag}.zip"
+  # Absolute path — zip resolves relative paths against the cd'd runner dir.
+  local out="${ROOT_DIR}/dist/erebrus-vpn-windows-${tag}.zip"
   (cd "${runner_dir}" && zip -qr "${out}" .)
-  echo "✓ packaged → ${out}"
+  echo "✓ packaged → dist/erebrus-vpn-windows-${tag}.zip"
 }
 
 read_version_tag() {

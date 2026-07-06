@@ -6,7 +6,21 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [[ ! -f android/key.properties ]]; then
-  echo "Missing android/key.properties — run ./scripts/create-android-release-keystore.sh first."
+  cat >&2 <<'EOF'
+Missing android/key.properties. Generate a keystore per flavor, e.g.:
+
+  keytool -genkey -v -keystore ~/keys/erebrus-playstore.jks \
+    -keyalg RSA -keysize 2048 -validity 10000 -alias erebrus
+
+then create android/key.properties with per-flavor prefixes
+(fields read by android/app/build.gradle.kts):
+
+  playstore.storeFile=/absolute/path/erebrus-playstore.jks
+  playstore.storePassword=...
+  playstore.keyAlias=erebrus
+  playstore.keyPassword=...
+  dappstore.storeFile=...      # same four keys for the dappstore flavor
+EOF
   exit 1
 fi
 

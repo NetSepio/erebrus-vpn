@@ -1,35 +1,19 @@
 #!/usr/bin/env bash
 #
-# Build sing-box libbox for Linux (amd64 + arm64) into
-# linux/native/libbox/.
+# PLACEHOLDER — libbox for Linux cannot be built with gomobile.
 #
-# Prereqs: Go ≥1.23, gcc, gomobile.
-# Usage: ./scripts/build-libbox-linux.sh
+# `gomobile bind` only supports android/ios/iossimulator/macos/maccatalyst:
+#   $ gomobile bind -target=linux/amd64
+#   gomobile: invalid -target="linux/amd64": unsupported platform: "linux"
+#
+# Linux desktop doesn't need this today: the app tunnels through the sing-box
+# CLI (scripts/fetch-singbox-cli.sh + SingboxDesktopRunner). A native libbox
+# path would mean `go build -buildmode=c-shared` against a hand-written cgo
+# export shim (sing-box has no c-shared entry point) plus a TUN implementation
+# with cap_net_admin — tracked as future work in docs/BUILD.md.
 #
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=libbox-common.sh
-source "${SCRIPT_DIR}/libbox-common.sh"
-
-OUT_DIR="${ROOT_DIR}/linux/native/libbox"
-WORK="$(mktemp -d)"
-JAVA_PKG="io.nekohasekai.libbox"
-
-echo "▸ sing-box ${SING_BOX_VERSION} (${SING_BOX_COMMIT}) → ${OUT_DIR}/"
-echo "▸ gomobile ${GOMOBILE_VERSION} · targets linux/amd64 + linux/arm64"
-
-ensure_gomobile
-prepare_singbox_source "${WORK}"
-
-mkdir -p "${OUT_DIR}"
-gomobile bind -v \
-  -target=linux/amd64,linux/arm64 \
-  -javapkg="${JAVA_PKG}" \
-  -tags="${LIBBOX_TAGS}" \
-  -trimpath -ldflags="-s -w" \
-  -o "${OUT_DIR}/libbox.so" \
-  ./experimental/libbox
-
-echo "✓ wrote ${OUT_DIR}/libbox.so (from sing-box ${SING_BOX_COMMIT})"
-rm -rf "${WORK}"
+echo "✗ build-libbox-linux.sh is a placeholder — gomobile cannot target linux." >&2
+echo "  Use the sing-box CLI instead: ./scripts/fetch-singbox-cli.sh linux" >&2
+exit 1

@@ -12,8 +12,8 @@ import 'bottombar/main_shell.dart';
 /// Top-level router: first-launch onboarding → sign-in → the app.
 ///
 /// Onboarding shows only until the "seen" flag is persisted; thereafter an
-/// unauthenticated user lands on login, and an authenticated session opens the
-/// dVPN tab. Logging out clears the session and returns here (to login).
+/// unauthenticated user lands on login, and any authenticated session (wallet,
+/// email, Google, or Apple) opens the dVPN tab. Logging out returns here.
 class RootView extends StatelessWidget {
   const RootView({super.key});
 
@@ -28,7 +28,7 @@ class RootView extends StatelessWidget {
         screen = OnboardingView(key: const ValueKey('onboarding'), onDone: settings.markOnboardingSeen);
       } else if (!auth.sessionReady.value) {
         screen = const _Splash(key: ValueKey('splash'));
-      } else if (auth.walletAddress.value.isEmpty) {
+      } else if (!auth.isAuthenticated) {
         screen = const LoginView(key: ValueKey('login'));
       } else {
         screen = const MainShell(key: ValueKey('app'));
