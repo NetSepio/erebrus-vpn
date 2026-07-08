@@ -7,9 +7,15 @@ const kReownProjectId = String.fromEnvironment('REOWN_PROJECT_ID');
 bool get hasReownProjectId => kReownProjectId.isNotEmpty;
 
 /// Google Sign-In **server** (web) client id — its audience must be listed in the
-/// gateway's `GOOGLE_CLIENT_IDS`. Absent => Google sign-in is hidden (no native
-/// call, no error).
-const kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+/// gateway's `GOOGLE_CLIENT_IDS`. Client ids are public identifiers (never the
+/// secret), so the production one is baked in; override via `--dart-define` for
+/// a different Google Cloud project. Empty => Google sign-in is hidden (no
+/// native call, no error).
+const kGoogleServerClientId = String.fromEnvironment(
+  'GOOGLE_SERVER_CLIENT_ID',
+  defaultValue:
+      '743089346496-15iub9ug9b4jkqonokg2js80ndjv8nba.apps.googleusercontent.com',
+);
 bool get hasGoogleSignIn => kGoogleServerClientId.isNotEmpty;
 
 /// Apple Sign-In Services id + redirect, needed only for the web/Android relay

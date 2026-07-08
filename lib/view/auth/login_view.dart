@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -13,8 +15,22 @@ import '../../theme/premium_widgets.dart';
 /// wallet/social modal, and a full-screen connecting overlay shows while the
 /// gateway verifies the signed challenge. On success the auth session updates
 /// and the app router routes to the dVPN tab.
-class LoginView extends StatelessWidget {
+class LoginView extends StatefulWidget {
   const LoginView({super.key});
+
+  @override
+  State<LoginView> createState() => _LoginViewState();
+}
+
+class _LoginViewState extends State<LoginView> {
+  @override
+  void initState() {
+    super.initState();
+    // Re-discover gateway login methods on every visit: the app-start fetch is
+    // best-effort, and a transient failure there would otherwise hide Google
+    // sign-in until the app restarts.
+    unawaited(Get.find<WalletAuthController>().loadAuthMethods());
+  }
 
   @override
   Widget build(BuildContext context) {

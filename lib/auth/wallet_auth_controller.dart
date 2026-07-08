@@ -67,6 +67,9 @@ class WalletAuthController extends GetxController {
   String? _token;
   String? _mwaAuthToken;
 
+  /// Mirrors [_token] for GetX — [RootView] must observe this, not the raw token.
+  final sessionActive = false.obs;
+
   final isSolanaMobileDevice = false.obs;
 
   /// Native-login availability = gateway-configured AND app-side config present.
@@ -74,7 +77,7 @@ class WalletAuthController extends GetxController {
   bool get googleLoginAvailable => authMethods.value.google && googleSignInSupported;
   bool get appleLoginAvailable => authMethods.value.apple && appleDeviceReady.value;
 
-  bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  bool get isAuthenticated => sessionActive.value;
   bool get isEntitled =>
       entitlement.value.entitled || role.value == 'admin';
 
@@ -118,7 +121,7 @@ class WalletAuthController extends GetxController {
   Future<bool> requestEmailLoginCode(String email) async {
     authError.value = null;
     try {
-      await _authClient.emailLoginStart(email.trim());
+      await _authClient.emailLoginStart(email.trim().toLowerCase());
       return true;
     } on AuthException catch (e) {
       authError.value = e.message;
@@ -133,19 +136,22 @@ class WalletAuthController extends GetxController {
     required String email,
     required String code,
   }) async {
-    if (isAuthenticating.value) return;
     final normalized = code.replaceAll(RegExp(r'\D'), '');
     if (normalized.length < 4) {
       authError.value = 'Enter the full code from your email';
       return;
     }
-    isAuthenticating.value = true;
     authError.value = null;
     try {
       final session = await _authClient.emailLoginVerify(
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         code: normalized,
       );
+      if (session.token.isEmpty) {
+        authError.value = 'Sign-in succeeded but no session token was returned';
+        debugPrint('[Auth] email verify: empty token from gateway');
+        return;
+      }
       await _persistSession(session, method: 'email');
       await _afterLogin();
       debugPrint('[Auth] email login OK user=${session.userId}');
@@ -157,8 +163,6 @@ class WalletAuthController extends GetxController {
     } catch (e) {
       authError.value = e.toString();
       debugPrint('[Auth] email verify error: $e');
-    } finally {
-      isAuthenticating.value = false;
     }
   }
 
@@ -234,7 +238,7 @@ class WalletAuthController extends GetxController {
     try {
       final stored = await _store.read();
       if (stored != null) {
-        _token = stored.token;
+        _applyToken(stored.token);
         _mwaAuthToken = stored.mwaAuthToken;
         walletAddress.value = stored.walletAddress;
         userId.value = stored.userId;
@@ -245,6 +249,7 @@ class WalletAuthController extends GetxController {
         await refreshProfile();
         debugPrint('[Auth] restored session for ${stored.walletAddress}');
       } else {
+        _applyToken(null);
         entitlement.value = EntitlementState.none;
       }
     } catch (e) {
@@ -549,7 +554,7 @@ class WalletAuthController extends GetxController {
     profileChain.value = '';
     profileCreatedAt.value = null;
     final mwaToken = _mwaAuthToken;
-    _token = null;
+    _applyToken(null);
     _mwaAuthToken = null;
     unawaited(googleSignOut()); // best-effort; lets the chooser reappear next time
     walletAddress.value = '';
@@ -734,12 +739,17 @@ class WalletAuthController extends GetxController {
     }
   }
 
+  void _applyToken(String? token) {
+    _token = token;
+    sessionActive.value = token != null && token.isNotEmpty;
+  }
+
   Future<void> _persistSession(
     AuthSession session, {
     required String method,
     String? mwaToken,
   }) async {
-    _token = session.token;
+    _applyToken(session.token);
     walletAddress.value = session.walletAddress;
     userId.value = session.userId;
     role.value = session.role;
