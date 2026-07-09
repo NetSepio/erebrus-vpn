@@ -123,6 +123,30 @@ class _ConnectViewState extends State<ConnectView> {
     }
   }
 
+  /// Highlights the transport in use while connected/connecting; otherwise the
+  /// user's saved preference (Auto / WireGuard / Stealth).
+  ConnectMode _displayMode(VpnController c) {
+    final stage = c.stage.value;
+    final transport = c.activeTransport.value;
+    if ((stage == VpnStage.connected || stage == VpnStage.connecting) &&
+        transport != null) {
+      return transport.connectMode;
+    }
+    return c.mode.value;
+  }
+
+  String _protocolBlurb(VpnController c) {
+    final stage = c.stage.value;
+    final transport = c.activeTransport.value;
+    if (stage == VpnStage.connected && transport != null) {
+      return 'In use · ${transport.label}';
+    }
+    if (stage == VpnStage.connecting && transport != null) {
+      return transport.connectMode.blurb;
+    }
+    return c.mode.value.blurb;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -144,14 +168,16 @@ class _ConnectViewState extends State<ConnectView> {
               const SizedBox(height: 16),
               // protocol segmented
               Obx(() => _ProtocolSegment(
-                    mode: _c.mode.value,
-                    enabled: !_c.isConnected && !_c.killSwitchBlocking.value,
+                    mode: _displayMode(_c),
+                    enabled: !_c.isConnected &&
+                        !_c.isBusy &&
+                        !_c.killSwitchBlocking.value,
                     onSelect: _setProtocol,
                   )),
               const SizedBox(height: 8),
               Obx(() => Center(
                     child: Text(
-                      _c.mode.value.blurb,
+                      _protocolBlurb(_c),
                       textAlign: TextAlign.center,
                       style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted),
                     ),

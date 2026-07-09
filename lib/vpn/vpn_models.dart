@@ -37,6 +37,12 @@ extension TransportX on Transport {
         Transport.vlessReality => 'VLESS · REALITY',
         Transport.hysteria2 => 'Hysteria2',
       };
+
+  /// UI protocol segment for the transport actually running the tunnel.
+  ConnectMode get connectMode => switch (this) {
+        Transport.wireguard => ConnectMode.wireguard,
+        Transport.vlessReality || Transport.hysteria2 => ConnectMode.stealth,
+      };
 }
 
 /// Org summary embedded on gateway node discovery (`GET /api/v2/nodes`) and the
@@ -747,6 +753,8 @@ class SingboxConfigBuilder {
   static bool get _isMacOS =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
+  // NOTE: the pinned sing-box (v1.11.15) rejects unknown DNS fields at config
+  // decode — validate additions with `bin/sing-box/<os>/sing-box check` first.
   static Map<String, dynamic> _dnsConfig({
     required String remoteServer,
     required String wgTag,

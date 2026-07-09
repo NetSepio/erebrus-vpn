@@ -39,6 +39,12 @@ void main() {
     expect(ConnectMode.wireguard.transports, [Transport.wireguard]);
   });
 
+  test('Transport maps to the connect-screen protocol segment', () {
+    expect(Transport.wireguard.connectMode, ConnectMode.wireguard);
+    expect(Transport.vlessReality.connectMode, ConnectMode.stealth);
+    expect(Transport.hysteria2.connectMode, ConnectMode.stealth);
+  });
+
   test('CredentialBundle parses the node response', () {
     final b = CredentialBundle.fromJson(jsonDecode(_bundleJson));
     expect(b.serverPublicKey, '6RfVDGZnJs4BJSzRk+iR8Ta1ftSMSnEC5fGwSbw7RkM=');

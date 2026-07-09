@@ -117,6 +117,9 @@ class VpnController extends GetxController {
         egressIp.value = null;
         egressIpLoading.value = false;
         activeTransport.value = null;
+        if (!_connectInProgress) {
+          _restorePreferredMode();
+        }
         if (_wasConnected &&
             !_userDisconnecting &&
             !_syncingNative &&
@@ -442,6 +445,7 @@ class VpnController extends GetxController {
     activeTransport.value = null;
     error.value = null;
     stage.value = VpnStage.disconnected;
+    _restorePreferredMode();
     debugPrint('[VPN] connect aborted — back to disconnected');
   }
 
@@ -463,6 +467,7 @@ class VpnController extends GetxController {
     error.value = null;
     egressIp.value = null;
     egressIpLoading.value = false;
+    _restorePreferredMode();
     await VpnSessionStore.clear();
   }
 
@@ -475,7 +480,13 @@ class VpnController extends GetxController {
     error.value = null;
     egressIp.value = null;
     egressIpLoading.value = false;
+    _restorePreferredMode();
     await VpnSessionStore.clear();
+  }
+
+  void _restorePreferredMode() {
+    if (!Get.isRegistered<AppSettingsController>()) return;
+    mode.value = Get.find<AppSettingsController>().defaultProtocol.value;
   }
 
   Future<void> _syncAppProxy({required bool enabled}) async {
