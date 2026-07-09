@@ -283,7 +283,7 @@ class _ServerSheetState extends State<_ServerSheet> {
       if (gateway.orgNodes.isEmpty) {
         return const NodesEmptyPanel(
           title: 'No nodes in your organizations',
-          subtitle: 'An org admin can enroll a Standard, Shield or Sentinel node — it will show up here.',
+          subtitle: 'The workspace owner or a manager can enroll a Standard, Shield or Sentinel node — it will show up here.',
         );
       }
       return NodesEmptyPanel(

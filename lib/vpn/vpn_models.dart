@@ -49,7 +49,7 @@ extension TransportX on Transport {
 /// operator node view (`GET /api/v2/operator/nodes`). Mirrors the gateway
 /// `orgSummary` shape (api/org_views.go): `verification_status` (string),
 /// `slug`, `display_name`, `description`, `website_url`, `plan`, and `id` (only
-/// present when the caller is org owner/admin).
+/// present for any org member).
 class VpnNodeOrg {
   const VpnNodeOrg({
     required this.name,
@@ -105,7 +105,7 @@ class VpnNodeOrg {
 }
 
 /// An organization the signed-in user belongs to (`GET /api/v2/orgs`). The org
-/// UUID (`id`) is only returned to owner/admin members; [slug] is always present
+/// UUID (`id`) is returned for any org member; [slug] is always present
 /// and is the stable key used to scope nodes to an org.
 class VpnOrg {
   const VpnOrg({

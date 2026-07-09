@@ -55,7 +55,7 @@ class NodesEmptyPanel extends StatelessWidget {
     return NodesEmptyPanel(
       title: 'No nodes in $orgName',
       subtitle:
-          'This organization has no online nodes yet. An org admin can enroll a node, '
+          'This organization has no online nodes yet. The workspace owner or a manager can enroll a node, '
           'or switch to the Public network to browse community nodes.',
       onRetry: onShowPublic,
       actionLabel: 'PUBLIC NETWORK',
