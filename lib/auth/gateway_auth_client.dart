@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'auth_config.dart';
 import 'entitlement_state.dart';
+import 'referral_summary.dart';
 import 'user_profile.dart';
 import '../vpn/gateway_config.dart';
 import '../vpn/gateway_http.dart';
@@ -205,6 +206,31 @@ class GatewayAuthClient {
       bearerToken: bearerToken,
     );
     return UserProfile.fromJson(map);
+  }
+
+  /// `GET /api/v2/referrals/me` — my invite code, referrer, recent referees.
+  Future<ReferralSummary> fetchReferrals(String bearerToken) async {
+    final map = await _getJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/referrals/me'),
+      bearerToken: bearerToken,
+    );
+    return ReferralSummary.fromJson(map);
+  }
+
+  /// `POST /api/v2/referrals/redeem` — apply an invite code (one referrer,
+  /// ever). Returns the refreshed summary, or null on the gateway's minimal
+  /// `{bound:true}` fallback — refetch in that case.
+  Future<ReferralSummary?> redeemReferralCode(
+    String bearerToken,
+    String code,
+  ) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/referrals/redeem'),
+      {'code': code.trim().toUpperCase()},
+      bearerToken: bearerToken,
+    );
+    if ((map['code'] ?? '').toString().isEmpty) return null;
+    return ReferralSummary.fromJson(map);
   }
 
   /// `POST /api/v2/auth/email` — send OTP to link a recovery email.

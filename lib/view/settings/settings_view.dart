@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../platform/platform_capabilities.dart';
+import '../../auth/gateway_auth_client.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../vpn/gateway_config.dart';
 import '../../settings/app_settings_controller.dart';
@@ -50,6 +51,7 @@ class _SettingsViewState extends State<SettingsView> {
     final auth = Get.find<WalletAuthController>();
     if (auth.isAuthenticated) {
       auth.refreshProfile();
+      auth.refreshReferrals();
       Get.find<GatewayController>().refreshNodes();
     }
   }
@@ -78,6 +80,7 @@ class _SettingsViewState extends State<SettingsView> {
                   authMethod: auth.authMethod.value,
                   displayName: auth.profileName.value,
                   chain: auth.profileChain.value,
+                  email: auth.profileEmail.value,
                 )),
             const SizedBox(height: 14),
 
@@ -106,6 +109,9 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                 ])),
             const SizedBox(height: 18),
+
+            // referrals — mirrors the webapp profile "Invite friends" card
+            _ReferralSection(auth: auth),
 
             // vpn & security
             const SectionLabel('VPN & SECURITY'),
@@ -230,11 +236,13 @@ class _ProfileCard extends StatefulWidget {
     required this.authMethod,
     required this.displayName,
     required this.chain,
+    this.email = '',
   });
   final String walletAddress;
   final String authMethod;
   final String displayName;
   final String chain;
+  final String email;
   @override
   State<_ProfileCard> createState() => _ProfileCardState();
 }
@@ -257,15 +265,19 @@ class _ProfileCardState extends State<_ProfileCard> {
       }
       return name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
     }
-    final a = widget.walletAddress;
+    final a = widget.walletAddress.isNotEmpty ? widget.walletAddress : widget.email.trim();
     if (a.length < 2) return 'ER';
     return a.substring(0, 2).toUpperCase();
   }
 
+  // Name > wallet > email — identity-login users shouldn't read "Not connected".
   String get _title {
     final name = widget.displayName.trim();
     if (name.isNotEmpty) return name;
-    return _short;
+    if (widget.walletAddress.isNotEmpty) return _short;
+    final email = widget.email.trim();
+    if (email.isNotEmpty) return email;
+    return 'Erebrus account';
   }
 
   String get _subtitle {
@@ -303,22 +315,29 @@ class _ProfileCardState extends State<_ProfileCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_title, style: grotesk(size: 16, weight: FontWeight.w600)),
+                Text(_title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 16, weight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(_subtitle, style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                Text(_subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: _copy,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-              child: Icon(_copied ? Icons.check : Icons.copy_outlined,
-                  size: 16, color: _copied ? AppColors.success : AppColors.textSecondary),
+          if (widget.walletAddress.isNotEmpty)
+            GestureDetector(
+              onTap: _copy,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
+                child: Icon(_copied ? Icons.check : Icons.copy_outlined,
+                    size: 16, color: _copied ? AppColors.success : AppColors.textSecondary),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -499,10 +518,15 @@ class _GroupRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: grotesk(size: 14.5, weight: FontWeight.w500)),
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: grotesk(size: 14.5, weight: FontWeight.w500)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)),
                   ],
                 ],
@@ -512,6 +536,207 @@ class _GroupRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Invite friends, earn XP" — the referral card from the webapp profile page.
+/// Hidden until the summary loads (the gateway allocates the code lazily).
+class _ReferralSection extends StatefulWidget {
+  const _ReferralSection({required this.auth});
+  final WalletAuthController auth;
+  @override
+  State<_ReferralSection> createState() => _ReferralSectionState();
+}
+
+class _ReferralSectionState extends State<_ReferralSection> {
+  final _codeCtrl = TextEditingController();
+  bool _copied = false;
+
+  @override
+  void dispose() {
+    _codeCtrl.dispose();
+    super.dispose();
+  }
+
+  void _copy(String code) {
+    Clipboard.setData(ClipboardData(text: code));
+    setState(() => _copied = true);
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  Future<void> _redeem() async {
+    final code = _codeCtrl.text.trim();
+    if (code.isEmpty || widget.auth.isRedeemingReferral.value) return;
+    FocusScope.of(context).unfocus();
+    try {
+      await widget.auth.redeemReferralCode(code);
+      _codeCtrl.clear();
+      Get.snackbar('Invite code applied', 'You both earn XP',
+          snackPosition: SnackPosition.BOTTOM);
+    } on AuthException catch (e) {
+      Get.snackbar('Invite code', e.message, snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final sum = widget.auth.referral.value;
+      if (sum == null || sum.code.isEmpty) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionLabel('REFERRALS'),
+          const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.accent.withValues(alpha: 0.10),
+                  AppColors.accent.withValues(alpha: 0.03),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Invite friends, earn XP',
+                    style: grotesk(size: 15, weight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Text(
+                  'Share your code — when a friend joins and starts their trial, '
+                  'you both earn XP. Claim XP on erebrus.io for free days of access.',
+                  style: grotesk(
+                      size: 12, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.45),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(sum.code,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: mono(
+                                size: 15,
+                                weight: FontWeight.w600,
+                                color: AppColors.accentHi,
+                                letterSpacing: 15 * 0.12)),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _copy(sum.code),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: (_copied ? AppColors.success : AppColors.accent)
+                                .withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(_copied ? 'COPIED' : 'COPY',
+                              style: mono(
+                                  size: 11,
+                                  weight: FontWeight.w500,
+                                  color: _copied ? AppColors.success : AppColors.accent,
+                                  letterSpacing: 11 * 0.06)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    _ReferralStat(value: sum.referredCount, label: 'invited'),
+                    const SizedBox(width: 28),
+                    _ReferralStat(value: sum.qualifiedCount, label: 'qualified'),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(height: 1, color: AppColors.strokeSoft),
+                const SizedBox(height: 12),
+                if (sum.referredBy.isNotEmpty)
+                  Text('Invited by ${sum.referredBy}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary))
+                else ...[
+                  Text('Were you invited? Enter the code — you both earn XP.',
+                      style: grotesk(
+                          size: 12, weight: FontWeight.w400, color: AppColors.textSecondary)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _codeCtrl,
+                          textCapitalization: TextCapitalization.characters,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          onSubmitted: (_) => _redeem(),
+                          style: mono(size: 13, weight: FontWeight.w500, letterSpacing: 13 * 0.1),
+                          decoration: const InputDecoration(hintText: 'Invite code', isDense: true),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: widget.auth.isRedeemingReferral.value ? null : _redeem,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                              widget.auth.isRedeemingReferral.value ? 'APPLYING…' : 'APPLY',
+                              style: mono(
+                                  size: 12,
+                                  weight: FontWeight.w600,
+                                  color: AppColors.onAccent,
+                                  letterSpacing: 12 * 0.05)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+      );
+    });
+  }
+}
+
+class _ReferralStat extends StatelessWidget {
+  const _ReferralStat({required this.value, required this.label});
+  final int value;
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('$value', style: grotesk(size: 18, weight: FontWeight.w700)),
+        const SizedBox(height: 1),
+        Text(label, style: grotesk(size: 11, weight: FontWeight.w400, color: AppColors.textMuted)),
+      ],
     );
   }
 }

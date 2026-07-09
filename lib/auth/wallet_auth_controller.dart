@@ -15,6 +15,7 @@ import 'deep_link_handler.dart';
 import 'desktop_web_auth.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import 'referral_summary.dart';
 import 'social_login.dart';
 import 'user_profile.dart';
 import '../platform/platform_capabilities.dart';
@@ -56,6 +57,8 @@ class WalletAuthController extends GetxController {
   final isLoadingProfile = false.obs;
   final profileError = RxnString();
   final isLinkingEmail = false.obs;
+  final referral = Rxn<ReferralSummary>();
+  final isRedeemingReferral = false.obs;
   final entitlementError = RxnString();
   final awaitingWebCallback = false.obs;
 
@@ -553,6 +556,7 @@ class WalletAuthController extends GetxController {
     profileName.value = '';
     profileChain.value = '';
     profileCreatedAt.value = null;
+    referral.value = null;
     final mwaToken = _mwaAuthToken;
     _applyToken(null);
     _mwaAuthToken = null;
@@ -648,6 +652,38 @@ class WalletAuthController extends GetxController {
       rethrow;
     } finally {
       isLinkingEmail.value = false;
+    }
+  }
+
+  /// Loads the referral summary (best-effort — the card just stays hidden on
+  /// failure). The gateway allocates the invite code lazily on first access.
+  Future<void> refreshReferrals() async {
+    final token = _token;
+    if (token == null || token.isEmpty) {
+      referral.value = null;
+      return;
+    }
+    try {
+      referral.value = await _authClient.fetchReferrals(token);
+    } catch (e) {
+      debugPrint('[Auth] referral summary load failed: $e');
+    }
+  }
+
+  /// Applies an invite code to this account (one referrer, ever). Throws
+  /// [AuthException] with the gateway's message so the UI can surface it.
+  Future<void> redeemReferralCode(String code) async {
+    if (!isAuthenticated) return;
+    isRedeemingReferral.value = true;
+    try {
+      final sum = await _authClient.redeemReferralCode(_token!, code);
+      if (sum != null) {
+        referral.value = sum;
+      } else {
+        await refreshReferrals();
+      }
+    } finally {
+      isRedeemingReferral.value = false;
     }
   }
 
