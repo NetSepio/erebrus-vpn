@@ -98,11 +98,7 @@ class _ServerSheetState extends State<_ServerSheet> {
 
   List<VpnNode> _privateList(GatewayController gateway) {
     final list = gateway.orgNodes.where((n) {
-      if (_privType != null) {
-        final want = _privType!;
-        final got = VpnNode.normalizeDeploymentProfile(n.deploymentProfile);
-        if (got != want) return false;
-      }
+      if (_privType != null && n.deploymentProfile.toLowerCase() != _privType) return false;
       if (_privWorkspace != null && n.org?.slug != _privWorkspace) return false;
       if (_privRegion != null && n.region.toUpperCase() != _privRegion) return false;
       return true;
