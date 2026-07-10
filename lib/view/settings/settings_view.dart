@@ -614,7 +614,7 @@ class _ReferralSectionState extends State<_ReferralSection> {
                 const SizedBox(height: 6),
                 Text(
                   'Share your code — when a friend joins and starts their trial, '
-                  'you both earn XP. Claim XP on erebrus.io for free days of access.',
+                  'you both earn XP. Claim XP here for plan upgrades and to extend your free trial.',
                   style: grotesk(
                       size: 12, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.45),
                 ),
