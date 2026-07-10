@@ -310,14 +310,10 @@ class _StartPageState extends State<_StartPage> {
     super.dispose();
   }
 
-  void _submitSearch({bool newTab = false}) {
+  void _submitSearch() {
     final query = _search.text;
     if (query.trim().isEmpty) return;
-    if (newTab) {
-      _browser.searchPrivateWebInNewTab(query);
-    } else {
-      _browser.searchPrivateWeb(query);
-    }
+    _browser.searchPrivateWeb(query);
     _search.clear();
     _focus.unfocus();
   }
@@ -394,20 +390,7 @@ class _StartPageState extends State<_StartPage> {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => _submitSearch(newTab: true),
-            icon: const Icon(Icons.open_in_new, size: 16, color: AppColors.textSecondary),
-            label: Text('Open in new tab', style: grotesk(size: 13, weight: FontWeight.w500, color: AppColors.textSecondary)),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(44, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 22),
         Text('YOUR NETWORK', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.12)),
         const SizedBox(height: 12),
         GridView.count(
