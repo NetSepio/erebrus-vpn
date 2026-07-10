@@ -27,6 +27,8 @@ class NodeDisplay {
     this.showLoad = true,
     this.showNodeSpeedtest = false,
     this.showActivity = false,
+    this.deploymentTypeLabel,
+    this.deploymentTypeColor,
   });
 
   final String flag;
@@ -51,6 +53,9 @@ class NodeDisplay {
   final bool showLoad;
   final bool showNodeSpeedtest;
   final bool showActivity;
+  /// Shield / Sentinel pill on the tag row (private picker).
+  final String? deploymentTypeLabel;
+  final Color? deploymentTypeColor;
 
   String get loadLabel => showLoad ? '${loadValue.toStringAsFixed(0)}%' : '—';
 
@@ -126,10 +131,23 @@ class NodeDisplay {
     bool forcePlaceholder = false,
     int? clientPingMs,
     bool showActivity = false,
+    bool showDeploymentType = false,
   }) {
     if (node == null || forcePlaceholder) return placeholder();
     final region = node.region.isEmpty ? 'Erebrus node' : node.region;
     final activity = _nodeActivity(node);
+    final profile = node.deploymentProfile.toLowerCase();
+    String? deploymentTypeLabel;
+    Color? deploymentTypeColor;
+    if (showDeploymentType && !node.isStandard) {
+      if (node.isShield) {
+        deploymentTypeLabel = 'Shield';
+        deploymentTypeColor = AppColors.success;
+      } else if (node.isSentinel) {
+        deploymentTypeLabel = 'Sentinel';
+        deploymentTypeColor = AppColors.accent;
+      }
+    }
     return NodeDisplay(
       flag: _flag(node.region),
       name: node.name,
@@ -150,6 +168,8 @@ class NodeDisplay {
       clientPingMs: clientPingMs,
       showNodeSpeedtest: node.hasReportedSpeedtest,
       showActivity: showActivity,
+      deploymentTypeLabel: deploymentTypeLabel,
+      deploymentTypeColor: deploymentTypeColor,
     );
   }
 

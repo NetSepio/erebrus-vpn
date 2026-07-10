@@ -177,7 +177,7 @@ class VpnNode {
     required this.loadPct,
     this.status = 'online',
     this.accessMode = 'public',
-    this.deploymentProfile = 'erebrus',
+    this.deploymentProfile = 'standard',
     this.minTier = 0,
     this.zone,
     this.peerId,
@@ -208,7 +208,7 @@ class VpnNode {
   final double loadPct;
   final String status;
   final String accessMode;
-  /// Node type: `erebrus` (Standard) | `shield` | `sentinel`.
+  /// Node type: `standard` | `shield` | `sentinel`.
   final String deploymentProfile;
   final int minTier;
   final String? zone;
@@ -238,8 +238,18 @@ class VpnNode {
   bool get isOffline => status.toLowerCase() == 'offline';
   bool get isPrivateAccess => accessMode.toLowerCase() == 'private';
 
+  static String normalizeDeploymentProfile(String? raw) {
+    final p = (raw ?? 'standard').toLowerCase();
+    if (p == 'erebrus') return 'standard';
+    return p;
+  }
+
   bool get isShield => deploymentProfile.toLowerCase() == 'shield';
   bool get isSentinel => deploymentProfile.toLowerCase() == 'sentinel';
+  bool get isStandard {
+    final p = deploymentProfile.toLowerCase();
+    return p == 'standard' || p == 'erebrus';
+  }
 
   /// Human node-type label for the private picker (Standard / Shield / Sentinel).
   String get nodeTypeLabel {
@@ -306,7 +316,7 @@ class VpnNode {
       loadPct: (j['load_pct'] as num?)?.toDouble() ?? 0,
       status: (j['status'] ?? 'online').toString(),
       accessMode: (j['access_mode'] ?? caps?['access_mode'] ?? 'public').toString(),
-      deploymentProfile: (j['deployment_profile'] ?? 'erebrus').toString(),
+      deploymentProfile: normalizeDeploymentProfile(j['deployment_profile']?.toString()),
       minTier: (j['min_tier'] as num?)?.toInt() ?? 0,
       zone: zone.isEmpty ? null : zone,
       peerId: peerId.isEmpty ? null : peerId,

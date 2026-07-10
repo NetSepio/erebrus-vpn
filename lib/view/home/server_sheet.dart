@@ -37,7 +37,7 @@ class _ServerSheetState extends State<_ServerSheet> {
   String? _pubRegion; // null = all
 
   // Private filters.
-  String? _privType; // null | erebrus | shield | sentinel
+  String? _privType; // null | standard | shield | sentinel
   String? _privWorkspace; // null = all; else org slug
   String? _privRegion;
 
@@ -98,7 +98,11 @@ class _ServerSheetState extends State<_ServerSheet> {
 
   List<VpnNode> _privateList(GatewayController gateway) {
     final list = gateway.orgNodes.where((n) {
-      if (_privType != null && n.deploymentProfile.toLowerCase() != _privType) return false;
+      if (_privType != null) {
+        final want = _privType!;
+        final got = VpnNode.normalizeDeploymentProfile(n.deploymentProfile);
+        if (got != want) return false;
+      }
       if (_privWorkspace != null && n.org?.slug != _privWorkspace) return false;
       if (_privRegion != null && n.region.toUpperCase() != _privRegion) return false;
       return true;
@@ -216,7 +220,7 @@ class _ServerSheetState extends State<_ServerSheet> {
             _FilterChips(
               options: const [
                 _Opt(null, 'ALL TYPES'),
-                _Opt('erebrus', 'STANDARD'),
+                _Opt('standard', 'STANDARD'),
                 _Opt('shield', 'SHIELD'),
                 _Opt('sentinel', 'SENTINEL'),
               ],
@@ -518,7 +522,12 @@ class _NodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = NodeDisplay.of(node, clientPingMs: clientPingMs, showActivity: true);
+    final d = NodeDisplay.of(
+      node,
+      clientPingMs: clientPingMs,
+      showActivity: true,
+      showDeploymentType: showType,
+    );
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -528,42 +537,7 @@ class _NodeRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.55) : AppColors.stroke),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            NodeCompactRow(display: d, metrics: NodeMetricsColumn(display: d, probing: probing)),
-            if (showType && !node.deploymentProfile.toLowerCase().startsWith('erebrus')) ...[
-              const SizedBox(height: 8),
-              Row(children: [_TypeBadge(node: node)]),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  const _TypeBadge({required this.node});
-  final VpnNode node;
-  @override
-  Widget build(BuildContext context) {
-    final color = node.isSentinel ? AppColors.accent : AppColors.success;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: color.withValues(alpha: 0.32)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(node.isSentinel ? Icons.gpp_good : Icons.shield_outlined, size: 11, color: color),
-          const SizedBox(width: 5),
-          Text(node.nodeTypeLabel.toUpperCase(),
-              style: mono(size: 9.5, weight: FontWeight.w600, color: color, letterSpacing: 9.5 * 0.06)),
-        ],
+        child: NodeCompactRow(display: d, metrics: NodeMetricsColumn(display: d, probing: probing)),
       ),
     );
   }
