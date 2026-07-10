@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
+import 'browser_link_menu.dart';
 
 /// The private start page (the "Sovereign web." service grid). New tabs open
 /// here; navigating to a real URL hands off to the WebView.
@@ -58,6 +59,9 @@ class BrowserController extends GetxController {
   /// True while the shell's BROWSER bottom-nav tab is selected.
   bool _shellTabVisible = false;
 
+  /// Set by [BrowserView] to present the native link long-press menu.
+  void Function(BrowserLinkHit hit)? linkContextMenuHandler;
+
   @override
   void onInit() {
     super.onInit();
@@ -80,14 +84,16 @@ class BrowserController extends GetxController {
     await SingboxEngine.instance.clearAppProxy();
   }
 
-  void addTab([String? url]) {
+  void addTab({String? url, bool activate = true}) {
     final u = url == null ? kStartPage : _normalizeUrl(url);
     final tab = BrowserTab(id: DateTime.now().microsecondsSinceEpoch.toString(), url: u, title: kStartTitle);
     tabs.add(tab);
-    activeIndex.value = tabs.length - 1;
-    addressBar.value = u;
+    if (activate) {
+      activeIndex.value = tabs.length - 1;
+      addressBar.value = u;
+    }
     tabs.refresh();
-    if (!tab.isStart && _shellTabVisible) unawaited(_loadActiveTabIfNeeded());
+    if (!tab.isStart && _shellTabVisible && activate) unawaited(_loadActiveTabIfNeeded());
   }
 
   void closeTab(int index) {
@@ -113,6 +119,7 @@ class BrowserController extends GetxController {
     activeIndex.value = index;
     addressBar.value = activeTab.url;
     tabs.refresh();
+    if (_shellTabVisible) unawaited(_loadActiveTabIfNeeded());
   }
 
   Future<void> goHome() async {
@@ -149,14 +156,28 @@ class BrowserController extends GetxController {
   void searchPrivateWebInNewTab(String query) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
-    addTab(braveSearchUrl(trimmed));
+    addTab(url: braveSearchUrl(trimmed));
   }
 
   /// Opens [input] in a new browser tab (URL or Brave query).
   void openInNewTab(String input) {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return;
-    addTab(_normalizeUrl(trimmed));
+    addTab(url: _normalizeUrl(trimmed));
+  }
+
+  /// Opens a link in the active tab.
+  Future<void> openLink(String url) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return;
+    await navigate(trimmed);
+  }
+
+  /// Opens a link in a new tab without switching away from the current tab.
+  void openInBackgroundTab(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return;
+    addTab(url: _normalizeUrl(trimmed), activate: false);
   }
 
   Future<void> navigate(String input) async {
@@ -218,6 +239,14 @@ class BrowserController extends GetxController {
   void _configure(BrowserTab tab) {
     tab.controller
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        kLinkContextMenuChannel,
+        onMessageReceived: (message) {
+          final hit = parseBrowserLinkHit(message.message);
+          if (hit == null) return;
+          linkContextMenuHandler?.call(hit);
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) => isLoading.value = true,
@@ -228,6 +257,7 @@ class BrowserController extends GetxController {
               addressBar.value = url;
             }
             await _refreshNavigationState(tab);
+            await _injectLinkContextMenu(tab);
             final title = await tab.controller.getTitle();
             if (title != null && title.isNotEmpty) {
               tab.title = title.length > 24 ? '${title.substring(0, 24)}…' : title;
@@ -237,9 +267,23 @@ class BrowserController extends GetxController {
           onWebResourceError: (error) {
             debugPrint('[Browser] resource error: ${error.description} (${error.errorCode})');
           },
-          onNavigationRequest: (req) => NavigationDecision.navigate,
+          onNavigationRequest: (req) {
+            if (!req.isMainFrame) {
+              openInNewTab(req.url);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
         ),
       );
+  }
+
+  Future<void> _injectLinkContextMenu(BrowserTab tab) async {
+    try {
+      await tab.controller.runJavaScript(kLinkContextMenuJs);
+    } catch (e) {
+      debugPrint('[Browser] link menu inject failed: $e');
+    }
   }
 
   static String _normalizeUrl(String input) {

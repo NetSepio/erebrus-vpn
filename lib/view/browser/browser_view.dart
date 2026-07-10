@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -7,6 +8,7 @@ import '../../theme/premium_widgets.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'browser_controller.dart';
+import 'browser_link_menu.dart';
 
 /// In-app private browser: tab strip, omnibox, the private start page (service
 /// grid) and the WebView for real pages, all over the dVPN tunnel.
@@ -31,6 +33,19 @@ class _BrowserViewState extends State<BrowserView> {
   void initState() {
     super.initState();
     _c.setShellTabVisible(widget.isActive);
+    _c.linkContextMenuHandler = _onLinkContextMenu;
+  }
+
+  @override
+  void dispose() {
+    _c.linkContextMenuHandler = null;
+    super.dispose();
+  }
+
+  void _onLinkContextMenu(BrowserLinkHit hit) {
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    showBrowserLinkContextMenu(context, _c, hit);
   }
 
   @override
