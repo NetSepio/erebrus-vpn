@@ -428,9 +428,18 @@ class _ServiceCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${service.title} — connect this card to its destination'),
+          content: Text(
+            'Connect to a private node to see your data.',
+            style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textPrimary),
+          ),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.surface3,
+          backgroundColor: AppColors.surface,
+          elevation: 6,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: AppColors.strokeHi),
+          ),
         ),
       ),
       child: Container(
