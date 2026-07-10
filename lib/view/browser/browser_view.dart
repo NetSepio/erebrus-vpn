@@ -264,8 +264,19 @@ class _OmniboxState extends State<_Omnibox> {
   }
 }
 
-class _StartPage extends StatelessWidget {
+class _StartPage extends StatefulWidget {
   const _StartPage();
+
+  @override
+  State<_StartPage> createState() => _StartPageState();
+}
+
+class _StartPageState extends State<_StartPage> {
+  final _search = TextEditingController();
+  final _focus = FocusNode();
+
+  BrowserController get _browser =>
+      Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
 
   String get _protocol {
     if (!Get.isRegistered<VpnController>()) return 'AUTO';
@@ -274,6 +285,21 @@ class _StartPage extends StatelessWidget {
       return vpn.activeTransport.value!.label.toUpperCase();
     }
     return vpn.mode.value.label.toUpperCase();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _submitSearch() {
+    final query = _search.text;
+    if (query.trim().isEmpty) return;
+    _browser.searchPrivateWeb(query);
+    _search.clear();
+    _focus.unfocus();
   }
 
   @override
@@ -301,23 +327,47 @@ class _StartPage extends StatelessWidget {
         const SizedBox(height: 14),
         Text('Sovereign web.', style: grotesk(size: 32, weight: FontWeight.w600, letterSpacing: -0.8)),
         const SizedBox(height: 18),
-        // search pill
-        GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.surface2,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.stroke),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.search, size: 18, color: AppColors.textMuted),
-                const SizedBox(width: 11),
-                Text('Search the private web…', style: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textMuted)),
-              ],
-            ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.stroke),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+              const SizedBox(width: 11),
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  focusNode: _focus,
+                  style: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textPrimary),
+                  cursorColor: AppColors.accent,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Search the private web…',
+                    hintStyle: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textMuted),
+                  ),
+                  onSubmitted: (_) => _submitSearch(),
+                ),
+              ),
+              GestureDetector(
+                onTap: _submitSearch,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.arrow_forward, size: 18, color: AppColors.accent),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 22),

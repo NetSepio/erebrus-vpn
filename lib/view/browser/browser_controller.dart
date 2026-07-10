@@ -13,8 +13,11 @@ import '../../vpn/vpn_models.dart';
 const kStartPage = 'erebrus://home';
 const kStartTitle = 'Erebrus Home';
 
+/// Private web search provider (Brave).
+const kBraveSearch = 'https://search.brave.com/search?q=';
+
 /// Fallback web home if a real page is requested without a URL.
-const kBrowserHome = 'https://www.google.com';
+const kBrowserHome = 'https://search.brave.com';
 
 class BrowserTab {
   BrowserTab({
@@ -131,6 +134,13 @@ class BrowserController extends GetxController {
     if (visible && !wasVisible) _loadActiveTabIfNeeded();
   }
 
+  /// Start-page search always routes through Brave Search.
+  Future<void> searchPrivateWeb(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    await navigate('$kBraveSearch${Uri.encodeComponent(trimmed)}');
+  }
+
   Future<void> navigate(String input) async {
     final url = _normalizeUrl(input);
     final tab = activeTab;
@@ -218,7 +228,7 @@ class BrowserController extends GetxController {
     final trimmed = input.trim();
     if (trimmed.isEmpty || trimmed == kStartPage) return kStartPage;
     if (trimmed.contains(' ') && !trimmed.contains('.')) {
-      return 'https://www.google.com/search?q=${Uri.encodeComponent(trimmed)}';
+      return '$kBraveSearch${Uri.encodeComponent(trimmed)}';
     }
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       return trimmed;
