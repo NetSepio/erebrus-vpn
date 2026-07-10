@@ -130,6 +130,8 @@ class _NodeMainColumn extends StatelessWidget {
                 children: [
                   NodeAccessPill(label: d.network, color: d.networkColor),
                   NodeAccessPill(label: d.accessLabel, color: d.accessColor),
+                  if (d.deploymentTypeLabel != null && d.deploymentTypeColor != null)
+                    NodeAccessPill(label: d.deploymentTypeLabel!, color: d.deploymentTypeColor!),
                   if (d.tierLabel != null) NodeAccessPill(label: d.tierLabel!, color: AppColors.warn),
                 ],
               ),

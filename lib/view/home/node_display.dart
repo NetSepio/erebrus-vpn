@@ -136,7 +136,6 @@ class NodeDisplay {
     if (node == null || forcePlaceholder) return placeholder();
     final region = node.region.isEmpty ? 'Erebrus node' : node.region;
     final activity = _nodeActivity(node);
-    final profile = node.deploymentProfile.toLowerCase();
     String? deploymentTypeLabel;
     Color? deploymentTypeColor;
     if (showDeploymentType && !node.isStandard) {
