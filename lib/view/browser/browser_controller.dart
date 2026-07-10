@@ -8,13 +8,16 @@ import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 
-/// The private start page (the "Sovereign web." service grid). New tabs open
-/// here; navigating to a real URL hands off to the WebView.
+/// The private start page ("Sovereign web." + Brave search). New tabs open here;
+/// navigating to a real URL hands off to the WebView.
 const kStartPage = 'erebrus://home';
 const kStartTitle = 'Erebrus Home';
 
+/// Default private search engine for query-style navigation.
+const kBraveSearch = 'https://search.brave.com/search?q=';
+
 /// Fallback web home if a real page is requested without a URL.
-const kBrowserHome = 'https://www.google.com';
+const kBrowserHome = 'https://search.brave.com';
 
 class BrowserTab {
   BrowserTab({
@@ -218,7 +221,7 @@ class BrowserController extends GetxController {
     final trimmed = input.trim();
     if (trimmed.isEmpty || trimmed == kStartPage) return kStartPage;
     if (trimmed.contains(' ') && !trimmed.contains('.')) {
-      return 'https://www.google.com/search?q=${Uri.encodeComponent(trimmed)}';
+      return '$kBraveSearch${Uri.encodeComponent(trimmed)}';
     }
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       return trimmed;
