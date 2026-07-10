@@ -112,91 +112,116 @@ void showBrowserLinkContextMenu(
 
   showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: AppColors.raised,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
     ),
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+    builder: (ctx) {
+      final maxHeight = MediaQuery.sizeOf(ctx).height * 0.82;
+
+      return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: grotesk(size: 16, weight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Text(hit.url, maxLines: 2, overflow: TextOverflow.ellipsis, style: mono(size: 11, color: AppColors.textMuted)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: grotesk(size: 16, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        hit.url,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: mono(size: 11, color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, color: AppColors.strokeSoft),
+                _LinkMenuTile(
+                  icon: Icons.open_in_browser,
+                  title: 'Open',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    controller.openLink(hit.url);
+                  },
+                ),
+                _LinkMenuTile(
+                  icon: Icons.open_in_new,
+                  title: 'Open in new tab',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    controller.openInNewTab(hit.url);
+                  },
+                ),
+                _LinkMenuTile(
+                  icon: Icons.tab,
+                  title: 'Open in background tab',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    controller.openInBackgroundTab(hit.url);
+                  },
+                ),
+                _LinkMenuTile(
+                  icon: Icons.link,
+                  title: 'Copy link',
+                  onTap: () async {
+                    await Clipboard.setData(ClipboardData(text: hit.url));
+                    if (context.mounted) Navigator.pop(ctx);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Link copied'), behavior: SnackBarBehavior.floating, backgroundColor: AppColors.surface3),
+                      );
+                    }
+                  },
+                ),
+                if (hit.label.isNotEmpty)
+                  _LinkMenuTile(
+                    icon: Icons.short_text,
+                    title: 'Copy link text',
+                    onTap: () async {
+                      await Clipboard.setData(ClipboardData(text: hit.label));
+                      if (context.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Link text copied'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: AppColors.surface3,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                _LinkMenuTile(
+                  icon: Icons.launch,
+                  title: 'Open in external browser',
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final uri = Uri.tryParse(hit.url);
+                    if (uri == null) return;
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  },
+                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.strokeSoft),
-          _LinkMenuTile(
-            icon: Icons.open_in_browser,
-            title: 'Open',
-            onTap: () {
-              Navigator.pop(ctx);
-              controller.openLink(hit.url);
-            },
-          ),
-          _LinkMenuTile(
-            icon: Icons.open_in_new,
-            title: 'Open in new tab',
-            onTap: () {
-              Navigator.pop(ctx);
-              controller.openInNewTab(hit.url);
-            },
-          ),
-          _LinkMenuTile(
-            icon: Icons.tab,
-            title: 'Open in background tab',
-            onTap: () {
-              Navigator.pop(ctx);
-              controller.openInBackgroundTab(hit.url);
-            },
-          ),
-          _LinkMenuTile(
-            icon: Icons.link,
-            title: 'Copy link',
-            onTap: () async {
-              await Clipboard.setData(ClipboardData(text: hit.url));
-              if (context.mounted) Navigator.pop(ctx);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Link copied'), behavior: SnackBarBehavior.floating, backgroundColor: AppColors.surface3),
-                );
-              }
-            },
-          ),
-          if (hit.label.isNotEmpty)
-            _LinkMenuTile(
-              icon: Icons.short_text,
-              title: 'Copy link text',
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: hit.label));
-                if (context.mounted) Navigator.pop(ctx);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Link text copied'), behavior: SnackBarBehavior.floating, backgroundColor: AppColors.surface3),
-                  );
-                }
-              },
-            ),
-          _LinkMenuTile(
-            icon: Icons.launch,
-            title: 'Open in external browser',
-            onTap: () async {
-              Navigator.pop(ctx);
-              final uri = Uri.tryParse(hit.url);
-              if (uri == null) return;
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }
 
@@ -211,7 +236,12 @@ class _LinkMenuTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: AppColors.textSecondary),
-      title: Text(title, style: grotesk(size: 15, weight: FontWeight.w600)),
+      title: Text(
+        title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: grotesk(size: 15, weight: FontWeight.w600),
+      ),
       onTap: onTap,
     );
   }
