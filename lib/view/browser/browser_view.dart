@@ -8,9 +8,8 @@ import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'browser_controller.dart';
 
-/// In-app private browser: tab strip, omnibox, the private start page (Brave
-/// search + network hub placeholder) and the WebView for real pages, all over
-/// the dVPN tunnel.
+/// In-app private browser: tab strip, omnibox, the private start page (service
+/// grid) and the WebView for real pages, all over the dVPN tunnel.
 ///
 /// [isActive] is true when this tab is the selected pane in [MainShell]'s
 /// [IndexedStack]. The native WebView platform view is mounted only then —
@@ -265,19 +264,8 @@ class _OmniboxState extends State<_Omnibox> {
   }
 }
 
-class _StartPage extends StatefulWidget {
+class _StartPage extends StatelessWidget {
   const _StartPage();
-
-  @override
-  State<_StartPage> createState() => _StartPageState();
-}
-
-class _StartPageState extends State<_StartPage> {
-  final _search = TextEditingController();
-  final _focus = FocusNode();
-
-  BrowserController get _browser =>
-      Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
 
   String get _protocol {
     if (!Get.isRegistered<VpnController>()) return 'AUTO';
@@ -289,22 +277,16 @@ class _StartPageState extends State<_StartPage> {
   }
 
   @override
-  void dispose() {
-    _search.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _submitSearch() {
-    final query = _search.text.trim();
-    if (query.isEmpty) return;
-    _browser.navigate(query);
-    _search.clear();
-    _focus.unfocus();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final services = <_Service>[
+      _Service('Sovereign AI', 'Private models', Icons.auto_awesome, AppColors.accent, AppColors.accent.withValues(alpha: 0.14)),
+      _Service('Private Files', 'Encrypted store', Icons.folder_outlined, const Color(0xFF7E96F0), AppColors.ethereum.withValues(alpha: 0.16)),
+      _Service('Team Drive', '11 members', Icons.group_outlined, AppColors.shared, AppColors.shared.withValues(alpha: 0.16)),
+      _Service('Node Console', 'home-lab-01', Icons.terminal, AppColors.success, AppColors.success.withValues(alpha: 0.16)),
+      _Service('Apps Hub', '6 installed', Icons.grid_view, const Color(0xFFB07CFF), AppColors.solana.withValues(alpha: 0.18)),
+      _Service('Bookmarks', 'Saved links', Icons.bookmark_outline, AppColors.warn, AppColors.warn.withValues(alpha: 0.16)),
+    ];
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 22),
       children: [
@@ -319,89 +301,104 @@ class _StartPageState extends State<_StartPage> {
         const SizedBox(height: 14),
         Text('Sovereign web.', style: grotesk(size: 32, weight: FontWeight.w600, letterSpacing: -0.8)),
         const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.surface2,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.stroke),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.search, size: 18, color: AppColors.textMuted),
-              const SizedBox(width: 11),
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  focusNode: _focus,
-                  style: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textPrimary),
-                  cursorColor: AppColors.accent,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: 'Search the private web…',
-                    hintStyle: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textMuted),
-                  ),
-                  onSubmitted: (_) => _submitSearch(),
-                ),
-              ),
-            ],
+        // search pill
+        GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search, size: 18, color: AppColors.textMuted),
+                const SizedBox(width: 11),
+                Text('Search the private web…', style: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textMuted)),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          'Powered by Brave Search over your tunnel.',
-          style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary),
-        ),
-        const SizedBox(height: 28),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.stroke),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.hub_outlined, size: 22, color: AppColors.accent),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text('Your network hub', style: grotesk(size: 15, weight: FontWeight.w600)),
-                        const SizedBox(width: 8),
-                        MonoChip(
-                          label: 'COMING SOON',
-                          color: AppColors.textMuted,
-                          background: AppColors.surface2,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Private services, files, and team tools will live here once the network hub ships.',
-                      style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textTertiary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        const SizedBox(height: 22),
+        Text('YOUR NETWORK', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.12)),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 2.1,
+          children: [for (final s in services) _ServiceCard(service: s)],
         ),
       ],
+    );
+  }
+}
+
+class _Service {
+  const _Service(this.title, this.sub, this.icon, this.color, this.chip);
+  final String title;
+  final String sub;
+  final IconData icon;
+  final Color color;
+  final Color chip;
+}
+
+class _ServiceCard extends StatelessWidget {
+  const _ServiceCard({required this.service});
+  final _Service service;
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${service.title} — connect this card to its destination'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.surface3,
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.stroke),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: service.chip, borderRadius: BorderRadius.circular(10)),
+              child: Icon(service.icon, size: 16, color: service.color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    service.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 13, weight: FontWeight.w600),
+                  ),
+                  Text(
+                    service.sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
