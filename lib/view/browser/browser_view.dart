@@ -46,6 +46,7 @@ class _BrowserViewState extends State<BrowserView> {
     final c = _c;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppColors.bg,
       body: SafeArea(
         bottom: false,
@@ -294,16 +295,22 @@ class _StartPageState extends State<_StartPage> {
     super.dispose();
   }
 
-  void _submitSearch() {
+  void _submitSearch({bool newTab = false}) {
     final query = _search.text;
     if (query.trim().isEmpty) return;
-    _browser.searchPrivateWeb(query);
+    if (newTab) {
+      _browser.searchPrivateWebInNewTab(query);
+    } else {
+      _browser.searchPrivateWeb(query);
+    }
     _search.clear();
     _focus.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final compact = MediaQuery.sizeOf(context).width < 380;
     final services = <_Service>[
       _Service('Sovereign AI', 'Private models', Icons.auto_awesome, AppColors.accent, AppColors.accent.withValues(alpha: 0.14)),
       _Service('Private Files', 'Encrypted store', Icons.folder_outlined, const Color(0xFF7E96F0), AppColors.ethereum.withValues(alpha: 0.16)),
@@ -314,18 +321,28 @@ class _StartPageState extends State<_StartPage> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 22),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(22, 8, 22, 22 + bottomInset),
       children: [
         Row(
           children: [
             _BlinkDot(color: AppColors.success, size: 6),
             const SizedBox(width: 8),
-            Text('PRIVATE SESSION · $_protocol',
-                style: mono(size: 11, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 11 * 0.12)),
+            Flexible(
+              child: Text(
+                'PRIVATE SESSION · $_protocol',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: mono(size: 11, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 11 * 0.12),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 14),
-        Text('Sovereign web.', style: grotesk(size: 32, weight: FontWeight.w600, letterSpacing: -0.8)),
+        Text(
+          'Sovereign web.',
+          style: grotesk(size: compact ? 28 : 32, weight: FontWeight.w600, letterSpacing: -0.8),
+        ),
         const SizedBox(height: 18),
         Container(
           padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
@@ -354,23 +371,28 @@ class _StartPageState extends State<_StartPage> {
                   onSubmitted: (_) => _submitSearch(),
                 ),
               ),
-              GestureDetector(
-                onTap: _submitSearch,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.arrow_forward, size: 18, color: AppColors.accent),
-                ),
+              _SearchActionButton(
+                icon: Icons.arrow_forward,
+                tooltip: 'Search',
+                onTap: () => _submitSearch(),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => _submitSearch(newTab: true),
+            icon: const Icon(Icons.open_in_new, size: 16, color: AppColors.textSecondary),
+            label: Text('Open in new tab', style: grotesk(size: 13, weight: FontWeight.w500, color: AppColors.textSecondary)),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
         Text('YOUR NETWORK', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.12)),
         const SizedBox(height: 12),
         GridView.count(
@@ -379,10 +401,38 @@ class _StartPageState extends State<_StartPage> {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 2.1,
+          childAspectRatio: compact ? 1.85 : 2.1,
           children: [for (final s in services) _ServiceCard(service: s)],
         ),
       ],
+    );
+  }
+}
+
+class _SearchActionButton extends StatelessWidget {
+  const _SearchActionButton({required this.icon, required this.tooltip, required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.accent),
+        ),
+      ),
     );
   }
 }
@@ -482,6 +532,19 @@ class _ControlBar extends StatelessWidget {
               onTap: () {
                 Navigator.pop(ctx);
                 controller.addTab();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_new, color: AppColors.textSecondary),
+              title: Text('Open in new tab', style: grotesk(size: 15, weight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                final tab = controller.activeTab;
+                if (tab.isStart) {
+                  controller.addTab();
+                  return;
+                }
+                controller.openInNewTab(tab.url);
               },
             ),
             ListTile(

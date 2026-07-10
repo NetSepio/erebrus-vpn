@@ -134,11 +134,29 @@ class BrowserController extends GetxController {
     if (visible && !wasVisible) _loadActiveTabIfNeeded();
   }
 
-  /// Start-page search always routes through Brave Search.
+  static String braveSearchUrl(String query) {
+    return '$kBraveSearch${Uri.encodeComponent(query.trim())}';
+  }
+
+  /// Start-page search routes through Brave Search in the active tab.
   Future<void> searchPrivateWeb(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
-    await navigate('$kBraveSearch${Uri.encodeComponent(trimmed)}');
+    await navigate(braveSearchUrl(trimmed));
+  }
+
+  /// Opens a Brave Search results page in a new browser tab.
+  void searchPrivateWebInNewTab(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    addTab(braveSearchUrl(trimmed));
+  }
+
+  /// Opens [input] in a new browser tab (URL or Brave query).
+  void openInNewTab(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return;
+    addTab(_normalizeUrl(trimmed));
   }
 
   Future<void> navigate(String input) async {
