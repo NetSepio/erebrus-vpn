@@ -66,7 +66,7 @@ class PrivacyView extends LegalDocumentView {
           'We may update this policy as Erebrus matures. Material changes will be '
           'reflected in the app. Continued use after an update constitutes acceptance '
           'of the revised policy.\n\n'
-          'Last updated: June 2026',
+          'Last updated: July 10, 2026',
     ),
   ];
 }

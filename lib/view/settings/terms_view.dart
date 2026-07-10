@@ -63,7 +63,7 @@ class TermsView extends LegalDocumentView {
       body:
           'Enterprise terms, node operator agreements, and legal inquiries: contact '
           'NetSepio through official channels.\n\n'
-          'Last updated: June 2026',
+          'Last updated: July 10, 2026',
     ),
   ];
 }
