@@ -5,10 +5,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
-import '../../vpn/vpn_controller.dart';
-import '../../vpn/vpn_models.dart';
 import 'browser_controller.dart';
 import 'browser_link_menu.dart';
+import 'browser_session_status.dart';
 
 /// In-app private browser: tab strip, omnibox, the private start page (service
 /// grid) and the WebView for real pages, all over the dVPN tunnel.
@@ -76,6 +75,7 @@ class _BrowserViewState extends State<BrowserView> {
               c.addressBar.value; // observe
               return _Omnibox(controller: c);
             }),
+            const BrowserSessionStrip(),
             Expanded(
               child: Obx(() {
                 c.tabs.length;
@@ -252,7 +252,7 @@ class _OmniboxState extends State<_Omnibox> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.lock, size: 16, color: AppColors.success),
+            const BrowserSessionLockIcon(),
             const SizedBox(width: 10),
             Expanded(
               child: TextField(
@@ -294,15 +294,6 @@ class _StartPageState extends State<_StartPage> {
   BrowserController get _browser =>
       Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
 
-  String get _protocol {
-    if (!Get.isRegistered<VpnController>()) return 'AUTO';
-    final vpn = Get.find<VpnController>();
-    if (vpn.isConnected && vpn.activeTransport.value != null) {
-      return vpn.activeTransport.value!.label.toUpperCase();
-    }
-    return vpn.mode.value.label.toUpperCase();
-  }
-
   @override
   void dispose() {
     _search.dispose();
@@ -335,21 +326,6 @@ class _StartPageState extends State<_StartPage> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.fromLTRB(22, 8, 22, 22 + bottomInset),
       children: [
-        Row(
-          children: [
-            _BlinkDot(color: AppColors.success, size: 6),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                'PRIVATE SESSION · $_protocol',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: mono(size: 11, weight: FontWeight.w500, color: AppColors.accent, letterSpacing: 11 * 0.12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
         Text(
           'Sovereign web.',
           style: grotesk(size: compact ? 28 : 32, weight: FontWeight.w600, letterSpacing: -0.8),
@@ -752,28 +728,4 @@ class _CtlIcon extends StatelessWidget {
   }
 }
 
-class _BlinkDot extends StatefulWidget {
-  const _BlinkDot({required this.color, this.size = 9});
-  final Color color;
-  final double size;
-  @override
-  State<_BlinkDot> createState() => _BlinkDotState();
-}
 
-class _BlinkDotState extends State<_BlinkDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 1.0, end: 0.25).animate(_c),
-      child: Container(width: widget.size, height: widget.size, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
-    );
-  }
-}

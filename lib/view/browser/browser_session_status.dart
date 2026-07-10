@@ -1,0 +1,195 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import '../../theme/app_theme.dart';
+import '../../vpn/singbox_engine.dart';
+import '../../vpn/vpn_controller.dart';
+import '../../vpn/vpn_models.dart';
+
+class BrowserSessionStatus {
+  const BrowserSessionStatus({
+    required this.label,
+    required this.tint,
+    required this.pulse,
+    required this.lockIcon,
+  });
+
+  final String label;
+  final Color tint;
+  final bool pulse;
+  final IconData lockIcon;
+}
+
+BrowserSessionStatus browserSessionStatus(VpnController vpn) {
+  final stage = vpn.stage.value;
+
+  if (vpn.killSwitchBlocking.value) {
+    return const BrowserSessionStatus(
+      label: 'KILL SWITCH ACTIVE',
+      tint: AppColors.danger,
+      pulse: true,
+      lockIcon: Icons.lock,
+    );
+  }
+
+  if (stage == VpnStage.connected) {
+    final transport = vpn.activeTransport.value;
+    final protocol = (transport?.label ?? vpn.mode.value.label).toUpperCase();
+    return BrowserSessionStatus(
+      label: 'PRIVATE SESSION · $protocol',
+      tint: AppColors.success,
+      pulse: true,
+      lockIcon: Icons.lock,
+    );
+  }
+
+  if (stage == VpnStage.connecting || stage == VpnStage.disconnecting) {
+    final transport = vpn.activeTransport.value;
+    final hint = transport?.label.toUpperCase() ?? vpn.mode.value.label.toUpperCase();
+    final verb = stage == VpnStage.connecting ? 'SECURING' : 'STOPPING';
+    return BrowserSessionStatus(
+      label: '$verb · $hint',
+      tint: AppColors.accent,
+      pulse: true,
+      lockIcon: Icons.lock_clock,
+    );
+  }
+
+  return const BrowserSessionStatus(
+    label: 'PUBLIC NETWORK',
+    tint: AppColors.warn,
+    pulse: false,
+    lockIcon: Icons.lock_open,
+  );
+}
+
+class BrowserSessionStrip extends StatelessWidget {
+  const BrowserSessionStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Get.isRegistered<VpnController>()) {
+      return const _BrowserSessionStripBody(
+        status: BrowserSessionStatus(
+          label: 'PUBLIC NETWORK',
+          tint: AppColors.warn,
+          pulse: false,
+          lockIcon: Icons.lock_open,
+        ),
+      );
+    }
+
+    final vpn = Get.find<VpnController>();
+    return Obx(() {
+      vpn.stage.value;
+      vpn.activeTransport.value;
+      vpn.mode.value;
+      vpn.killSwitchBlocking.value;
+      return _BrowserSessionStripBody(status: browserSessionStatus(vpn));
+    });
+  }
+}
+
+class _BrowserSessionStripBody extends StatelessWidget {
+  const _BrowserSessionStripBody({required this.status});
+
+  final BrowserSessionStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+      child: Row(
+        children: [
+          _SessionDot(color: status.tint, pulse: status.pulse),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              status.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: mono(size: 11, weight: FontWeight.w500, color: status.tint, letterSpacing: 11 * 0.12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BrowserSessionLockIcon extends StatelessWidget {
+  const BrowserSessionLockIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Get.isRegistered<VpnController>()) {
+      return const Icon(Icons.lock_open, size: 16, color: AppColors.warn);
+    }
+
+    final vpn = Get.find<VpnController>();
+    return Obx(() {
+      vpn.stage.value;
+      vpn.activeTransport.value;
+      vpn.mode.value;
+      vpn.killSwitchBlocking.value;
+      final status = browserSessionStatus(vpn);
+      return Icon(status.lockIcon, size: 16, color: status.tint);
+    });
+  }
+}
+
+class _SessionDot extends StatefulWidget {
+  const _SessionDot({required this.color, required this.pulse});
+
+  final Color color;
+  final bool pulse;
+
+  @override
+  State<_SessionDot> createState() => _SessionDotState();
+}
+
+class _SessionDotState extends State<_SessionDot> with SingleTickerProviderStateMixin {
+  AnimationController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SessionDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    if (widget.pulse) {
+      _controller ??= AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+      return;
+    }
+    _controller?.dispose();
+    _controller = null;
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+    );
+    final controller = _controller;
+    if (controller == null) return dot;
+    return FadeTransition(
+      opacity: Tween(begin: 1.0, end: 0.25).animate(controller),
+      child: dot,
+    );
+  }
+}
