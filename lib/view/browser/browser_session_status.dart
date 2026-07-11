@@ -11,13 +11,11 @@ class BrowserSessionStatus {
     required this.label,
     required this.tint,
     required this.pulse,
-    required this.lockIcon,
   });
 
   final String label;
   final Color tint;
   final bool pulse;
-  final IconData lockIcon;
 }
 
 BrowserSessionStatus browserSessionStatus(VpnController vpn) {
@@ -28,7 +26,6 @@ BrowserSessionStatus browserSessionStatus(VpnController vpn) {
       label: 'KILL SWITCH ACTIVE',
       tint: AppColors.danger,
       pulse: true,
-      lockIcon: Icons.lock,
     );
   }
 
@@ -39,7 +36,6 @@ BrowserSessionStatus browserSessionStatus(VpnController vpn) {
       label: 'PRIVATE SESSION · $protocol',
       tint: AppColors.success,
       pulse: true,
-      lockIcon: Icons.lock,
     );
   }
 
@@ -51,7 +47,6 @@ BrowserSessionStatus browserSessionStatus(VpnController vpn) {
       label: '$verb · $hint',
       tint: AppColors.accent,
       pulse: true,
-      lockIcon: Icons.lock_clock,
     );
   }
 
@@ -59,7 +54,6 @@ BrowserSessionStatus browserSessionStatus(VpnController vpn) {
     label: 'PUBLIC NETWORK',
     tint: AppColors.warn,
     pulse: false,
-    lockIcon: Icons.lock_open,
   );
 }
 
@@ -74,7 +68,6 @@ class BrowserSessionStrip extends StatelessWidget {
           label: 'PUBLIC NETWORK',
           tint: AppColors.warn,
           pulse: false,
-          lockIcon: Icons.lock_open,
         ),
       );
     }
@@ -117,27 +110,6 @@ class _BrowserSessionStripBody extends StatelessWidget {
   }
 }
 
-class BrowserSessionLockIcon extends StatelessWidget {
-  const BrowserSessionLockIcon({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    if (!Get.isRegistered<VpnController>()) {
-      return const Icon(Icons.lock_open, size: 16, color: AppColors.warn);
-    }
-
-    final vpn = Get.find<VpnController>();
-    return Obx(() {
-      vpn.stage.value;
-      vpn.activeTransport.value;
-      vpn.mode.value;
-      vpn.killSwitchBlocking.value;
-      final status = browserSessionStatus(vpn);
-      return Icon(status.lockIcon, size: 16, color: status.tint);
-    });
-  }
-}
-
 class _SessionDot extends StatefulWidget {
   const _SessionDot({required this.color, required this.pulse});
 
@@ -148,7 +120,7 @@ class _SessionDot extends StatefulWidget {
   State<_SessionDot> createState() => _SessionDotState();
 }
 
-class _SessionDotState extends State<_SessionDot> with SingleTickerProviderStateMixin {
+class _SessionDotState extends State<_SessionDot> with TickerProviderStateMixin {
   AnimationController? _controller;
 
   @override

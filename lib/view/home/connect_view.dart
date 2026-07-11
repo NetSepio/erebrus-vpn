@@ -234,6 +234,8 @@ class _ConnectViewState extends State<ConnectView> {
                             child: Text(
                               err,
                               textAlign: TextAlign.center,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                               style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
                             ),
                           ),

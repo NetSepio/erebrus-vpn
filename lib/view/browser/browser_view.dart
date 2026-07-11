@@ -252,8 +252,6 @@ class _OmniboxState extends State<_Omnibox> {
         ),
         child: Row(
           children: [
-            const BrowserSessionLockIcon(),
-            const SizedBox(width: 10),
             Expanded(
               child: TextField(
                 controller: _text,

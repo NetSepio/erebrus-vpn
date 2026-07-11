@@ -57,7 +57,12 @@ class NodeDisplay {
   final String? deploymentTypeLabel;
   final Color? deploymentTypeColor;
 
-  String get loadLabel => showLoad ? '${loadValue.toStringAsFixed(0)}%' : '—';
+  String get loadLabel {
+    if (!showLoad) return '—';
+    if (loadValue <= 0) return '0%';
+    if (loadValue < 1) return '${loadValue.toStringAsFixed(1)}%';
+    return '${loadValue.toStringAsFixed(0)}%';
+  }
 
   Color get loadColor => isPlaceholder
       ? AppColors.textMuted
