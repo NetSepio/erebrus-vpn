@@ -88,8 +88,12 @@ class _ConnectViewState extends State<ConnectView> {
       _c.cancelConnect();
       return;
     }
-    final auth = _auth;
     final node = _c.selectedNode.value;
+    if (node != null && !node.canAcceptClients) {
+      _c.error.value = 'Selected server is at capacity — pick another node';
+      return;
+    }
+    final auth = _auth;
     if (auth != null && !auth.canConnectVpn(node)) {
       final ent = auth.entitlement.value;
       _c.error.value = node?.isPrivateAccess == true && ent.orgMember == false

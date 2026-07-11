@@ -200,6 +200,9 @@ class VpnNode {
     this.capabilities,
     this.probeHost,
     this.probePorts = const [],
+    this.wgPeersRegistered,
+    this.wgPeersConnected,
+    this.acceptingClients,
   });
 
   final String id;
@@ -232,6 +235,9 @@ class VpnNode {
   final VpnNodeCapabilities? capabilities;
   final String? probeHost;
   final List<int> probePorts;
+  final int? wgPeersRegistered;
+  final int? wgPeersConnected;
+  final bool? acceptingClients;
 
   bool get supportsStealth =>
       protocols.contains('vless-reality') || protocols.contains('hysteria2');
@@ -275,6 +281,9 @@ class VpnNode {
   bool get isSolana => chain?.toUpperCase() == 'SOLANA';
 
   bool get canProbe => probeHost != null && probeHost!.isNotEmpty && probePorts.isNotEmpty;
+
+  /// True when the node is online and has room for another VPN peer.
+  bool get canAcceptClients => acceptingClients != false && !isOffline;
 
   String get protocolsLabel {
     final parts = <String>[];
@@ -330,6 +339,9 @@ class VpnNode {
       capabilities: caps == null ? null : VpnNodeCapabilities.fromJson(caps),
       probeHost: probe.$1,
       probePorts: probe.$2,
+      wgPeersRegistered: (j['wg_peers_registered'] as num?)?.toInt(),
+      wgPeersConnected: (j['wg_peers_connected'] as num?)?.toInt(),
+      acceptingClients: j['accepting_clients'] == true ? true : (j['accepting_clients'] == false ? false : null),
     );
   }
 
@@ -368,6 +380,11 @@ int _clientPingSortKey(VpnNode node, Map<String, int>? clientPingMs) {
 }
 
 int _compareNodesForPicker(VpnNode a, VpnNode b, {Map<String, int>? clientPingMs}) {
+  // Prefer nodes that are actively accepting new clients.
+  final aAccept = a.canAcceptClients ? 1 : 0;
+  final bAccept = b.canAcceptClients ? 1 : 0;
+  if (aAccept != bAccept) return bAccept - aAccept;
+
   if (clientPingMs != null && clientPingMs.isNotEmpty) {
     final ping = _clientPingSortKey(a, clientPingMs).compareTo(_clientPingSortKey(b, clientPingMs));
     if (ping != 0) return ping;

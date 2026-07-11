@@ -193,6 +193,12 @@ class NodeMetricsColumn extends StatelessWidget {
               value: display.loadLabel,
               valueColor: display.loadColor,
             ),
+            if (display.peerCount != null)
+              NodeMetricCell(
+                label: 'PEERS',
+                value: display.peerCount!,
+                valueColor: display.canConnect ? AppColors.success : AppColors.warn,
+              ),
             if (display.showActivity && display.activityTime != null)
               NodeActivityDot(time: display.activityTime!, live: display.activityLive),
             if (display.showNodeSpeedtest) ...[

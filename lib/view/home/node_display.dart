@@ -23,6 +23,8 @@ class NodeDisplay {
     this.downloadMbps,
     this.uploadMbps,
     this.clientPingMs,
+    this.peerCount,
+    this.canConnect = true,
     this.isPlaceholder = false,
     this.showLoad = true,
     this.showNodeSpeedtest = false,
@@ -49,6 +51,8 @@ class NodeDisplay {
   final double? downloadMbps;
   final double? uploadMbps;
   final int? clientPingMs;
+  final String? peerCount;
+  final bool canConnect;
   final bool isPlaceholder;
   final bool showLoad;
   final bool showNodeSpeedtest;
@@ -174,6 +178,10 @@ class NodeDisplay {
       showActivity: showActivity,
       deploymentTypeLabel: deploymentTypeLabel,
       deploymentTypeColor: deploymentTypeColor,
+      peerCount: node.wgPeersConnected != null && node.wgPeersRegistered != null
+          ? '${node.wgPeersConnected} / ${node.wgPeersRegistered} peers'
+          : null,
+      canConnect: node.canAcceptClients,
     );
   }
 

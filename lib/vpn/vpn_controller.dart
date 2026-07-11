@@ -252,6 +252,11 @@ class VpnController extends GetxController {
       error.value = 'Select a node first';
       return;
     }
+    if (!target.canAcceptClients) {
+      error.value = 'Selected server is at capacity — pick another node';
+      stage.value = VpnStage.error;
+      return;
+    }
     if (_provision == null) {
       error.value = 'VPN provisioning is not configured';
       return;
