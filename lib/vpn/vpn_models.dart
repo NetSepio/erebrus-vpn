@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../platform/platform_capabilities.dart';
 import 'gateway_http.dart';
 
 /// User-facing connection modes shown in the UI.
@@ -471,12 +473,18 @@ class SingboxConfigBuilder {
     final experimental = Map<String, dynamic>.from(
       (out['experimental'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
+    final secret = _generateClashApiSecret();
     experimental['clash_api'] = {
       'external_controller': '127.0.0.1:9090',
-      'secret': '',
+      'secret': secret,
     };
     out['experimental'] = experimental;
     return out;
+  }
+
+  static String _generateClashApiSecret() {
+    final bytes = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+    return base64Encode(bytes);
   }
 
   /// Resolves dial hostnames to IPv4 so WireGuard can handshake before tunnel DNS
@@ -888,17 +896,21 @@ class SingboxConfigBuilder {
     return (host, port);
   }
 
-  /// Blocks all traffic through a local TUN when the VPN tunnel drops unexpectedly.
-  static Map<String, dynamic> killSwitchBlockConfig() => {
+  /// Blocks all traffic when the VPN tunnel drops unexpectedly.
+  ///
+  /// Desktop (proxy-only) uses the local mixed inbound so the system proxy is
+  /// pointed at a dead end; mobile uses the TUN to block system-wide.
+  static Map<String, dynamic> killSwitchBlockConfig() {
+    if (PlatformCapabilities.isDesktop) {
+      return _withClashApi({
         'log': {'level': 'warn'},
         'inbounds': [
           {
-            'type': 'tun',
-            'tag': 'tun-in',
-            'address': [tunAddress],
-            'auto_route': true,
-            'strict_route': true,
-            'stack': 'gvisor',
+            'type': 'mixed',
+            'tag': localMixedInboundTag,
+            'listen': localProxyHost,
+            'listen_port': localProxyPort,
+            'sniff': true,
           },
         ],
         'outbounds': [
@@ -908,5 +920,35 @@ class SingboxConfigBuilder {
           'final': 'block',
           'auto_detect_interface': true,
         },
-      };
+      });
+    }
+
+    return {
+      'log': {'level': 'warn'},
+      'inbounds': [
+        {
+          'type': 'tun',
+          'tag': 'tun-in',
+          'address': [tunAddress],
+          'auto_route': true,
+          'strict_route': true,
+          'stack': 'gvisor',
+        },
+        {
+          'type': 'mixed',
+          'tag': localMixedInboundTag,
+          'listen': localProxyHost,
+          'listen_port': localProxyPort,
+          'sniff': true,
+        },
+      ],
+      'outbounds': [
+        {'type': 'block', 'tag': 'block'},
+      ],
+      'route': {
+        'final': 'block',
+        'auto_detect_interface': true,
+      },
+    };
+  }
 }

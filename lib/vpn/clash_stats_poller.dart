@@ -13,6 +13,7 @@ class ClashStatsPoller {
   ClashStatsPoller({this.baseUrl = 'http://127.0.0.1:9090'});
 
   final String baseUrl;
+  String? secret;
   final _ctrl = StreamController<VpnStats>.broadcast();
 
   HttpClient? _client;
@@ -30,6 +31,9 @@ class ClashStatsPoller {
     try {
       final req = await _client!.getUrl(Uri.parse('$baseUrl/traffic'));
       req.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
+      if (secret != null && secret!.isNotEmpty) {
+        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${secret!}');
+      }
       final res = await req.close();
       if (res.statusCode != 200) {
         debugPrint('[Stats] clash /traffic HTTP ${res.statusCode}');

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../platform/desktop_system_proxy.dart';
 import '../platform/macos_privileged_process.dart';
@@ -33,6 +34,7 @@ class SingboxDesktopRunner {
   final _statsPoller = ClashStatsPoller();
   StreamSubscription<VpnStats>? _statsSub;
   String? _lastError;
+  String? _clashApiSecret;
 
   Stream<VpnStage> get onStage => _stageCtrl.stream;
   Stream<VpnStats> get onStats => _statsPoller.stream;
@@ -88,9 +90,13 @@ class SingboxDesktopRunner {
       throw StateError(_lastError!);
     }
 
-    _workDir = (await Directory.systemTemp.createTemp('erebrus-singbox-')).path;
+    _workDir = await _ensureConfigDir();
     final configPath = p.join(_workDir!, 'config.json');
-    await File(configPath).writeAsString(configJson);
+    final configFile = File(configPath);
+    await configFile.writeAsString(configJson);
+    await _restrictConfigPermissions(configPath);
+    _clashApiSecret = _extractClashApiSecret(configJson);
+    _statsPoller.secret = _clashApiSecret;
     _logPath = p.join(_workDir!, 'singbox.log');
     _pidPath = p.join(_workDir!, 'singbox.pid');
 
@@ -238,6 +244,9 @@ class SingboxDesktopRunner {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 1);
       final req = await client.getUrl(Uri.parse('http://127.0.0.1:9090/'));
+      if (_clashApiSecret != null && _clashApiSecret!.isNotEmpty) {
+        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${_clashApiSecret!}');
+      }
       final res = await req.close();
       await res.drain();
       client.close(force: true);
@@ -315,6 +324,41 @@ class SingboxDesktopRunner {
     }
     _process = null;
     _setStage('disconnected');
+  }
+
+  String? _extractClashApiSecret(String configJson) {
+    try {
+      final m = jsonDecode(configJson) as Map<String, dynamic>;
+      final clashApi = (m['experimental'] as Map?)?['clash_api'] as Map?;
+      final secret = clashApi?['secret'] as String?;
+      if (secret != null && secret.isNotEmpty) return secret;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String> _ensureConfigDir() async {
+    final appDir = await getApplicationSupportDirectory();
+    final dir = Directory(p.join(appDir.path, 'singbox'));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir.path;
+  }
+
+  Future<void> _restrictConfigPermissions(String configPath) async {
+    try {
+      if (Platform.isWindows) {
+        // Remove inherited ACEs and allow only the current user.
+        final user = Platform.environment['USER'] ?? Platform.environment['USERNAME'];
+        if (user != null && user.isNotEmpty) {
+          await Process.run('icacls', [configPath, '/inheritance:r', '/grant:r', '$user:(R,W)']);
+        }
+      } else if (Platform.isMacOS || Platform.isLinux) {
+        await Process.run('chmod', ['600', configPath]);
+      }
+    } catch (e) {
+      debugPrint('[DesktopVPN] could not restrict config permissions: $e');
+    }
   }
 
   bool _configUsesTun(String configJson) {

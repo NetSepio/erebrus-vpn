@@ -14,6 +14,7 @@ class AppSettingsController extends GetxController {
   static const _kKillSwitch = 'settings.kill_switch';
   static const _kDiagnostics = 'settings.anonymous_diagnostics';
   static const _kOnboardingSeen = 'settings.onboarding_seen';
+  static const _kDnsResolver = 'settings.dns_resolver';
   static const _kSplitTunnelEnabled = 'settings.split_tunnel_enabled';
   static const _kSplitTunnelMode = 'settings.split_tunnel_mode';
   static const _kSplitTunnelInclude = 'settings.split_tunnel_include';
@@ -25,6 +26,7 @@ class AppSettingsController extends GetxController {
   final autoConnectOnLaunch = false.obs;
   final killSwitchEnabled = true.obs;
   final anonymousDiagnostics = false.obs;
+  final dnsResolver = 'system'.obs;
   final splitTunnelEnabled = false.obs;
   final splitTunnelMode = SplitTunnelMode.exclude.obs;
   final splitTunnelIncludePackages = <String>[].obs;
@@ -52,6 +54,7 @@ class AppSettingsController extends GetxController {
     autoConnectOnLaunch.value = prefs.getBool(_kAutoConnect) ?? false;
     killSwitchEnabled.value = prefs.getBool(_kKillSwitch) ?? true;
     anonymousDiagnostics.value = prefs.getBool(_kDiagnostics) ?? false;
+    dnsResolver.value = prefs.getString(_kDnsResolver) ?? 'system';
     onboardingSeen.value = prefs.getBool(_kOnboardingSeen) ?? false;
     splitTunnelEnabled.value = prefs.getBool(_kSplitTunnelEnabled) ?? false;
     splitTunnelMode.value = SplitTunnelMode.fromName(prefs.getString(_kSplitTunnelMode));
@@ -147,6 +150,23 @@ class AppSettingsController extends GetxController {
     if (!value && Get.isRegistered<VpnController>()) {
       await Get.find<VpnController>().releaseKillSwitchIfActive();
     }
+  }
+
+  Future<void> setDnsResolver(String value) async {
+    dnsResolver.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kDnsResolver, value);
+  }
+
+  String get dnsResolverLabel {
+    return switch (dnsResolver.value) {
+      'system' => 'System DNS',
+      'cloudflare' => 'Cloudflare DoH',
+      'quad9' => 'Quad9 DoH',
+      'adguard' => 'AdGuard DoH',
+      final String custom when custom.startsWith('https://') => 'Custom',
+      _ => 'System DNS',
+    };
   }
 
   Future<void> setAnonymousDiagnostics(bool value) async {

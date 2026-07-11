@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dnslib/dnslib.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'gateway_config.dart';
 
@@ -11,6 +13,8 @@ abstract final class GatewayHttp {
   static const _connectTimeout = Duration(seconds: 12);
   static const _lookupRetries = 3;
   static const _lookupRetryDelay = Duration(milliseconds: 350);
+  static const _defaultDohPort = 443;
+  static const _defaultDohPath = '/dns-query';
 
   /// Gateway [HttpClient] — DNS preflight only (do not use [HttpClient.connectionFactory]
   /// for HTTPS here; it breaks SNI and the gateway returns 404).
@@ -27,7 +31,7 @@ abstract final class GatewayHttp {
     await resolveHost(host);
   }
 
-  /// System DNS with backoff, then Google DNS-over-HTTPS (lookup only).
+  /// System DNS with backoff, then the user-selected DNS-over-HTTPS provider.
   static Future<List<InternetAddress>> resolveHost(String host) async {
     Object? lastError;
     for (var attempt = 0; attempt < _lookupRetries; attempt++) {
@@ -45,8 +49,11 @@ abstract final class GatewayHttp {
       }
     }
 
+    final resolver = await _selectedResolver();
+    if (resolver == null) throw lastError ?? const SocketException('System DNS failed and DoH is disabled');
+
     try {
-      final viaDoh = await _resolveViaDoh(host);
+      final viaDoh = await _resolveViaDoh(host, resolver);
       debugPrint('[Gateway] DNS fallback (DoH) resolved $host → ${viaDoh.first.address}');
       return viaDoh;
     } catch (e) {
@@ -54,38 +61,67 @@ abstract final class GatewayHttp {
     }
   }
 
-  static Future<List<InternetAddress>> _resolveViaDoh(String host) async {
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 8);
+  static Future<String?> _selectedResolver() async {
     try {
-      final req = await client.getUrl(
-        Uri.https('dns.google', '/resolve', {'name': host, 'type': 'A'}),
-      );
-      final res = await req.close();
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw SocketException('DoH lookup failed (HTTP ${res.statusCode})');
-      }
-      final body = await utf8.decodeStream(res);
-      final decoded = jsonDecode(body);
-      if (decoded is! Map) throw const FormatException('DoH response');
-      final answers = decoded['Answer'];
-      if (answers is! List || answers.isEmpty) {
-        throw SocketException('DoH returned no records for $host');
-      }
-      final out = <InternetAddress>[];
-      for (final a in answers) {
-        if (a is Map && a['type'] == 1) {
-          final data = a['data']?.toString();
-          if (data != null && data.isNotEmpty) {
-            out.add(InternetAddress(data));
-          }
-        }
-      }
-      if (out.isEmpty) throw SocketException('DoH returned no IPv4 for $host');
-      return out;
-    } finally {
-      client.close(force: true);
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getString('settings.dns_resolver');
+      if (value == null || value.isEmpty || value == 'system') return null;
+      return value;
+    } catch (e) {
+      debugPrint('[Gateway] could not read DNS resolver setting: $e');
+      return null;
     }
+  }
+
+  static Future<List<InternetAddress>> _resolveViaDoh(String host, String resolver) async {
+    final dnsServer = _createDnsServer(resolver);
+    final records = await DNSClient.query(
+      domain: host,
+      dnsRecordType: DNSRecordTypes.findByName('A'),
+      dnsServer: dnsServer,
+      timeout: 8000,
+    );
+    final ipv4 = records
+        .whereType<AResponseRecord>()
+        .map((r) => r.ip)
+        .where((a) => a.type == InternetAddressType.IPv4)
+        .toList();
+    if (ipv4.isEmpty) throw SocketException('DoH returned no IPv4 for $host');
+    return ipv4;
+  }
+
+  static DNSServer _createDnsServer(String resolver) {
+    return switch (resolver) {
+      'cloudflare' => DNSServer(
+          host: 'cloudflare-dns.com',
+          port: _defaultDohPort,
+          protocol: DNSProtocol.doh,
+          path: _defaultDohPath,
+        ),
+      'quad9' => DNSServer(
+          host: 'dns.quad9.net',
+          port: _defaultDohPort,
+          protocol: DNSProtocol.doh,
+          path: _defaultDohPath,
+        ),
+      'adguard' => DNSServer(
+          host: 'dns.adguard-dns.com',
+          port: _defaultDohPort,
+          protocol: DNSProtocol.doh,
+          path: _defaultDohPath,
+        ),
+      _ => _parseCustomDnsServer(resolver),
+    };
+  }
+
+  static DNSServer _parseCustomDnsServer(String url) {
+    final uri = Uri.tryParse(url) ?? Uri.parse('https://dns.google$_defaultDohPath');
+    return DNSServer(
+      host: uri.host,
+      port: uri.hasPort ? uri.port : _defaultDohPort,
+      protocol: DNSProtocol.doh,
+      path: uri.path.isEmpty ? _defaultDohPath : uri.path,
+    );
   }
 
   static bool isTransientNetworkError(Object error) {

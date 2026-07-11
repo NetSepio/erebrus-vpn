@@ -126,21 +126,24 @@ class SingboxEngine {
   }
 
   /// Routes in-app HTTP/WebView through the local sing-box mixed inbound.
-  Future<void> setAppProxy({required String host, required int port}) async {
-    if (_useDesktopRunner) return;
+  /// Returns `false` when the platform WebView does not support proxy override.
+  Future<bool> setAppProxy({required String host, required int port}) async {
+    if (_useDesktopRunner) return true;
     try {
-      await _method.invokeMethod('setAppProxy', {'host': host, 'port': port});
+      return await _method.invokeMethod('setAppProxy', {'host': host, 'port': port}) as bool? ?? false;
     } on PlatformException catch (e) {
       debugPrint('[SingboxEngine] setAppProxy failed: $e');
+      return false;
     }
   }
 
-  Future<void> clearAppProxy() async {
-    if (_useDesktopRunner) return;
+  Future<bool> clearAppProxy() async {
+    if (_useDesktopRunner) return true;
     try {
-      await _method.invokeMethod('clearAppProxy');
+      return await _method.invokeMethod('clearAppProxy') as bool? ?? false;
     } on PlatformException catch (e) {
       debugPrint('[SingboxEngine] clearAppProxy failed: $e');
+      return false;
     }
   }
 

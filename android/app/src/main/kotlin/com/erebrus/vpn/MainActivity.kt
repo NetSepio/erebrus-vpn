@@ -169,7 +169,7 @@ class MainActivity : FlutterActivity() {
 
     private fun setAppProxy(host: String, port: Int, result: MethodChannel.Result) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-            result.success(null)
+            result.success(false)
             return
         }
         val config = ProxyConfig.Builder()
@@ -177,17 +177,17 @@ class MainActivity : FlutterActivity() {
             .addDirect()
             .build()
         ProxyController.getInstance().setProxyOverride(config, Runnable::run) {
-            result.success(null)
+            result.success(true)
         }
     }
 
     private fun clearAppProxy(result: MethodChannel.Result) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-            result.success(null)
+            result.success(false)
             return
         }
         ProxyController.getInstance().clearProxyOverride(Runnable::run) {
-            result.success(null)
+            result.success(true)
         }
     }
 

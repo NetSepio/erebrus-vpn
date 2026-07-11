@@ -1,20 +1,15 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../platform/desktop_prefs_storage.dart';
-import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 import 'vpn_models.dart';
 
 /// Persists the last successful gateway credential bundle per node + WG pubkey.
 class CredentialCache {
-  CredentialCache({FlutterSecureStorage? storage})
-      : _storage = storage ?? ErebrusSecureStorage.instance;
+  CredentialCache();
 
-  final FlutterSecureStorage _storage;
   static const _indexKey = 'erebrus_bundle_index';
 
   String _key(String nodeId, String wgPublicKey) =>
@@ -26,9 +21,7 @@ class CredentialCache {
   }) async {
     try {
       final cacheKey = _key(nodeId, wgPublicKey);
-      final raw = PlatformCapabilities.isDesktop
-          ? await DesktopPrefsStorage.read(cacheKey)
-          : await _storage.read(key: cacheKey);
+      final raw = await ErebrusSecureStorage.read(cacheKey);
       if (raw == null || raw.isEmpty) return null;
       return CredentialBundle.fromJson(
         jsonDecode(raw) as Map<String, dynamic>,
@@ -57,11 +50,7 @@ class CredentialCache {
         'singbox_profile': bundle.singboxProfile,
       });
       final cacheKey = _key(nodeId, wgPublicKey);
-      if (PlatformCapabilities.isDesktop) {
-        await DesktopPrefsStorage.write(cacheKey, json);
-      } else {
-        await _storage.write(key: cacheKey, value: json);
-      }
+      await ErebrusSecureStorage.write(cacheKey, json);
       await _rememberKey(cacheKey);
     } catch (e) {
       debugPrint('[VPN] credential cache write failed: $e');
@@ -73,13 +62,7 @@ class CredentialCache {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getStringList(_indexKey) ?? const <String>[];
       for (final cacheKey in keys) {
-        if (PlatformCapabilities.isDesktop) {
-          await DesktopPrefsStorage.delete(cacheKey);
-        } else {
-          try {
-            await _storage.delete(key: cacheKey);
-          } catch (_) {}
-        }
+        await ErebrusSecureStorage.delete(cacheKey);
       }
       await prefs.remove(_indexKey);
       debugPrint('[VPN] credential cache cleared (${keys.length} entries)');

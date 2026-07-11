@@ -5,7 +5,6 @@ import 'dart:io' show Platform, Socket;
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
-import '../platform/desktop_prefs_storage.dart';
 import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 import '../settings/app_settings_controller.dart';
@@ -37,7 +36,6 @@ class VpnController extends GetxController {
   VpnController({Provisioner? provisioner}) : _provision = provisioner;
 
   final _engine = SingboxEngine.instance;
-  final _storage = ErebrusSecureStorage.instance;
   Provisioner? _provision;
 
   // observables
@@ -269,161 +267,170 @@ class VpnController extends GetxController {
     }
     selectedNode.value = target;
     error.value = null;
-    stage.value = VpnStage.connecting;
 
     try {
-      if (!await _engine.prepare()) {
-        error.value = _engine.desktopPrepareError ??
-            (PlatformCapabilities.isDesktop
-                ? 'sing-box missing — run ./scripts/fetch-singbox-cli.sh macos from the repo root'
-                : 'VPN permission denied');
-        stage.value = VpnStage.error;
-        return;
-      }
-      final keys = await _ensureWgKeys();
-      var bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
-      if (_cancelRequested) {
-        await _finishCancelled();
-        return;
-      }
-
-      // Stealth needs a full sing-box profile; stale WG-only caches break REALITY.
-      if (mode.value != ConnectMode.wireguard &&
-          !bundle.hasStealth &&
-          Get.isRegistered<GatewayController>()) {
-        final gw = Get.find<GatewayController>();
-        debugPrint('[VPN] bundle missing stealth — refreshing from gateway');
+      for (var attempt = 0; attempt <= 1; attempt++) {
         try {
-          final fresh = await gw.client.fetchExistingClientBundle(
-            nodeId: target.id,
-            wgPublicKey: keys.public,
-          );
-          if (fresh != null && fresh.hasStealth) bundle = fresh;
-        } catch (e) {
-          debugPrint('[VPN] stealth bundle refresh failed: $e');
-        }
-      }
-
-      // Filter candidate transports to what this node/bundle actually supports.
-      final candidates = mode.value.transports.where((t) {
-        if (t == Transport.wireguard) return true;
-        return bundle.hasStealth && target.supportsStealth;
-      }).toList();
-      if (candidates.isEmpty) {
-        error.value = 'No usable transport for this node';
-        stage.value = VpnStage.error;
-        return;
-      }
-
-      debugPrint(
-        '[VPN] mode=${mode.value.label} · try order: '
-        '${candidates.map((t) => t.label).join(' → ')}',
-      );
-
-      final resolvedHosts = PlatformCapabilities.isDesktop
-          ? const <String, String>{}
-          : await SingboxConfigBuilder.resolveDialHosts(bundle);
-
-      for (var i = 0; i < candidates.length; i++) {
-        if (_cancelRequested) break;
-        final t = candidates[i];
-        try {
-          if (i > 0) await _ensureTunnelStopped();
-          if (_cancelRequested) break;
           stage.value = VpnStage.connecting;
-          final config = SingboxConfigBuilder.build(
-            bundle: bundle,
-            transport: t,
-            clientPrivateKey: keys.private,
-            // Desktop CLI: local mixed proxy + system HTTP/SOCKS (no TUN). TUN on
-            // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
-            // egress probe (explicit 127.0.0.1:10808) works.
-            useSystemTunnel: !PlatformCapabilities.isDesktop,
-            resolvedHosts: resolvedHosts,
-          );
-          activeTransport.value = t;
-          final srv = bundle.serverPublicKey;
-          final srvShort = srv.length > 8 ? '${srv.substring(0, 8)}…' : srv;
-          debugPrint(
-            '[VPN] trying ${t.label} → ${bundle.dialTarget(t)} '
-            '(wg ${bundle.address}, srv $srvShort)',
-          );
-          var ok = await _armAndStart(
-            _engine.start(
-              jsonEncode(config),
-              profileName: 'Erebrus · ${target.name}',
-              splitTunnel: _splitTunnelConfig(),
-            ),
-          );
-          if (!ok) {
-            // Native tunnel may be up while EventChannel/method-channel was blocked (e.g. main-thread ANR).
-            final native = await _engine.stage().catchError((_) => VpnStage.disconnected);
-            if (native == VpnStage.connected) {
-              ok = true;
-              debugPrint('[VPN] ${t.label} native connected (stage event missed)');
-            }
-          }
-          debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
-          if (ok) {
-            final ready = t == Transport.wireguard
-                ? await _waitWireGuardReady()
-                : await _waitStealthReady();
-            if (_cancelRequested) break;
-            if (!ready) {
-              debugPrint('[VPN] ${t.label} tunnel up but no egress — trying next transport');
-              await _ensureTunnelStopped();
-              continue;
-            }
-          }
-          if (ok) {
-            _wasConnected = true;
-            stage.value = VpnStage.connected;
-            error.value = null;
-            unawaited(_syncAppProxy(enabled: true));
-            unawaited(_probeEgressIp());
-            debugPrint(
-              '[VPN] connected · mode=${mode.value.label} · transport=${t.label} · '
-              'config=${t == Transport.wireguard ? "direct-wg" : "stealth-singbox"}',
-            );
-            await VpnSessionStore.save(
-              node: target,
-              transport: t,
-              mode: mode.value,
-              profileName: 'Erebrus · ${target.name}',
-            );
+          if (!await _engine.prepare()) {
+            error.value = _engine.desktopPrepareError ??
+                (PlatformCapabilities.isDesktop
+                    ? 'sing-box missing — run ./scripts/fetch-singbox-cli.sh macos from the repo root'
+                    : 'VPN permission denied');
+            stage.value = VpnStage.error;
             return;
           }
-        } catch (e, st) {
-          debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
+          final keys = await _ensureWgKeys();
+          var bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
+          if (_cancelRequested) {
+            await _finishCancelled();
+            return;
+          }
+
+          // Stealth needs a full sing-box profile; stale WG-only caches break REALITY.
+          if (mode.value != ConnectMode.wireguard &&
+              !bundle.hasStealth &&
+              Get.isRegistered<GatewayController>()) {
+            final gw = Get.find<GatewayController>();
+            debugPrint('[VPN] bundle missing stealth — refreshing from gateway');
+            try {
+              final fresh = await gw.client.fetchExistingClientBundle(
+                nodeId: target.id,
+                wgPublicKey: keys.public,
+              );
+              if (fresh != null && fresh.hasStealth) bundle = fresh;
+            } catch (e) {
+              debugPrint('[VPN] stealth bundle refresh failed: $e');
+            }
+          }
+
+          // Filter candidate transports to what this node/bundle actually supports.
+          final candidates = mode.value.transports.where((t) {
+            if (t == Transport.wireguard) return true;
+            return bundle.hasStealth && target.supportsStealth;
+          }).toList();
+          if (candidates.isEmpty) {
+            error.value = 'No usable transport for this node';
+            stage.value = VpnStage.error;
+            return;
+          }
+
+          debugPrint(
+            '[VPN] mode=${mode.value.label} · try order: '
+            '${candidates.map((t) => t.label).join(' → ')}',
+          );
+
+          final resolvedHosts = PlatformCapabilities.isDesktop
+              ? const <String, String>{}
+              : await SingboxConfigBuilder.resolveDialHosts(bundle);
+
+          for (var i = 0; i < candidates.length; i++) {
+            if (_cancelRequested) break;
+            final t = candidates[i];
+            try {
+              if (i > 0) await _ensureTunnelStopped();
+              if (_cancelRequested) break;
+              stage.value = VpnStage.connecting;
+              final config = SingboxConfigBuilder.build(
+                bundle: bundle,
+                transport: t,
+                clientPrivateKey: keys.private,
+                // Desktop CLI: local mixed proxy + system HTTP/SOCKS (no TUN). TUN on
+                // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
+                // egress probe (explicit 127.0.0.1:10808) works.
+                useSystemTunnel: !PlatformCapabilities.isDesktop,
+                resolvedHosts: resolvedHosts,
+              );
+              activeTransport.value = t;
+              final srv = bundle.serverPublicKey;
+              final srvShort = srv.length > 8 ? '${srv.substring(0, 8)}…' : srv;
+              debugPrint(
+                '[VPN] trying ${t.label} → ${bundle.dialTarget(t)} '
+                '(wg ${bundle.address}, srv $srvShort)',
+              );
+              var ok = await _armAndStart(
+                _engine.start(
+                  jsonEncode(config),
+                  profileName: 'Erebrus · ${target.name}',
+                  splitTunnel: _splitTunnelConfig(),
+                ),
+              );
+              if (!ok) {
+                // Native tunnel may be up while EventChannel/method-channel was blocked (e.g. main-thread ANR).
+                final native = await _engine.stage().catchError((_) => VpnStage.disconnected);
+                if (native == VpnStage.connected) {
+                  ok = true;
+                  debugPrint('[VPN] ${t.label} native connected (stage event missed)');
+                }
+              }
+              debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
+              if (ok) {
+                final ready = t == Transport.wireguard
+                    ? await _waitWireGuardReady()
+                    : await _waitStealthReady();
+                if (_cancelRequested) break;
+                if (!ready) {
+                  debugPrint('[VPN] ${t.label} tunnel up but no egress — trying next transport');
+                  await _ensureTunnelStopped();
+                  continue;
+                }
+              }
+              if (ok) {
+                _wasConnected = true;
+                stage.value = VpnStage.connected;
+                error.value = null;
+                unawaited(_syncAppProxy(enabled: true));
+                unawaited(_probeEgressIp());
+                debugPrint(
+                  '[VPN] connected · mode=${mode.value.label} · transport=${t.label} · '
+                  'config=${t == Transport.wireguard ? "direct-wg" : "stealth-singbox"}',
+                );
+                await VpnSessionStore.save(
+                  node: target,
+                  transport: t,
+                  mode: mode.value,
+                  profileName: 'Erebrus · ${target.name}',
+                );
+                return;
+              }
+            } catch (e, st) {
+              debugPrint('[VPN] transport ${t.label} failed: $e\n$st');
+            }
+            _wasConnected = false;
+            if (_cancelRequested) break;
+            await _ensureTunnelStopped();
+          }
+          _wasConnected = false;
+          if (_cancelRequested) {
+            await _finishCancelled();
+            return;
+          }
+          await _engine.stop().catchError((_) {});
+          error.value = await _connectFailureMessage();
+          stage.value = VpnStage.error;
+        } on GatewayException catch (e) {
+          _wasConnected = false;
+          if (_cancelRequested) {
+            await _finishCancelled();
+            return;
+          }
+          if (attempt == 0 && _looksLikeMissingServerConfig(e)) {
+            debugPrint('[VPN] server config missing for current WG key — rotating and retrying once');
+            await _rotateWgKeys();
+            continue;
+          }
+          error.value = friendlyGatewayError(e, nodeName: target.name);
+          stage.value = VpnStage.error;
+        } catch (e) {
+          _wasConnected = false;
+          if (_cancelRequested) {
+            await _finishCancelled();
+            return;
+          }
+          error.value = friendlyGatewayError(e, nodeName: target.name);
+          stage.value = VpnStage.error;
         }
-        _wasConnected = false;
-        if (_cancelRequested) break;
-        await _ensureTunnelStopped();
       }
-      _wasConnected = false;
-      if (_cancelRequested) {
-        await _finishCancelled();
-        return;
-      }
-      await _engine.stop().catchError((_) {});
-      error.value = await _connectFailureMessage();
-      stage.value = VpnStage.error;
-    } on GatewayException catch (e) {
-      _wasConnected = false;
-      if (_cancelRequested) {
-        await _finishCancelled();
-        return;
-      }
-      error.value = friendlyGatewayError(e, nodeName: target.name);
-      stage.value = VpnStage.error;
-    } catch (e) {
-      _wasConnected = false;
-      if (_cancelRequested) {
-        await _finishCancelled();
-        return;
-      }
-      error.value = friendlyGatewayError(e, nodeName: target.name);
-      stage.value = VpnStage.error;
     } finally {
       _connectInProgress = false;
     }
@@ -490,14 +497,27 @@ class VpnController extends GetxController {
   }
 
   Future<void> _syncAppProxy({required bool enabled}) async {
-    if (enabled) {
-      await _engine.setAppProxy(
-        host: SingboxConfigBuilder.localProxyHost,
-        port: SingboxConfigBuilder.localProxyPort,
-      );
-      return;
+    final ok = enabled
+        ? await _engine.setAppProxy(
+            host: SingboxConfigBuilder.localProxyHost,
+            port: SingboxConfigBuilder.localProxyPort,
+          )
+        : await _engine.clearAppProxy();
+    if (!ok && !PlatformCapabilities.isDesktop) {
+      _showWebViewProxyWarning();
     }
-    await _engine.clearAppProxy();
+  }
+
+  void _showWebViewProxyWarning() {
+    if (Get.isDialogOpen ?? false) return;
+    Get.defaultDialog(
+      title: 'WebView proxy not supported',
+      middleText:
+          'Your system WebView does not support proxy override. The in-app browser may not route through the VPN tunnel. Use an external browser to ensure traffic goes through the tunnel.',
+      textConfirm: 'OK',
+      barrierDismissible: false,
+      onConfirm: Get.back,
+    );
   }
 
   Future<void> _probeEgressIp() async {
@@ -745,28 +765,41 @@ class VpnController extends GetxController {
     return keys;
   }
 
-  Future<String?> _readStoredSecret(String key) {
-    if (PlatformCapabilities.isDesktop) {
-      return DesktopPrefsStorage.read(key);
-    }
-    return _storage.read(key: key);
-  }
+  Future<String?> _readStoredSecret(String key) => ErebrusSecureStorage.read(key);
 
-  Future<void> _writeStoredSecret(String key, String value) {
-    if (PlatformCapabilities.isDesktop) {
-      return DesktopPrefsStorage.write(key, value);
-    }
-    return _storage.write(key: key, value: value);
-  }
+  Future<void> _writeStoredSecret(String key, String value) => ErebrusSecureStorage.write(key, value);
 
   Future<void> _deleteStoredSecret(String key) async {
     try {
-      if (PlatformCapabilities.isDesktop) {
-        await DesktopPrefsStorage.delete(key);
-      } else {
-        await _storage.delete(key: key);
-      }
+      await ErebrusSecureStorage.delete(key);
     } catch (_) {}
+  }
+
+  /// If the gateway no longer recognizes the current WG public key, retry once
+  /// with a freshly generated key pair.
+  bool _looksLikeMissingServerConfig(GatewayException e) {
+    final lower = e.message.toLowerCase();
+    if (lower.contains('node not found')) return false;
+    final missingHints = [
+      'not found',
+      'notfound',
+      'no such client',
+      'client not found',
+      'config not found',
+      'invalid public key',
+      'public key not found',
+      'missing client',
+      'unknown client',
+    ];
+    return missingHints.any(lower.contains);
+  }
+
+  Future<void> _rotateWgKeys() async {
+    await _deleteStoredSecret(_kWgPrivate);
+    await _deleteStoredSecret(_kWgPublic);
+    final keys = await _engine.generateWireGuardKeyPair();
+    await _writeStoredSecret(_kWgPrivate, keys.private);
+    await _writeStoredSecret(_kWgPublic, keys.public);
   }
 
   String _clientName() {

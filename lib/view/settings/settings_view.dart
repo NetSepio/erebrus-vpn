@@ -146,6 +146,14 @@ class _SettingsViewState extends State<SettingsView> {
                     subtitle: 'Block internet if the VPN drops unexpectedly',
                     trailing: EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch),
                   ),
+                  _RowDivider(),
+                  Obx(() => _GroupRow(
+                    icon: Icons.dns_outlined,
+                    title: 'DNS resolver',
+                    subtitle: settings.dnsResolverLabel,
+                    onTap: () => _pickDnsResolver(context, settings),
+                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                  )),
                   if (PlatformCapabilities.supportsSplitTunnel) ...[
                     _RowDivider(),
                     Obx(() {
@@ -224,6 +232,109 @@ class _SettingsViewState extends State<SettingsView> {
                   },
                 ));
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _pickDnsResolver(BuildContext context, AppSettingsController settings) {
+    final options = const {
+      'system': 'System DNS',
+      'cloudflare': 'Cloudflare DoH',
+      'quad9': 'Quad9 DoH',
+      'adguard': 'AdGuard DoH',
+      'custom': 'Custom',
+    };
+    final customCtrl = TextEditingController();
+    var selected = settings.dnsResolver.value;
+    if (!options.containsKey(selected) && !selected.startsWith('https://')) {
+      selected = 'system';
+    }
+    var customUrl = '';
+    if (selected.startsWith('https://')) {
+      customUrl = selected;
+      selected = 'custom';
+      customCtrl.text = customUrl;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.raised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('DNS resolver', style: grotesk(size: 18, weight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('Fallback used when system DNS fails', style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textMuted)),
+                const SizedBox(height: 12),
+                RadioGroup<String>(
+                  groupValue: selected,
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setSheetState(() => selected = v);
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: options.entries
+                        .map((e) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              leading: Radio<String>(
+                                value: e.key,
+                                activeColor: AppColors.accent,
+                              ),
+                              title: Text(e.value, style: grotesk(size: 14.5, weight: FontWeight.w500)),
+                              onTap: () => setSheetState(() => selected = e.key),
+                            ))
+                        .toList(),
+                  ),
+                ),
+                if (selected == 'custom') ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: customCtrl,
+                    autocorrect: false,
+                    onChanged: (v) => customUrl = v.trim(),
+                    style: mono(size: 13, weight: FontWeight.w500),
+                    decoration: InputDecoration(
+                      hintText: 'https://doh.example.com/dns-query',
+                      hintStyle: mono(size: 13, weight: FontWeight.w400, color: AppColors.textMuted),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.strokeSoft)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () {
+                    final value = selected == 'custom' ? customUrl : selected;
+                    if (selected == 'custom' && !value.startsWith('https://')) {
+                      Get.snackbar('Invalid URL', 'Custom resolver must be an https:// URL', snackPosition: SnackPosition.BOTTOM);
+                      return;
+                    }
+                    settings.setDnsResolver(value);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
+                    child: Text('SAVE', style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

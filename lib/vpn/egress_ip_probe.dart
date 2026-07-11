@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -8,24 +9,45 @@ import 'vpn_models.dart';
 
 /// Fetches the device's public egress IP through the tunnel when requested.
 ///
-/// All endpoints are probed in parallel and the first plausible answer wins.
-/// `1.1.1.1/cdn-cgi/trace` is first on purpose: it is an IP literal, so it
+/// A randomized subset of endpoints is probed in parallel and the first
+/// plausible answer wins. The `1.1.1.1` IP literal is always included so it
 /// proves tunnel egress even when DNS through the tunnel is broken — the exact
 /// failure mode of a half-up WireGuard endpoint.
 class EgressIpProbe {
-  static const _endpoints = [
-    'https://1.1.1.1/cdn-cgi/trace',
+  /// Always include this IP literal as a DNS-dead fallback.
+  static const _ipLiteralEndpoint = 'https://1.1.1.1/cdn-cgi/trace';
+
+  static const _hostEndpoints = [
     'https://api.ipify.org',
+    'https://api64.ipify.org',
+    'https://icanhazip.com',
+    'https://ident.me',
+    'https://ipinfo.io/ip',
+    'https://checkip.amazonaws.com',
     'https://ifconfig.me/ip',
+    'https://www.cloudflare.com/cdn-cgi/trace',
+    'https://ipecho.net/plain',
   ];
+
+  static final _rng = Random.secure();
+
+  static const _genericUserAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   static Future<String?> fetch({
     Duration timeout = const Duration(seconds: 8),
     bool useTunnelProxy = false,
   }) {
+    // Always include the IP literal, plus a randomized sample of hostnames.
+    final hostPool = List<String>.of(_hostEndpoints)..shuffle(_rng);
+    final endpoints = [
+      _ipLiteralEndpoint,
+      ...hostPool.take(3),
+    ];
+
     final completer = Completer<String?>();
-    var pending = _endpoints.length;
-    for (final url in _endpoints) {
+    var pending = endpoints.length;
+    for (final url in endpoints) {
       unawaited(() async {
         String? ip;
         try {
@@ -60,7 +82,7 @@ class EgressIpProbe {
       // dead tunnel turned a "5s" probe into ~10s.
       return await () async {
         final req = await client.getUrl(Uri.parse(url));
-        req.headers.set(HttpHeaders.userAgentHeader, 'ErebrusVPN/1.0');
+        req.headers.set(HttpHeaders.userAgentHeader, _genericUserAgent);
         final res = await req.close();
         if (res.statusCode != 200) return null;
         final body = await res.transform(utf8.decoder).join();

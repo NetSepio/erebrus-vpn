@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../platform/platform_capabilities.dart';
 import '../platform/secure_storage.dart';
 
 /// Persisted gateway session + optional Solana Mobile Wallet Adapter state.
@@ -27,10 +26,6 @@ class AuthSessionStore {
   static const _prefsPrefix = 'erebrus_auth_';
 
   Future<StoredAuthSession?> read() async {
-    // Unsigned desktop: never touch Keychain (avoids login-keychain password prompts).
-    if (PlatformCapabilities.isDesktop) {
-      return _readPrefs();
-    }
     final secure = await _readSecure();
     if (secure != null) return secure;
     return _readPrefs();
@@ -53,23 +48,13 @@ class AuthSessionStore {
       mwaAuthToken: mwaAuthToken,
     );
 
-    if (PlatformCapabilities.isDesktop) {
-      await _writePrefs(session);
-      debugPrint('[Auth] session saved (desktop local store)');
-      return;
-    }
-
     final secureOk = await _writeSecure(session);
     if (secureOk) return;
     await _writePrefs(session);
-    debugPrint('[Auth] session saved (mobile prefs fallback — KeyStore unavailable)');
+    debugPrint('[Auth] session saved (prefs fallback — secure storage unavailable)');
   }
 
   Future<void> clear() async {
-    if (PlatformCapabilities.isDesktop) {
-      await _clearPrefs();
-      return;
-    }
     await _clearPrefs();
     for (final key in [kToken, kWallet, kUserId, kRole, kAuthMethod, kMwaToken]) {
       try {

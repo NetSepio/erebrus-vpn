@@ -79,9 +79,10 @@ class BrowserController extends GetxController {
         host: SingboxConfigBuilder.localProxyHost,
         port: SingboxConfigBuilder.localProxyPort,
       );
-      return;
+    } else {
+      await SingboxEngine.instance.clearAppProxy();
     }
-    await SingboxEngine.instance.clearAppProxy();
+    await reload();
   }
 
   void addTab({String? url, bool activate = true}) {
