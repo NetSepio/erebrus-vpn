@@ -46,6 +46,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
 
 # sing-box CLI binaries (fetch via scripts/fetch-singbox-cli.sh)
 /bin/sing-box/
