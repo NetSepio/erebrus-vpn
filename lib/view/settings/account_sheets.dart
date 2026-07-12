@@ -236,3 +236,125 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     );
   }
 }
+
+Future<void> showDeleteAccountSheet(BuildContext context, WalletAuthController auth) async {
+  if (!auth.isAuthenticated) {
+    Get.snackbar('Sign in required', 'Connect your account first', snackPosition: SnackPosition.BOTTOM);
+    return;
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+    builder: (ctx) => _DeleteAccountSheet(auth: auth),
+  );
+}
+
+class _DeleteAccountSheet extends StatefulWidget {
+  const _DeleteAccountSheet({required this.auth});
+
+  final WalletAuthController auth;
+
+  @override
+  State<_DeleteAccountSheet> createState() => _DeleteAccountSheetState();
+}
+
+class _DeleteAccountSheetState extends State<_DeleteAccountSheet> {
+  Future<void> _request() async {
+    try {
+      final message = await widget.auth.requestAccountDeletion();
+      if (mounted) Navigator.of(context).pop();
+      if (message != null) {
+        Get.snackbar('Account deletion', message, snackPosition: SnackPosition.BOTTOM);
+      }
+    } on AuthException catch (e) {
+      Get.snackbar('Account deletion', e.message, snackPosition: SnackPosition.BOTTOM);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(22, 18, 22, 22 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Request account deletion', style: grotesk(size: 18, weight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text(
+              'This will request deletion of your account. An admin will review and complete the removal. You cannot undo this request.',
+              style: grotesk(size: 13, color: AppColors.textTertiary, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            _Condition(icon: Icons.mark_email_read_outlined, text: 'Email must be verified'),
+            _Condition(icon: Icons.work_outline, text: 'You must not own organizations'),
+            _Condition(icon: Icons.people_outline, text: 'No active organization memberships'),
+            _Condition(icon: Icons.pending_outlined, text: 'No pending deletion request'),
+            const SizedBox(height: 16),
+            Obx(() => GestureDetector(
+                  onTap: widget.auth.isDeletingAccount.value ? null : _request,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      widget.auth.isDeletingAccount.value ? 'REQUESTING…' : 'REQUEST ACCOUNT DELETION',
+                      style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.strokeSoft),
+                ),
+                child: Text(
+                  'CANCEL',
+                  style: mono(size: 13, weight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Condition extends StatelessWidget {
+  const _Condition({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: grotesk(size: 13, weight: FontWeight.w400, color: AppColors.textTertiary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

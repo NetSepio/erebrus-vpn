@@ -6,8 +6,12 @@ import 'auth_config.dart';
 import 'entitlement_state.dart';
 import 'referral_summary.dart';
 import 'user_profile.dart';
+import 'user_org_invite.dart';
 import '../vpn/gateway_config.dart';
 import '../vpn/gateway_http.dart';
+import '../vpn/vpn_models.dart';
+
+export 'user_org_invite.dart';
 
 /// Wallet auth + subscriptions against the Erebrus gateway (v2).
 class GatewayAuthClient {
@@ -272,6 +276,74 @@ class GatewayAuthClient {
       'trial_consumed': map['trial_consumed'],
       'nft_gating': true,
     });
+  }
+
+  /// `POST /api/v2/account/deletion-request` — request account deletion.
+  Future<String> requestAccountDeletion(String bearerToken) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/account/deletion-request'),
+      const {},
+      bearerToken: bearerToken,
+    );
+    return (map['message'] ?? 'Deletion request submitted').toString();
+  }
+
+  /// `GET /api/v2/account/org-invites` — pending organization invites.
+  Future<List<UserOrgInvite>> fetchAccountOrgInvites(String bearerToken) async {
+    final decoded = await _getDecoded(
+      GatewayHttp.apiUri(_base, path: '/api/v2/account/org-invites'),
+      bearerToken: bearerToken,
+    );
+    final list = decoded is List
+        ? decoded
+        : (decoded is Map ? (decoded['invites'] as List?) : null) ?? const [];
+    return list
+        .map((e) => UserOrgInvite.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// `POST /api/v2/account/org-invites/:orgId/accept`.
+  Future<void> acceptAccountOrgInvite(
+    String bearerToken,
+    String orgId,
+  ) async {
+    await _postJson(
+      GatewayHttp.apiUri(
+        _base,
+        path: '/api/v2/account/org-invites/$orgId/accept',
+      ),
+      const {},
+      bearerToken: bearerToken,
+    );
+  }
+
+  /// `POST /api/v2/account/org-invites/:orgId/decline`.
+  Future<void> declineAccountOrgInvite(
+    String bearerToken,
+    String orgId,
+  ) async {
+    await _postJson(
+      GatewayHttp.apiUri(
+        _base,
+        path: '/api/v2/account/org-invites/$orgId/decline',
+      ),
+      const {},
+      bearerToken: bearerToken,
+    );
+  }
+
+  /// `POST /api/v2/orgs` — create a new organization.
+  Future<VpnOrg> createOrg(
+    String bearerToken, {
+    required String name,
+    required String slug,
+  }) async {
+    final map = await _postJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/orgs'),
+      {'name': name.trim(), 'slug': slug.trim().toLowerCase()},
+      bearerToken: bearerToken,
+    );
+    return VpnOrg.fromJson(map);
   }
 
   Future<dynamic> _getDecoded(Uri uri, {String? bearerToken}) async {

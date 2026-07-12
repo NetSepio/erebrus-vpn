@@ -188,66 +188,76 @@ class _ConnectViewState extends State<ConnectView> {
                   )),
               // dial
               Expanded(
-                child: Center(
-                  child: Obx(() {
-                    final stage = _c.stage.value;
-                    final blocking = _c.killSwitchBlocking.value;
-                    final err = _c.error.value;
-                    final transport = _c.activeTransport.value;
-                    final stealthWait = stage == VpnStage.connecting &&
-                        transport != null &&
-                        transport != Transport.wireguard;
-                    final stalled = stage == VpnStage.connected && !_c.tunnelHealthy.value;
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ConnectDial(
-                          stage: blocking ? VpnStage.error : stage,
-                          durationLabel: _fmtDur(_elapsed),
-                          connectingLabel: _connectingLabel(stage),
-                          // Connecting stays tappable: it cancels. Only a
-                          // disconnect in flight is uninterruptible.
-                          onTap: stage == VpnStage.disconnecting ? null : _onDialTap,
+                child: Obx(() {
+                  final stage = _c.stage.value;
+                  final blocking = _c.killSwitchBlocking.value;
+                  final err = _c.error.value;
+                  final transport = _c.activeTransport.value;
+                  final stealthWait = stage == VpnStage.connecting &&
+                      transport != null &&
+                      transport != Transport.wireguard;
+                  final stalled = stage == VpnStage.connected && !_c.tunnelHealthy.value;
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ConnectDial(
+                                  stage: blocking ? VpnStage.error : stage,
+                                  durationLabel: _fmtDur(_elapsed),
+                                  connectingLabel: _connectingLabel(stage),
+                                  // Connecting stays tappable: it cancels. Only a
+                                  // disconnect in flight is uninterruptible.
+                                  onTap: stage == VpnStage.disconnecting ? null : _onDialTap,
+                                ),
+                                if (stealthWait) ...[
+                                  const SizedBox(height: 14),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Text(
+                                      'Disguising traffic — this can take up to a minute on strict networks.',
+                                      textAlign: TextAlign.center,
+                                      style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.textMuted),
+                                    ),
+                                  ),
+                                ],
+                                if (stalled) ...[
+                                  const SizedBox(height: 14),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Text(
+                                      'Tunnel is up but nothing is getting through — tap the dial to disconnect, then reconnect (try Stealth).',
+                                      textAlign: TextAlign.center,
+                                      style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
+                                    ),
+                                  ),
+                                ],
+                                if (err != null && err.isNotEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Text(
+                                      err,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                        if (stealthWait) ...[
-                          const SizedBox(height: 14),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              'Disguising traffic — this can take up to a minute on strict networks.',
-                              textAlign: TextAlign.center,
-                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.textMuted),
-                            ),
-                          ),
-                        ],
-                        if (stalled) ...[
-                          const SizedBox(height: 14),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              'Tunnel is up but nothing is getting through — tap the dial to disconnect, then reconnect (try Stealth).',
-                              textAlign: TextAlign.center,
-                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
-                            ),
-                          ),
-                        ],
-                        if (err != null && err.isNotEmpty) ...[
-                          const SizedBox(height: 14),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              err,
-                              textAlign: TextAlign.center,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger),
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  }),
-                ),
+                      );
+                    },
+                  );
+                }),
               ),
               // data readout
               Obx(() => _DataReadout(stats: _c.stats.value, connected: _c.isConnected)),

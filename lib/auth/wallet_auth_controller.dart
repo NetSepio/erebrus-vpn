@@ -62,6 +62,14 @@ class WalletAuthController extends GetxController {
   final entitlementError = RxnString();
   final awaitingWebCallback = false.obs;
 
+  final isDeletingAccount = false.obs;
+  final deleteAccountError = RxnString();
+  final hasPendingDeletionRequest = false.obs;
+
+  final accountOrgInvites = <UserOrgInvite>[].obs;
+  final isLoadingAccountOrgInvites = false.obs;
+  final accountOrgInvitesError = RxnString();
+
   /// Which login methods the gateway has configured (loaded best-effort) and
   /// whether Apple sign-in is usable on this device.
   final authMethods = AuthMethods.unknown.obs;
@@ -582,6 +590,94 @@ class WalletAuthController extends GetxController {
     awaitingWebCallback.value = false;
     DesktopWebAuth.clearPendingState();
     _syncGatewayToken();
+  }
+
+  Future<void> refreshAccountOrgInvites() async {
+    final token = _token;
+    if (token == null || token.isEmpty) {
+      accountOrgInvites.value = const [];
+      return;
+    }
+    isLoadingAccountOrgInvites.value = true;
+    accountOrgInvitesError.value = null;
+    try {
+      accountOrgInvites.value = await _authClient.fetchAccountOrgInvites(token);
+    } on AuthException catch (e) {
+      accountOrgInvitesError.value = e.message;
+    } catch (e) {
+      accountOrgInvitesError.value = e.toString();
+    } finally {
+      isLoadingAccountOrgInvites.value = false;
+    }
+  }
+
+  Future<void> acceptAccountOrgInvite(String orgId) async {
+    if (!isAuthenticated) return;
+    try {
+      await _authClient.acceptAccountOrgInvite(_token!, orgId);
+      accountOrgInvites.removeWhere((i) => i.orgId == orgId);
+      unawaited(refreshAccountOrgInvites());
+      if (Get.isRegistered<GatewayController>()) {
+        unawaited(Get.find<GatewayController>().refreshNodes());
+      }
+    } on AuthException catch (e) {
+      accountOrgInvitesError.value = e.message;
+      rethrow;
+    } catch (e) {
+      accountOrgInvitesError.value = e.toString();
+      rethrow;
+    }
+  }
+
+  Future<void> declineAccountOrgInvite(String orgId) async {
+    if (!isAuthenticated) return;
+    try {
+      await _authClient.declineAccountOrgInvite(_token!, orgId);
+      accountOrgInvites.removeWhere((i) => i.orgId == orgId);
+    } on AuthException catch (e) {
+      accountOrgInvitesError.value = e.message;
+      rethrow;
+    } catch (e) {
+      accountOrgInvitesError.value = e.toString();
+      rethrow;
+    }
+  }
+
+  Future<VpnOrg> createOrg({required String name, required String slug}) async {
+    if (!isAuthenticated) throw AuthException('Sign in first');
+    try {
+      final org = await _authClient.createOrg(_token!, name: name, slug: slug);
+      if (Get.isRegistered<GatewayController>()) {
+        unawaited(Get.find<GatewayController>().refreshNodes());
+      }
+      return org;
+    } on AuthException {
+      rethrow;
+    } catch (e) {
+      throw AuthException(e.toString());
+    }
+  }
+
+  Future<String?> requestAccountDeletion() async {
+    if (!isAuthenticated) {
+      deleteAccountError.value = 'Sign in first';
+      return null;
+    }
+    isDeletingAccount.value = true;
+    deleteAccountError.value = null;
+    try {
+      final message = await _authClient.requestAccountDeletion(_token!);
+      hasPendingDeletionRequest.value = true;
+      return message;
+    } on AuthException catch (e) {
+      deleteAccountError.value = e.message;
+      rethrow;
+    } catch (e) {
+      deleteAccountError.value = e.toString();
+      rethrow;
+    } finally {
+      isDeletingAccount.value = false;
+    }
   }
 
   Future<void> refreshProfile() async {

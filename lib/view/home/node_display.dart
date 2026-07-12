@@ -179,7 +179,7 @@ class NodeDisplay {
       deploymentTypeLabel: deploymentTypeLabel,
       deploymentTypeColor: deploymentTypeColor,
       peerCount: node.wgPeersConnected != null && node.wgPeersRegistered != null
-          ? '${node.wgPeersConnected} / ${node.wgPeersRegistered} peers'
+          ? '${node.wgPeersConnected} / ${node.wgPeersRegistered}'
           : null,
       canConnect: node.canAcceptClients,
     );

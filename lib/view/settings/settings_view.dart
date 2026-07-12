@@ -13,6 +13,7 @@ import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
 import 'about_view.dart';
 import 'account_sheets.dart';
+import 'organization_sheets.dart';
 import 'split_tunnel_sheet.dart';
 import '../../vpn/gateway_controller.dart';
 
@@ -61,6 +62,9 @@ class _SettingsViewState extends State<SettingsView> {
     final auth = Get.find<WalletAuthController>();
     final settings = Get.find<AppSettingsController>();
     final vpn = Get.find<VpnController>();
+    final gateway = Get.isRegistered<GatewayController>()
+        ? Get.find<GatewayController>()
+        : null;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -107,11 +111,66 @@ class _SettingsViewState extends State<SettingsView> {
                     title: 'Member since',
                     subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
                   ),
+                  if (auth.isAuthenticated) ...[
+                    _RowDivider(),
+                    _GroupRow(
+                      icon: Icons.delete_outline,
+                      title: 'Request account deletion',
+                      titleColor: AppColors.danger,
+                      iconColor: AppColors.danger,
+                      onTap: () => showDeleteAccountSheet(context, auth),
+                    ),
+                  ],
                 ])),
             const SizedBox(height: 18),
 
             // referrals — mirrors the webapp profile "Invite friends" card
             _ReferralSection(auth: auth),
+
+            // organizations
+            const SectionLabel('ORGANIZATIONS'),
+            const SizedBox(height: 9),
+            Obx(() => _GroupCard(children: [
+                  _GroupRow(
+                    icon: Icons.business_outlined,
+                    title: 'Organizations',
+                    subtitle: auth.isAuthenticated
+                        ? 'Manage workspaces and invites'
+                        : 'Sign in to manage organizations',
+                    onTap: auth.isAuthenticated ? () => showOrganizationsSheet(context, auth) : null,
+                    trailing: auth.isAuthenticated && (gateway?.orgs.isNotEmpty ?? false)
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Text(
+                              '${gateway?.orgs.length ?? 0}',
+                              style: mono(size: 11, weight: FontWeight.w600, color: AppColors.accent),
+                            ),
+                          )
+                        : const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                  ),
+                  if (auth.isAuthenticated && auth.accountOrgInvites.isNotEmpty) ...[
+                    _RowDivider(),
+                    _GroupRow(
+                      icon: Icons.mail_outline,
+                      title: 'Pending invites',
+                      subtitle: '${auth.accountOrgInvites.length} invitation${auth.accountOrgInvites.length == 1 ? '' : 's'}',
+                      onTap: () => showOrganizationsSheet(context, auth),
+                      trailing: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
+                ])),
+            const SizedBox(height: 18),
 
             // vpn & security
             const SectionLabel('VPN & SECURITY'),
@@ -608,12 +667,16 @@ class _GroupRow extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
+    this.iconColor,
+    this.titleColor,
   });
   final IconData? icon;
   final String title;
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
+  final Color? iconColor;
+  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +687,7 @@ class _GroupRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
         child: Row(
           children: [
-            if (icon != null) ...[Icon(icon, size: 20, color: AppColors.textSecondary), const SizedBox(width: 13)],
+            if (icon != null) ...[Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary), const SizedBox(width: 13)],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,7 +695,7 @@ class _GroupRow extends StatelessWidget {
                   Text(title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: grotesk(size: 14.5, weight: FontWeight.w500)),
+                      style: grotesk(size: 14.5, weight: FontWeight.w500, color: titleColor ?? AppColors.textPrimary)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
