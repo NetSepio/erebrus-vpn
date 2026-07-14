@@ -426,6 +426,7 @@ class VpnController extends GetxController {
           }
           error.value = friendlyGatewayError(e, nodeName: target.name);
           stage.value = VpnStage.error;
+          break;
         } catch (e) {
           _wasConnected = false;
           if (_cancelRequested) {
@@ -434,6 +435,7 @@ class VpnController extends GetxController {
           }
           error.value = friendlyGatewayError(e, nodeName: target.name);
           stage.value = VpnStage.error;
+          break;
         }
       }
     } finally {
