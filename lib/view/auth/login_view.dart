@@ -35,8 +35,8 @@ class _LoginViewState extends State<LoginView> {
     _authWorker = ever(
       Get.find<WalletAuthController>().sessionActive,
       (isActive) {
-        if (isActive && mounted && Navigator.of(context).canPop()) {
-          Get.back();
+        if (isActive && mounted) {
+          Get.until((route) => route.isFirst);
         }
       },
     );
@@ -326,7 +326,6 @@ class _EmailLoginSheetState extends State<_EmailLoginSheet> {
     await auth.verifyEmailLoginCode(email: _emailCtrl.text.trim(), code: _codeCtrl.text.trim());
     if (!mounted) return;
     setState(() => _busy = false);
-    if (auth.isAuthenticated) Navigator.of(context).pop();
   }
 
   @override
