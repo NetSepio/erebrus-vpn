@@ -5,7 +5,7 @@ import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
-import 'connect_view.dart' show fmtData;
+import 'connect_dial.dart' show fmtData;
 import 'node_display.dart';
 import 'sheet_chrome.dart';
 

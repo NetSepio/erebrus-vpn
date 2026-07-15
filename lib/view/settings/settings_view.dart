@@ -14,6 +14,7 @@ import '../../vpn/vpn_models.dart';
 import 'about_view.dart';
 import 'account_sheets.dart';
 import 'organization_sheets.dart';
+import '../auth/login_view.dart';
 import 'split_tunnel_sheet.dart';
 import '../../vpn/gateway_controller.dart';
 
@@ -78,98 +79,103 @@ class _SettingsViewState extends State<SettingsView> {
             Text('Settings', style: grotesk(size: 24, weight: FontWeight.w600, letterSpacing: -0.48)),
             const SizedBox(height: 18),
 
-            // profile
-            Obx(() => _ProfileCard(
-                  walletAddress: auth.walletAddress.value,
-                  authMethod: auth.authMethod.value,
-                  displayName: auth.profileName.value,
-                  chain: auth.profileChain.value,
-                  email: auth.profileEmail.value,
-                )),
-            const SizedBox(height: 14),
+            Obx(() => auth.isAuthenticated
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // profile
+                      Obx(() => _ProfileCard(
+                            walletAddress: auth.walletAddress.value,
+                            authMethod: auth.authMethod.value,
+                            displayName: auth.profileName.value,
+                            chain: auth.profileChain.value,
+                            email: auth.profileEmail.value,
+                          )),
+                      const SizedBox(height: 14),
 
-            // subscription
-            _SubscriptionCard(auth: auth),
-            const SizedBox(height: 22),
+                      // subscription
+                      _SubscriptionCard(auth: auth),
+                      const SizedBox(height: 22),
 
-            // account
-            const SectionLabel('ACCOUNT'),
-            const SizedBox(height: 9),
-            Obx(() => _GroupCard(children: [
-                  _EmailRow(auth: auth),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.edit_outlined,
-                    title: 'Display name',
-                    subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
-                    onTap: () => showEditProfileSheet(context, auth),
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                  ),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.calendar_today_outlined,
-                    title: 'Member since',
-                    subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
-                  ),
-                  if (auth.isAuthenticated) ...[
-                    _RowDivider(),
-                    _GroupRow(
-                      icon: Icons.delete_outline,
-                      title: 'Request account deletion',
-                      titleColor: AppColors.danger,
-                      iconColor: AppColors.danger,
-                      onTap: () => showDeleteAccountSheet(context, auth),
-                    ),
-                  ],
-                ])),
-            const SizedBox(height: 18),
-
-            // referrals — mirrors the webapp profile "Invite friends" card
-            _ReferralSection(auth: auth),
-
-            // organizations
-            const SectionLabel('ORGANIZATIONS'),
-            const SizedBox(height: 9),
-            Obx(() => _GroupCard(children: [
-                  _GroupRow(
-                    icon: Icons.business_outlined,
-                    title: 'Organizations',
-                    subtitle: auth.isAuthenticated
-                        ? 'Manage workspaces and invites'
-                        : 'Sign in to manage organizations',
-                    onTap: auth.isAuthenticated ? () => showOrganizationsSheet(context, auth) : null,
-                    trailing: auth.isAuthenticated && (gateway?.orgs.isNotEmpty ?? false)
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(7),
+                      // account
+                      const SectionLabel('ACCOUNT'),
+                      const SizedBox(height: 9),
+                      Obx(() => _GroupCard(children: [
+                            _EmailRow(auth: auth),
+                            _RowDivider(),
+                            _GroupRow(
+                              icon: Icons.edit_outlined,
+                              title: 'Display name',
+                              subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
+                              onTap: () => showEditProfileSheet(context, auth),
+                              trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
                             ),
-                            child: Text(
-                              '${gateway?.orgs.length ?? 0}',
-                              style: mono(size: 11, weight: FontWeight.w600, color: AppColors.accent),
+                            _RowDivider(),
+                            _GroupRow(
+                              icon: Icons.calendar_today_outlined,
+                              title: 'Member since',
+                              subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
                             ),
-                          )
-                        : const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                  ),
-                  if (auth.isAuthenticated && auth.accountOrgInvites.isNotEmpty) ...[
-                    _RowDivider(),
-                    _GroupRow(
-                      icon: Icons.mail_outline,
-                      title: 'Pending invites',
-                      subtitle: '${auth.accountOrgInvites.length} invitation${auth.accountOrgInvites.length == 1 ? '' : 's'}',
-                      onTap: () => showOrganizationsSheet(context, auth),
-                      trailing: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.accent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ])),
+                            _RowDivider(),
+                            _GroupRow(
+                              icon: Icons.delete_outline,
+                              title: 'Request account deletion',
+                              titleColor: AppColors.danger,
+                              iconColor: AppColors.danger,
+                              onTap: () => showDeleteAccountSheet(context, auth),
+                            ),
+                          ])),
+                      const SizedBox(height: 18),
+
+                      // referrals — mirrors the webapp profile "Invite friends" card
+                      _ReferralSection(auth: auth),
+
+                      // organizations
+                      const SectionLabel('ORGANIZATIONS'),
+                      const SizedBox(height: 9),
+                      Obx(() => _GroupCard(children: [
+                            _GroupRow(
+                              icon: Icons.business_outlined,
+                              title: 'Organizations',
+                              subtitle: 'Manage workspaces and invites',
+                              onTap: () => showOrganizationsSheet(context, auth),
+                              trailing: (gateway?.orgs.isNotEmpty ?? false)
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent.withValues(alpha: 0.16),
+                                        borderRadius: BorderRadius.circular(7),
+                                      ),
+                                      child: Text(
+                                        '${gateway?.orgs.length ?? 0}',
+                                        style: mono(size: 11, weight: FontWeight.w600, color: AppColors.accent),
+                                      ),
+                                    )
+                                  : const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                            ),
+                            if (auth.accountOrgInvites.isNotEmpty) ...[
+                              _RowDivider(),
+                              _GroupRow(
+                                icon: Icons.mail_outline,
+                                title: 'Pending invites',
+                                subtitle: '${auth.accountOrgInvites.length} invitation${auth.accountOrgInvites.length == 1 ? '' : 's'}',
+                                onTap: () => showOrganizationsSheet(context, auth),
+                                trailing: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.accent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ])),
+                      const SizedBox(height: 18),
+                    ],
+                  )
+                : const _GuestSignInCard()),
             const SizedBox(height: 18),
 
             // vpn & security
@@ -246,21 +252,36 @@ class _SettingsViewState extends State<SettingsView> {
             ]),
             const SizedBox(height: 22),
 
-            // log out
-            GestureDetector(
-              onTap: auth.signOut,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.danger.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                ),
-                child: Text('Log out', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.danger)),
-              ),
-            ),
+            // log out / sign in
+            Obx(() => auth.isAuthenticated
+                ? GestureDetector(
+                    onTap: auth.signOut,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.danger.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                      ),
+                      child: Text('Log out', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.danger)),
+                    ),
+                  )
+                : GestureDetector(
+                    onTap: () => Get.to(() => const LoginView()),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Text('SIGN IN / REGISTER',
+                          style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+                    ),
+                  )),
           ],
         ),
       ),
@@ -395,6 +416,47 @@ class _SettingsViewState extends State<SettingsView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GuestSignInCard extends StatelessWidget {
+  const _GuestSignInCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.accent.withValues(alpha: 0.14), AppColors.accent.withValues(alpha: 0.04)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Unlock the full network', style: grotesk(size: 15, weight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Text('Sign in or register to browse nodes, manage subscriptions, and earn rewards.',
+              style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.4)),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () => Get.to(() => const LoginView()),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
+              child: Text('SIGN IN / REGISTER',
+                  style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../auth/wallet_auth_controller.dart';
+import '../../guest/guest_config_store.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../vpn/vpn_controller.dart';
 import '../browser/browser_view.dart';
+import '../guest/guest_connect_view.dart';
 import '../home/connect_view.dart';
 import '../home/diagnostics_sheet.dart';
 import '../home/server_sheet.dart';
@@ -49,6 +51,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         Get.find<AppSettingsController>().autoConnectOnLaunch,
         Get.find<WalletAuthController>().sessionReady,
         Get.find<WalletAuthController>().entitlement,
+        Get.find<GuestConfigController>().selectedId,
         Get.find<VpnController>().selectedNode,
       ],
       (_) => _tryAutoConnect(),
@@ -79,16 +82,31 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final settings = Get.find<AppSettingsController>();
     final auth = Get.find<WalletAuthController>();
     final vpn = Get.find<VpnController>();
+    final guest = Get.find<GuestConfigController>();
     if (vpn.isConnected) {
       _autoConnectAttempted = true;
       return;
     }
     if (!settings.autoConnectOnLaunch.value) return;
-    if (!auth.sessionReady.value || !auth.canConnectVpn(vpn.selectedNode.value)) return;
     if (vpn.isConnected || vpn.isBusy || vpn.killSwitchBlocking.value) return;
-    if (vpn.selectedNode.value == null) return;
-    _autoConnectAttempted = true;
-    vpn.connect();
+
+    if (auth.isAuthenticated) {
+      if (!auth.sessionReady.value || !auth.canConnectVpn(vpn.selectedNode.value)) return;
+      if (vpn.selectedNode.value == null) return;
+      _autoConnectAttempted = true;
+      vpn.connect();
+    } else {
+      final config = guest.selected;
+      if (config == null) return;
+      final node = config.toNode();
+      vpn.selectNode(node);
+      _autoConnectAttempted = true;
+      vpn.connect(
+        node: node,
+        providedBundle: config.bundle,
+        clientPrivateKey: config.clientPrivateKey,
+      );
+    }
   }
 
   @override
@@ -96,13 +114,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final useSideRail = DesktopLayout.useSideRail(
       MediaQuery.sizeOf(context).width,
     );
+    final auth = Get.find<WalletAuthController>();
     final tabs = [
       DesktopScreen(
-        child: ConnectView(
-          onOpenServers: () => showServerSheet(context),
-          onOpenDiagnostics: () => showDiagnosticsSheet(context),
-          onGoSettings: () => _go(2),
-        ),
+        child: Obx(() => auth.isAuthenticated
+            ? ConnectView(
+                onOpenServers: () => showServerSheet(context),
+                onOpenDiagnostics: () => showDiagnosticsSheet(context),
+                onGoSettings: () => _go(2),
+              )
+            : const GuestConnectView()),
       ),
       DesktopScreen(
         layout: DesktopContentLayout.browser,

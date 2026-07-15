@@ -23,6 +23,8 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
+  Worker? _authWorker;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +32,20 @@ class _LoginViewState extends State<LoginView> {
     // best-effort, and a transient failure there would otherwise hide Google
     // sign-in until the app restarts.
     unawaited(Get.find<WalletAuthController>().loadAuthMethods());
+    _authWorker = ever(
+      Get.find<WalletAuthController>().sessionActive,
+      (isActive) {
+        if (isActive && mounted && Navigator.of(context).canPop()) {
+          Get.back();
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _authWorker?.dispose();
+    super.dispose();
   }
 
   @override

@@ -6,7 +6,6 @@ import '../onboarding/onboarding_view.dart';
 import '../settings/app_settings_controller.dart';
 import '../theme/app_theme.dart';
 import '../theme/premium_widgets.dart';
-import 'auth/login_view.dart';
 import 'bottombar/main_shell.dart';
 
 /// Top-level router: first-launch onboarding → sign-in → the app.
@@ -28,8 +27,6 @@ class RootView extends StatelessWidget {
         screen = OnboardingView(key: const ValueKey('onboarding'), onDone: settings.markOnboardingSeen);
       } else if (!auth.sessionReady.value) {
         screen = const _Splash(key: ValueKey('splash'));
-      } else if (!auth.isAuthenticated) {
-        screen = const LoginView(key: ValueKey('login'));
       } else {
         screen = const MainShell(key: ValueKey('app'));
       }

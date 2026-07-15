@@ -242,7 +242,7 @@ class VpnController extends GetxController {
 
   /// Connects to [node] (or the currently selected node) using the current mode,
   /// trying each candidate transport in order until one connects.
-  Future<void> connect({VpnNode? node}) async {
+  Future<void> connect({VpnNode? node, CredentialBundle? providedBundle, String? clientPrivateKey}) async {
     if (_connectInProgress) {
       debugPrint('[VPN] connect already in progress — ignoring duplicate request');
       return;
@@ -257,7 +257,7 @@ class VpnController extends GetxController {
       stage.value = VpnStage.error;
       return;
     }
-    if (_provision == null) {
+    if (providedBundle == null && _provision == null) {
       error.value = 'VPN provisioning is not configured';
       return;
     }
@@ -285,15 +285,30 @@ class VpnController extends GetxController {
             stage.value = VpnStage.error;
             return;
           }
-          final keys = await _ensureWgKeys();
-          var bundle = await _provision!(node: target, wgPublicKey: keys.public, name: _clientName());
+          final String privateToUse;
+          ({String private, String public})? wgKeys;
+          CredentialBundle bundle;
+          if (providedBundle != null) {
+            bundle = providedBundle;
+            if (clientPrivateKey != null && clientPrivateKey.isNotEmpty) {
+              privateToUse = clientPrivateKey;
+            } else {
+              wgKeys = await _ensureWgKeys();
+              privateToUse = wgKeys.private;
+            }
+          } else {
+            wgKeys = await _ensureWgKeys();
+            privateToUse = wgKeys.private;
+            bundle = await _provision!(node: target, wgPublicKey: wgKeys.public, name: _clientName());
+          }
           if (_cancelRequested) {
             await _finishCancelled();
             return;
           }
 
           // Stealth needs a full sing-box profile; stale WG-only caches break REALITY.
-          if (mode.value != ConnectMode.wireguard &&
+          if (providedBundle == null &&
+              mode.value != ConnectMode.wireguard &&
               !bundle.hasStealth &&
               Get.isRegistered<GatewayController>()) {
             final gw = Get.find<GatewayController>();
@@ -301,7 +316,7 @@ class VpnController extends GetxController {
             try {
               final fresh = await gw.client.fetchExistingClientBundle(
                 nodeId: target.id,
-                wgPublicKey: keys.public,
+                wgPublicKey: wgKeys!.public,
               );
               if (fresh != null && fresh.hasStealth) bundle = fresh;
             } catch (e) {
@@ -339,7 +354,7 @@ class VpnController extends GetxController {
               final config = SingboxConfigBuilder.build(
                 bundle: bundle,
                 transport: t,
-                clientPrivateKey: keys.private,
+                clientPrivateKey: privateToUse,
                 // Desktop CLI: local mixed proxy + system HTTP/SOCKS (no TUN). TUN on
                 // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
                 // egress probe (explicit 127.0.0.1:10808) works.

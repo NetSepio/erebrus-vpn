@@ -442,6 +442,18 @@ class CredentialBundle {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'wireguard': {
+          'server_public_key': serverPublicKey,
+          'endpoint': endpoint,
+          'address': address,
+          'dns': dns,
+        },
+        'vless_uri': vlessUri,
+        'hysteria2_uri': hysteria2Uri,
+        'singbox_profile': singboxProfile,
+      };
+
   bool get hasWireGuard =>
       serverPublicKey.isNotEmpty && endpoint.isNotEmpty && address.isNotEmpty;
 

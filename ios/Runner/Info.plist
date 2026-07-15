@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Erebrus uses the local network to establish secure VPN tunnels.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Erebrus uses the camera to scan VPN configuration QR codes.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
