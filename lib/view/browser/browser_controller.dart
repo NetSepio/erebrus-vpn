@@ -57,7 +57,7 @@ class BrowserController extends GetxController {
   }
 
   /// True while the shell's BROWSER bottom-nav tab is selected.
-  bool _shellTabVisible = false;
+  final shellTabVisible = false.obs;
 
   /// Set by [BrowserView] to present the native link long-press menu.
   void Function(BrowserLinkHit hit)? linkContextMenuHandler;
@@ -94,7 +94,7 @@ class BrowserController extends GetxController {
       addressBar.value = u;
     }
     tabs.refresh();
-    if (!tab.isStart && _shellTabVisible && activate) unawaited(_loadActiveTabIfNeeded());
+    if (!tab.isStart && shellTabVisible.value && activate) unawaited(_loadActiveTabIfNeeded());
   }
 
   void closeTab(int index) {
@@ -120,7 +120,7 @@ class BrowserController extends GetxController {
     activeIndex.value = index;
     addressBar.value = activeTab.url;
     tabs.refresh();
-    if (_shellTabVisible) unawaited(_loadActiveTabIfNeeded());
+    if (shellTabVisible.value) unawaited(_loadActiveTabIfNeeded());
   }
 
   Future<void> goHome() async {
@@ -137,9 +137,9 @@ class BrowserController extends GetxController {
   /// while visible — loads are kicked off here, not while the tab is hidden in
   /// [IndexedStack].
   void setShellTabVisible(bool visible) {
-    final wasVisible = _shellTabVisible;
-    _shellTabVisible = visible;
-    if (visible && !wasVisible) _loadActiveTabIfNeeded();
+    if (shellTabVisible.value == visible) return;
+    shellTabVisible.value = visible;
+    if (visible) _loadActiveTabIfNeeded();
   }
 
   static String braveSearchUrl(String query) {
@@ -186,10 +186,10 @@ class BrowserController extends GetxController {
     final tab = activeTab;
     tab.url = url;
     addressBar.value = url;
-    if (url != kStartPage && _shellTabVisible) _ensureConfigured(tab);
+    if (url != kStartPage && shellTabVisible.value) _ensureConfigured(tab);
     tabs.refresh();
     if (url == kStartPage) return;
-    if (_shellTabVisible) await tab.controller.loadRequest(Uri.parse(url));
+    if (shellTabVisible.value) await tab.controller.loadRequest(Uri.parse(url));
   }
 
   Future<void> _loadActiveTabIfNeeded() async {

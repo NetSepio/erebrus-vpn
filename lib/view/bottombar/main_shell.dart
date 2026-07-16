@@ -9,6 +9,7 @@ import '../../guest/guest_config_store.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../vpn/vpn_controller.dart';
+import '../browser/browser_controller.dart';
 import '../browser/browser_view.dart';
 import '../guest/guest_connect_view.dart';
 import '../home/connect_view.dart';
@@ -31,21 +32,25 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _index = 0;
   bool _autoConnectAttempted = false;
   Worker? _autoConnectWorker;
+  late final List<Widget> _tabs;
 
   void _go(int i) {
     if (_index == i) return;
-    // Defer tab switch so in-flight scroll-end notifications don't hit Material
-    // on a tab that IndexedStack is about to deactivate (inactive element crash).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _index = i);
-    });
+    setState(() => _index = i);
+    if (Get.isRegistered<BrowserController>()) {
+      Get.find<BrowserController>().setShellTabVisible(i == 1);
+    }
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _tabs = [
+      const DesktopScreen(child: _HomeTab()),
+      const DesktopScreen(child: BrowserView()),
+      const DesktopScreen(child: SettingsView()),
+    ];
     _autoConnectWorker = everAll(
       [
         Get.find<AppSettingsController>().autoConnectOnLaunch,
@@ -57,6 +62,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       (_) => _tryAutoConnect(),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoConnect());
+    if (Get.isRegistered<BrowserController>()) {
+      Get.find<BrowserController>().setShellTabVisible(false);
+    }
   }
 
   @override
@@ -114,23 +122,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final useSideRail = DesktopLayout.useSideRail(
       MediaQuery.sizeOf(context).width,
     );
-    final auth = Get.find<WalletAuthController>();
-    final tabs = [
-      DesktopScreen(
-        child: Obx(() => auth.isAuthenticated
-            ? ConnectView(
-                onOpenServers: () => showServerSheet(context),
-                onOpenDiagnostics: () => showDiagnosticsSheet(context),
-                onGoSettings: () => _go(2),
-              )
-            : const GuestConnectView()),
-      ),
-      DesktopScreen(
-        layout: DesktopContentLayout.browser,
-        child: BrowserView(isActive: _index == 1),
-      ),
-      const DesktopScreen(child: SettingsView()),
-    ];
 
     return Scaffold(
       extendBody: false,
@@ -142,7 +133,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             const VerticalDivider(width: 1, color: AppColors.stroke),
           ],
           Expanded(
-            child: IndexedStack(index: _index, children: tabs),
+            child: IndexedStack(index: _index, children: _tabs),
           ),
         ],
       ),
@@ -150,6 +141,29 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ? null
           : _NavBar(index: _index, onTap: _go),
     );
+  }
+}
+
+/// Home tab router: stable widget so [MainShell] does not rebuild it on every
+/// bottom-nav tap. Switches between authenticated and guest UIs reactively.
+class _HomeTab extends StatelessWidget {
+  const _HomeTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final auth = Get.find<WalletAuthController>();
+      return auth.isAuthenticated
+          ? ConnectView(
+              onOpenServers: () => showServerSheet(context),
+              onOpenDiagnostics: () => showDiagnosticsSheet(context),
+              onGoSettings: () {
+                final shell = context.findAncestorStateOfType<_MainShellState>();
+                shell?._go(2);
+              },
+            )
+          : const GuestConnectView();
+    });
   }
 }
 

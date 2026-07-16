@@ -36,8 +36,9 @@ without you having to fiddle with settings.
 
 | Platform | Where |
 |----------|--------|
-| **Android (Solana Mobile)** | Solana dApp Store — Seeker / Saga |
-| **Android (general)** | [GitHub Releases](https://github.com/NetSepio/erebrus-vpn/releases) (sideload APKs from CI) |
+| **Android (Solana Mobile)** | **v1.0.0** live on [Solana dApp Store](https://dappstore.solanamobile.com) — Seeker / Saga |
+| **Android (Google Play)** | **Coming next** |
+| **Android (sideload)** | [GitHub Releases](https://github.com/NetSepio/erebrus-vpn/releases) (APKs from CI) |
 | **iOS** | TestFlight / App Store (see [docs/BUILD.md](docs/BUILD.md)) |
 | **Desktop** | Build from source — [docs/BUILD.md](docs/BUILD.md) |
 

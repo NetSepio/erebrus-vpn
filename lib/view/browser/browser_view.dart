@@ -12,13 +12,11 @@ import 'browser_session_status.dart';
 /// In-app private browser: tab strip, omnibox, the private start page (service
 /// grid) and the WebView for real pages, all over the dVPN tunnel.
 ///
-/// [isActive] is true when this tab is the selected pane in [MainShell]'s
-/// [IndexedStack]. The native WebView platform view is mounted only then —
-/// embedding it in a hidden IndexedStack child freezes many Android devices.
+/// The native WebView platform view is mounted only while the BROWSER tab is
+/// selected in [MainShell]'s [IndexedStack] — embedding it in a hidden
+/// IndexedStack child freezes many Android devices.
 class BrowserView extends StatefulWidget {
-  const BrowserView({super.key, required this.isActive});
-
-  final bool isActive;
+  const BrowserView({super.key});
 
   @override
   State<BrowserView> createState() => _BrowserViewState();
@@ -31,13 +29,13 @@ class _BrowserViewState extends State<BrowserView> {
   @override
   void initState() {
     super.initState();
-    _c.setShellTabVisible(widget.isActive);
     _c.linkContextMenuHandler = _onLinkContextMenu;
   }
 
   @override
   void dispose() {
     _c.linkContextMenuHandler = null;
+    _c.setShellTabVisible(false);
     super.dispose();
   }
 
@@ -45,14 +43,6 @@ class _BrowserViewState extends State<BrowserView> {
     if (!mounted) return;
     HapticFeedback.mediumImpact();
     showBrowserLinkContextMenu(context, _c, hit);
-  }
-
-  @override
-  void didUpdateWidget(BrowserView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isActive != oldWidget.isActive) {
-      _c.setShellTabVisible(widget.isActive);
-    }
   }
 
   @override
@@ -84,7 +74,7 @@ class _BrowserViewState extends State<BrowserView> {
                 if (c.tabs.isEmpty) return const SizedBox.shrink();
                 final tab = c.activeTab;
                 if (tab.isStart) return const _StartPage();
-                if (!widget.isActive) {
+                if (!c.shellTabVisible.value) {
                   // Shell is on VPN/Settings — keep Flutter-only UI in the tree.
                   return _PendingWebPage(url: tab.url, loading: c.isLoading.value);
                 }

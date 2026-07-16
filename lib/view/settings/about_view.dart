@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
@@ -47,6 +48,21 @@ class AboutView extends StatelessWidget {
           const SizedBox(height: 4),
           const Center(
             child: Text('by NetSepio', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          const SizedBox(height: 8),
+          FutureBuilder<PackageInfo>(
+            future: PackageInfo.fromPlatform(),
+            builder: (context, snapshot) {
+              final version = snapshot.hasData
+                  ? 'v${snapshot.data!.version} (${snapshot.data!.buildNumber})'
+                  : '';
+              return Center(
+                child: Text(
+                  version,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                ),
+              );
+            },
           ),
           const SizedBox(height: AppSpace.xl),
           const SectionLabel('Our ethos'),
