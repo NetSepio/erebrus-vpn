@@ -62,15 +62,28 @@ class BrowserController extends GetxController {
   /// Set by [BrowserView] to present the native link long-press menu.
   void Function(BrowserLinkHit hit)? linkContextMenuHandler;
 
+  Timer? _proxySyncDebounce;
+
   @override
   void onInit() {
     super.onInit();
     if (tabs.isEmpty) addTab();
     if (Get.isRegistered<VpnController>()) {
       final vpn = Get.find<VpnController>();
-      ever(vpn.stage, (_) => _syncTunnelProxy(vpn));
-      _syncTunnelProxy(vpn);
+      ever(vpn.stage, (_) => _debouncedSyncTunnelProxy(vpn));
+      _debouncedSyncTunnelProxy(vpn);
     }
+  }
+
+  @override
+  void onClose() {
+    _proxySyncDebounce?.cancel();
+    super.onClose();
+  }
+
+  void _debouncedSyncTunnelProxy(VpnController vpn) {
+    _proxySyncDebounce?.cancel();
+    _proxySyncDebounce = Timer(const Duration(milliseconds: 500), () => _syncTunnelProxy(vpn));
   }
 
   Future<void> _syncTunnelProxy(VpnController vpn) async {

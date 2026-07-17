@@ -52,9 +52,11 @@ class _SettingsViewState extends State<SettingsView> {
     super.initState();
     final auth = Get.find<WalletAuthController>();
     if (auth.isAuthenticated) {
-      auth.refreshProfile();
-      auth.refreshReferrals();
-      Get.find<GatewayController>().refreshNodes();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        auth.refreshProfile();
+        auth.refreshReferrals();
+        Get.find<GatewayController>().refreshNodes();
+      });
     }
   }
 
@@ -101,16 +103,16 @@ class _SettingsViewState extends State<SettingsView> {
                       // account
                       const SectionLabel('ACCOUNT'),
                       const SizedBox(height: 9),
-                      Obx(() => _GroupCard(children: [
+                      _GroupCard(children: [
                             _EmailRow(auth: auth),
                             _RowDivider(),
-                            _GroupRow(
-                              icon: Icons.edit_outlined,
-                              title: 'Display name',
-                              subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
-                              onTap: () => showEditProfileSheet(context, auth),
-                              trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                            ),
+                            Obx(() => _GroupRow(
+                                  icon: Icons.edit_outlined,
+                                  title: 'Display name',
+                                  subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
+                                  onTap: () => showEditProfileSheet(context, auth),
+                                  trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                                )),
                             _RowDivider(),
                             _GroupRow(
                               icon: Icons.calendar_today_outlined,
@@ -125,7 +127,7 @@ class _SettingsViewState extends State<SettingsView> {
                               iconColor: AppColors.danger,
                               onTap: () => showDeleteAccountSheet(context, auth),
                             ),
-                          ])),
+                          ]),
                       const SizedBox(height: 18),
 
                       // referrals — mirrors the webapp profile "Invite friends" card
@@ -181,44 +183,44 @@ class _SettingsViewState extends State<SettingsView> {
             // vpn & security
             const SectionLabel('VPN & SECURITY'),
             const SizedBox(height: 9),
-            Obx(() => _GroupCard(children: [
-                  _GroupRow(
-                    icon: Icons.shield_outlined,
-                    title: 'Default protocol',
-                    subtitle: settings.defaultProtocol.value.blurb,
-                    onTap: () => _pickProtocol(context, settings, vpn),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(settings.defaultProtocol.value.label.toUpperCase(),
-                            style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary)),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                      ],
-                    ),
-                  ),
+            _GroupCard(children: [
+                  Obx(() => _GroupRow(
+                        icon: Icons.shield_outlined,
+                        title: 'Default protocol',
+                        subtitle: settings.defaultProtocol.value.blurb,
+                        onTap: () => _pickProtocol(context, settings, vpn),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(settings.defaultProtocol.value.label.toUpperCase(),
+                                style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary)),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                          ],
+                        ),
+                      )),
                   _RowDivider(),
                   _GroupRow(
                     icon: Icons.power_settings_new,
                     title: 'Auto-connect',
                     subtitle: 'Connect to your last server when the app opens',
-                    trailing: EreToggle(value: settings.autoConnectOnLaunch.value, onChanged: settings.setAutoConnect),
+                    trailing: Obx(() => EreToggle(value: settings.autoConnectOnLaunch.value, onChanged: settings.setAutoConnect)),
                   ),
                   _RowDivider(),
                   _GroupRow(
                     icon: Icons.lock_outline,
                     title: 'Kill switch',
                     subtitle: 'Block internet if the VPN drops unexpectedly',
-                    trailing: EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch),
+                    trailing: Obx(() => EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch)),
                   ),
                   _RowDivider(),
                   Obx(() => _GroupRow(
-                    icon: Icons.dns_outlined,
-                    title: 'DNS resolver',
-                    subtitle: settings.dnsResolverLabel,
-                    onTap: () => _pickDnsResolver(context, settings),
-                    trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                  )),
+                        icon: Icons.dns_outlined,
+                        title: 'DNS resolver',
+                        subtitle: settings.dnsResolverLabel,
+                        onTap: () => _pickDnsResolver(context, settings),
+                        trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
+                      )),
                   if (PlatformCapabilities.supportsSplitTunnel) ...[
                     _RowDivider(),
                     Obx(() {
@@ -237,7 +239,7 @@ class _SettingsViewState extends State<SettingsView> {
                       );
                     }),
                   ],
-                ])),
+                ]),
             const SizedBox(height: 18),
 
             // about

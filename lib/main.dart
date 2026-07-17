@@ -40,8 +40,11 @@ Future<void> main() async {
   await auth.detectDevice();
   await auth.loadPersistedSession();
   Get.put(GatewayController(), permanent: true);
-  await Get.find<GatewayController>().refreshNodes();
-  await Get.find<VpnController>().syncWithNative();
+  // Refresh nodes and native state after the first frame so the app renders faster.
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await Get.find<GatewayController>().refreshNodes();
+    await Get.find<VpnController>().syncWithNative();
+  });
   Timer.periodic(const Duration(minutes: 5), (_) {
     if (Get.isRegistered<AppSettingsController>()) {
       Get.find<AppSettingsController>().pingDiagnosticsIfEnabled(
