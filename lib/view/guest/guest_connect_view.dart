@@ -113,16 +113,29 @@ class _GuestConnectViewState extends State<GuestConnectView> {
     );
   }
 
+  static const _kAllowedExtensions = ['conf', 'json', 'txt'];
+
   Future<void> _importFromFile() async {
     try {
+      // Use FileType.any with manual extension validation. FileType.custom
+      // relies on OS-level MIME/UTI filters that Android and iOS often fail
+      // to map for .conf and sometimes .json, so the files appear grayed out.
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['conf', 'json', 'txt'],
+        type: FileType.any,
         allowMultiple: false,
         withData: false,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
+      final ext = (file.extension ?? '').toLowerCase();
+      if (!_kAllowedExtensions.contains(ext)) {
+        Get.snackbar(
+          'Unsupported file type',
+          'Please choose a .conf, .json, or .txt config file.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
       String text;
       if (file.path != null) {
         text = await File(file.path!).readAsString();
