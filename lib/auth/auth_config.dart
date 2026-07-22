@@ -11,12 +11,14 @@ bool get hasReownProjectId => kReownProjectId.isNotEmpty;
 /// secret), so the production one is baked in; override via `--dart-define` for
 /// a different Google Cloud project. Empty => Google sign-in is hidden (no
 /// native call, no error).
-const kGoogleServerClientId = String.fromEnvironment(
-  'GOOGLE_SERVER_CLIENT_ID',
-  defaultValue:
-      '743089346496-15iub9ug9b4jkqonokg2js80ndjv8nba.apps.googleusercontent.com',
-);
-bool get hasGoogleSignIn => kGoogleServerClientId.isNotEmpty;
+const kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+const kDefaultGoogleServerClientId =
+    '743089346496-15iub9ug9b4jkqonokg2js80ndjv8nba.apps.googleusercontent.com';
+
+/// Bundle-specific Google OAuth client for `com.erebrus.vpn`. OAuth client IDs
+/// are public app identifiers, so this is intentionally checked into source.
+const kGoogleIosClientId =
+    '743089346496-fq5j5npvhmqqa3lsfj6gqctlph7o53tp.apps.googleusercontent.com';
 
 /// Apple Sign-In Services id + redirect, needed only for the web/Android relay
 /// flow; on iOS/macOS native Apple sign-in uses the app's capability instead.

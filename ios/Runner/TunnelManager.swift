@@ -39,6 +39,23 @@ final class TunnelManager {
     func start(config: String, profileName: String) async throws {
         setStage("connecting")
         let manager = try await loadOrCreateManager()
+
+        // An existing On Demand rule can start this profile as soon as its
+        // preferences change. Suspend it while replacing the provider config,
+        // otherwise startVPNTunnel() can race neagent and report
+        // NEVPNError.configurationInvalid/configurationStale.
+        if manager.isOnDemandEnabled {
+            manager.isOnDemandEnabled = false
+            try await manager.saveToPreferences()
+            try await manager.loadFromPreferences()
+        }
+
+        if manager.connection.status != .disconnected &&
+            manager.connection.status != .invalid {
+            manager.connection.stopVPNTunnel()
+            await waitUntilDisconnected(manager)
+        }
+
         let proto = manager.protocolConfiguration as! NETunnelProviderProtocol
         proto.providerBundleIdentifier = TunnelConstants.tunnelBundleId
         proto.serverAddress = TunnelConstants.providerDescription
@@ -49,6 +66,11 @@ final class TunnelManager {
         manager.localizedDescription = TunnelConstants.providerDescription
         manager.isEnabled = true
         try await manager.saveToPreferences()
+
+        // Network Extension preferences are owned by a system process. Reload
+        // the just-saved configuration before starting so the connection uses
+        // the current generation rather than a stale in-memory manager.
+        try await manager.loadFromPreferences()
         try manager.connection.startVPNTunnel()
         refreshStageFromSystem()
     }
@@ -59,10 +81,37 @@ final class TunnelManager {
             setStage("disconnected")
             return
         }
-        manager.connection.stopVPNTunnel()
+        // Disable On Demand first so stopping a user-requested connection does
+        // not immediately cause the system to launch it again.
+        manager.isOnDemandEnabled = false
         manager.isEnabled = false
         try? await manager.saveToPreferences()
+        manager.connection.stopVPNTunnel()
+        await waitUntilDisconnected(manager)
         setStage("disconnected")
+    }
+
+    /// Enables system-managed reconnects on any primary network. The last
+    /// successfully saved provider configuration is reused, so no gateway call
+    /// is required when iOS starts the extension in the background.
+    func setOnDemandEnabled(_ enabled: Bool) async -> Bool {
+        guard let manager = try? await loadManager() else { return false }
+        if enabled {
+            let connect = NEOnDemandRuleConnect()
+            connect.interfaceTypeMatch = .any
+            manager.onDemandRules = [connect]
+            manager.isEnabled = true
+        } else {
+            manager.onDemandRules = []
+        }
+        manager.isOnDemandEnabled = enabled
+        do {
+            try await manager.saveToPreferences()
+            return true
+        } catch {
+            NSLog("[TunnelManager] on-demand update failed: \(error)")
+            return false
+        }
     }
 
     func refreshStageFromSystem() {
@@ -85,7 +134,24 @@ final class TunnelManager {
         }
     }
 
+    private func waitUntilDisconnected(_ manager: NETunnelProviderManager) async {
+        for _ in 0..<40 {
+            if manager.connection.status == .disconnected ||
+                manager.connection.status == .invalid {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        NSLog("[TunnelManager] timed out waiting for the previous VPN session to stop")
+    }
+
     private func setStage(_ value: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.setStage(value)
+            }
+            return
+        }
         guard stage != value else { return }
         stage = value
         onStageChange?(value)

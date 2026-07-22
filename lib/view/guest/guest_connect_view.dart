@@ -71,7 +71,9 @@ class _GuestConnectViewState extends State<GuestConnectView> {
 
   void _maybeResetMode() {
     final config = _guest.selected;
-    if (config != null && !config.bundle.hasStealth && _vpn.mode.value == ConnectMode.stealth) {
+    if (config != null &&
+        !config.bundle.hasStealth &&
+        _vpn.mode.value == ConnectMode.stealth) {
       _vpn.setMode(ConnectMode.wireguard);
     }
   }
@@ -150,7 +152,11 @@ class _GuestConnectViewState extends State<GuestConnectView> {
       _maybeResetMode();
       HapticFeedback.lightImpact();
     } catch (e) {
-      Get.snackbar('Import failed', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Import failed',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -163,7 +169,11 @@ class _GuestConnectViewState extends State<GuestConnectView> {
       _maybeResetMode();
       HapticFeedback.lightImpact();
     } catch (e) {
-      Get.snackbar('QR import failed', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'QR import failed',
+        e.toString(),
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -187,64 +197,111 @@ class _GuestConnectViewState extends State<GuestConnectView> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 34),
-          children: [
-            _Header(),
-            const SizedBox(height: 22),
-            _ImportRow(onUpload: _importFromFile, onScan: _importFromQr),
-            const SizedBox(height: 20),
-            Obx(() => _ConfigList(
-                  configs: _guest.configs,
-                  selectedId: _guest.selectedId.value,
-                  protocolLabel: _protocolLabel,
-                  onSelect: (c) {
-                    _guest.select(c);
-                    _maybeResetMode();
-                  },
-                  onDelete: _deleteConfig,
-                )),
-            const SizedBox(height: 28),
-            Obx(() {
-              final config = _guest.selected;
-              if (config == null) return const SizedBox.shrink();
-              return _ConfigSummaryCard(config: config, protocolLabel: _protocolLabel(config));
-            }),
-            const SizedBox(height: 24),
-            Center(
-              child: Obx(() => ConnectDial(
-                    stage: blocking ? VpnStage.error : stage,
-                    durationLabel: fmtDuration(_elapsed),
-                    connectingLabel: _connectingLabel(stage),
-                    onTap: _onDialTap,
-                  )),
-            ),
-            const SizedBox(height: 18),
-            Obx(() => _ModeRow(
-                  mode: _vpn.mode.value,
-                  stealthAvailable: _guest.selected?.bundle.hasStealth ?? false,
-                  onChanged: (m) {
-                    _vpn.setMode(m);
-                    _settings.setDefaultProtocol(m);
-                  },
-                )),
-            const SizedBox(height: 14),
-            Obx(() => _StatsReadout(
-                  stats: _vpn.stats.value,
-                  connected: _vpn.stage.value == VpnStage.connected,
-                  egressIp: _vpn.egressIp.value,
-                  egressLoading: _vpn.egressIpLoading.value,
-                  protocol: _vpn.activeTransport.value?.label ?? _vpn.mode.value.label,
-                )),
-            if (_vpn.error.value != null) ...[
-              const SizedBox(height: 14),
-              Text(
-                _vpn.error.value!,
-                textAlign: TextAlign.center,
-                style: grotesk(size: 13, weight: FontWeight.w500, color: AppColors.danger),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 700;
+            final sectionGap = compact ? 12.0 : 16.0;
+            final importGap = compact ? 10.0 : 14.0;
+            final contentGap = compact ? 12.0 : 18.0;
+            final dialGap = compact ? 10.0 : 14.0;
+            final dialSize = (constraints.maxHeight - (compact ? 350 : 430))
+                .clamp(170.0, 240.0);
+
+            return ListView(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 16 : 22,
+                compact ? 12 : 20,
+                compact ? 16 : 22,
+                compact ? 16 : 34,
               ),
-            ],
-          ],
+              children: [
+                _Header(),
+                SizedBox(height: sectionGap),
+                _ImportRow(onUpload: _importFromFile, onScan: _importFromQr),
+                SizedBox(height: importGap),
+                Obx(
+                  () => _ConfigList(
+                    configs: _guest.configs,
+                    selectedId: _guest.selectedId.value,
+                    protocolLabel: _protocolLabel,
+                    onSelect: (c) {
+                      _guest.select(c);
+                      _maybeResetMode();
+                    },
+                    onDelete: _deleteConfig,
+                  ),
+                ),
+                SizedBox(height: contentGap),
+                Obx(() {
+                  final config = _guest.selected;
+                  if (config == null) {
+                    return SizedBox(height: compact ? 4 : 6);
+                  }
+                  return Column(
+                    children: [
+                      _ConfigSummaryCard(
+                        config: config,
+                        protocolLabel: _protocolLabel(config),
+                      ),
+                      SizedBox(height: contentGap),
+                    ],
+                  );
+                }),
+                Obx(() {
+                  final config = _guest.selected;
+                  return _ModeRow(
+                    mode: _vpn.mode.value,
+                    enabled: config != null,
+                    stealthAvailable: config?.bundle.hasStealth ?? false,
+                    onChanged: (m) {
+                      _vpn.setMode(m);
+                      _settings.setDefaultProtocol(m);
+                    },
+                  );
+                }),
+                SizedBox(height: dialGap),
+                Center(
+                  child: SizedBox.square(
+                    dimension: dialSize,
+                    child: FittedBox(
+                      child: Obx(
+                        () => ConnectDial(
+                          stage: blocking ? VpnStage.error : stage,
+                          durationLabel: fmtDuration(_elapsed),
+                          connectingLabel: _connectingLabel(stage),
+                          onTap: _onDialTap,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: dialGap),
+                Obx(
+                  () => _StatsReadout(
+                    stats: _vpn.stats.value,
+                    connected: _vpn.stage.value == VpnStage.connected,
+                    egressIp: _vpn.egressIp.value,
+                    egressLoading: _vpn.egressIpLoading.value,
+                    protocol:
+                        _vpn.activeTransport.value?.label ??
+                        _vpn.mode.value.label,
+                  ),
+                ),
+                if (_vpn.error.value != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _vpn.error.value!,
+                    textAlign: TextAlign.center,
+                    style: grotesk(
+                      size: 13,
+                      weight: FontWeight.w500,
+                      color: AppColors.danger,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -260,10 +317,23 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Erebrus VPN', style: grotesk(size: 24, weight: FontWeight.w600, letterSpacing: -0.48)),
+              Text(
+                'Erebrus VPN',
+                style: grotesk(
+                  size: 24,
+                  weight: FontWeight.w600,
+                  letterSpacing: -0.48,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('Import a config to connect to Erebrus VPN.',
-                  style: grotesk(size: 13, weight: FontWeight.w400, color: AppColors.textSecondary)),
+              Text(
+                'Import a config to connect to Erebrus VPN.',
+                style: grotesk(
+                  size: 13,
+                  weight: FontWeight.w400,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -302,28 +372,47 @@ class _ImportRow extends StatelessWidget {
 }
 
 class _ImportButton extends StatelessWidget {
-  const _ImportButton({required this.icon, required this.label, required this.onTap});
+  const _ImportButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.stroke),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 26, color: AppColors.textSecondary),
-            const SizedBox(height: 8),
-            Text(label, style: grotesk(size: 13, weight: FontWeight.w600, color: AppColors.textPrimary)),
-          ],
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.stroke),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: grotesk(
+                    size: 12.5,
+                    weight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -349,21 +438,43 @@ class _ConfigList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (configs.isEmpty) {
       return Container(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 15),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(13),
           border: Border.all(color: AppColors.stroke),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Icon(Icons.cloud_off_outlined, size: 32, color: AppColors.textTertiary),
-            const SizedBox(height: 10),
-            Text('No imported configs yet', style: grotesk(size: 15, weight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('Upload a .conf/JSON file or scan a QR code to get started.',
-                textAlign: TextAlign.center,
-                style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textSecondary)),
+            const Icon(
+              Icons.cloud_off_outlined,
+              size: 24,
+              color: AppColors.textTertiary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No imported configs yet',
+                    style: grotesk(size: 14, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Upload a config or scan a QR code to get started.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(
+                      size: 11.5,
+                      weight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       );
@@ -373,7 +484,15 @@ class _ConfigList extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('IMPORTED CONFIGS', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.12)),
+        Text(
+          'IMPORTED CONFIGS',
+          style: mono(
+            size: 11,
+            weight: FontWeight.w500,
+            color: AppColors.textMuted,
+            letterSpacing: 11 * 0.12,
+          ),
+        ),
         const SizedBox(height: 9),
         ...configs.map((c) {
           final selected = c.id == selectedId;
@@ -382,7 +501,11 @@ class _ConfigList extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? AppColors.surface : AppColors.surface,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.5) : AppColors.stroke),
+              border: Border.all(
+                color: selected
+                    ? AppColors.accent.withValues(alpha: 0.5)
+                    : AppColors.stroke,
+              ),
             ),
             child: Material(
               color: Colors.transparent,
@@ -394,26 +517,44 @@ class _ConfigList extends StatelessWidget {
                     child: InkWell(
                       onTap: () => onSelect(c),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
                         child: Row(
                           children: [
                             Icon(
-                              selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                              selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
                               size: 20,
-                              color: selected ? AppColors.accent : AppColors.textTertiary,
+                              color: selected
+                                  ? AppColors.accent
+                                  : AppColors.textTertiary,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(c.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: grotesk(size: 14, weight: FontWeight.w600)),
+                                  Text(
+                                    c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: grotesk(
+                                      size: 14,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
                                   const SizedBox(height: 2),
-                                  Text('${c.region ?? 'Imported'} · ${protocolLabel(c)}',
-                                      style: mono(size: 11.5, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                                  Text(
+                                    '${c.region ?? 'Imported'} · ${protocolLabel(c)}',
+                                    style: mono(
+                                      size: 11.5,
+                                      weight: FontWeight.w400,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -426,8 +567,15 @@ class _ConfigList extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     onTap: () => onDelete(c),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Icon(Icons.delete_outline, size: 20, color: AppColors.danger.withValues(alpha: 0.9)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.danger.withValues(alpha: 0.9),
+                      ),
                     ),
                   ),
                 ],
@@ -457,25 +605,50 @@ class _ConfigSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('SELECTED', style: mono(size: 10, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 10 * 0.12)),
+          Text(
+            'SELECTED',
+            style: mono(
+              size: 10,
+              weight: FontWeight.w500,
+              color: AppColors.textMuted,
+              letterSpacing: 10 * 0.12,
+            ),
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
               Expanded(
-                child: Text(config.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: grotesk(size: 15, weight: FontWeight.w600)),
+                child: Text(
+                  config.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: grotesk(size: 15, weight: FontWeight.w600),
+                ),
               ),
               const SizedBox(width: 8),
               if (config.bundle.hasStealth)
-                MonoChip(label: 'STEALTH', color: AppColors.accent, background: AppColors.accent.withValues(alpha: 0.16))
+                MonoChip(
+                  label: 'STEALTH',
+                  color: AppColors.accent,
+                  background: AppColors.accent.withValues(alpha: 0.16),
+                )
               else
-                MonoChip(label: 'WIREGUARD', color: AppColors.textTertiary, background: AppColors.textTertiary.withValues(alpha: 0.12)),
+                MonoChip(
+                  label: 'WIREGUARD',
+                  color: AppColors.textTertiary,
+                  background: AppColors.textTertiary.withValues(alpha: 0.12),
+                ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(protocolLabel, style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textSecondary)),
+          Text(
+            protocolLabel,
+            style: grotesk(
+              size: 12.5,
+              weight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -483,8 +656,14 @@ class _ConfigSummaryCard extends StatelessWidget {
 }
 
 class _ModeRow extends StatelessWidget {
-  const _ModeRow({required this.mode, required this.stealthAvailable, required this.onChanged});
+  const _ModeRow({
+    required this.mode,
+    required this.enabled,
+    required this.stealthAvailable,
+    required this.onChanged,
+  });
   final ConnectMode mode;
+  final bool enabled;
   final bool stealthAvailable;
   final ValueChanged<ConnectMode> onChanged;
 
@@ -502,27 +681,21 @@ class _ModeRow extends StatelessWidget {
           _ModeChip(
             label: 'Auto',
             active: mode == ConnectMode.auto,
-            onTap: stealthAvailable ? () => onChanged(ConnectMode.auto) : () => onChanged(ConnectMode.wireguard),
+            enabled: enabled,
+            onTap: () => onChanged(ConnectMode.auto),
           ),
           _ModeChip(
             label: 'WireGuard',
             active: mode == ConnectMode.wireguard,
+            enabled: enabled,
             onTap: () => onChanged(ConnectMode.wireguard),
           ),
           if (stealthAvailable)
             _ModeChip(
               label: 'Stealth',
               active: mode == ConnectMode.stealth,
+              enabled: enabled,
               onTap: () => onChanged(ConnectMode.stealth),
-            )
-          else
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                alignment: Alignment.center,
-                child: Text('No stealth profile in config',
-                    style: grotesk(size: 12, weight: FontWeight.w500, color: AppColors.textMuted)),
-              ),
             ),
         ],
       ),
@@ -531,26 +704,40 @@ class _ModeRow extends StatelessWidget {
 }
 
 class _ModeChip extends StatelessWidget {
-  const _ModeChip({required this.label, required this.active, required this.onTap});
+  const _ModeChip({
+    required this.label,
+    required this.active,
+    required this.enabled,
+    required this.onTap,
+  });
   final String label;
   final bool active;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: active ? AppColors.accent : Colors.transparent,
+            color: active && enabled ? AppColors.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
-            style: grotesk(size: 12.5, weight: FontWeight.w600, color: active ? AppColors.onAccent : AppColors.textSecondary),
+            style: grotesk(
+              size: 12.5,
+              weight: FontWeight.w600,
+              color: !enabled
+                  ? AppColors.textMuted.withValues(alpha: 0.55)
+                  : active
+                  ? AppColors.onAccent
+                  : AppColors.textSecondary,
+            ),
           ),
         ),
       ),
@@ -576,8 +763,8 @@ class _StatsReadout extends StatelessWidget {
   Widget build(BuildContext context) {
     final egressValue = connected
         ? (egressLoading
-            ? '…'
-            : (egressIp?.isNotEmpty == true ? egressIp! : '—'))
+              ? '…'
+              : (egressIp?.isNotEmpty == true ? egressIp! : '—'))
         : '—';
     final protocolValue = connected ? protocol : '—';
     return Container(
@@ -593,11 +780,21 @@ class _StatsReadout extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: _StatBox(label: 'DOWNLOAD', value: connected ? fmtData(stats.rxBytes) : '0 KB'),
+                  child: _StatBox(
+                    label: 'DOWNLOAD',
+                    value: connected ? fmtData(stats.rxBytes) : '0 KB',
+                  ),
                 ),
-                const VerticalDivider(width: 1, thickness: 1, color: AppColors.strokeSoft),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: AppColors.strokeSoft,
+                ),
                 Expanded(
-                  child: _StatBox(label: 'UPLOAD', value: connected ? fmtData(stats.txBytes) : '0 KB'),
+                  child: _StatBox(
+                    label: 'UPLOAD',
+                    value: connected ? fmtData(stats.txBytes) : '0 KB',
+                  ),
                 ),
               ],
             ),
@@ -609,7 +806,11 @@ class _StatsReadout extends StatelessWidget {
                 Expanded(
                   child: _StatBox(label: 'EGRESS IP', value: egressValue),
                 ),
-                const VerticalDivider(width: 1, thickness: 1, color: AppColors.strokeSoft),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: AppColors.strokeSoft,
+                ),
                 Expanded(
                   child: _StatBox(label: 'PROTOCOL', value: protocolValue),
                 ),
@@ -635,13 +836,35 @@ class _StatBox extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('↓', style: mono(size: 10, weight: FontWeight.w500, color: AppColors.textMuted)),
+            Text(
+              '↓',
+              style: mono(
+                size: 10,
+                weight: FontWeight.w500,
+                color: AppColors.textMuted,
+              ),
+            ),
             const SizedBox(width: 3),
-            Text(label, style: mono(size: 10, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 10 * 0.08)),
+            Text(
+              label,
+              style: mono(
+                size: 10,
+                weight: FontWeight.w400,
+                color: AppColors.textMuted,
+                letterSpacing: 10 * 0.08,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
-        Text(value, style: mono(size: 17, weight: FontWeight.w600, color: AppColors.textPrimary)),
+        Text(
+          value,
+          style: mono(
+            size: 17,
+            weight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ],
     );
   }

@@ -22,11 +22,12 @@ import 'vpn_session_store.dart';
 /// credential bundle. Injected so the controller stays independent of the HTTP
 /// layer (api.dart provides the real implementation:
 /// POST /api/v2/vpn/clients { name, node_id, wg_public_key }).
-typedef Provisioner = Future<CredentialBundle> Function({
-  required VpnNode node,
-  required String wgPublicKey,
-  required String name,
-});
+typedef Provisioner =
+    Future<CredentialBundle> Function({
+      required VpnNode node,
+      required String wgPublicKey,
+      required String name,
+    });
 
 /// Drives the single sing-box engine for every protocol. The UI binds to its
 /// observables; the connect flow provisions a client, builds the per-transport
@@ -68,7 +69,9 @@ class VpnController extends GetxController {
   static const _kWgPublic = 'erebrus_wg_public';
 
   bool get isConnected => stage.value == VpnStage.connected;
-  bool get isBusy => stage.value == VpnStage.connecting || stage.value == VpnStage.disconnecting;
+  bool get isBusy =>
+      stage.value == VpnStage.connecting ||
+      stage.value == VpnStage.disconnecting;
 
   /// Allows late injection of the gateway provisioner (e.g. after login).
   set provisioner(Provisioner p) => _provision = p;
@@ -99,7 +102,9 @@ class VpnController extends GetxController {
           !_wasConnected &&
           !_syncingNative &&
           stage.value == VpnStage.error) {
-        debugPrint('[VPN] late connected event after failed connect — stopping zombie tunnel');
+        debugPrint(
+          '[VPN] late connected event after failed connect — stopping zombie tunnel',
+        );
         unawaited(_engine.stop().catchError((_) {}));
         return;
       }
@@ -107,11 +112,9 @@ class VpnController extends GetxController {
       if (s == VpnStage.connected) {
         _wasConnected = true;
         killSwitchBlocking.value = false;
-        unawaited(_syncAppProxy(enabled: true));
         unawaited(_probeEgressIp());
       }
       if (s == VpnStage.disconnected || s == VpnStage.error) {
-        unawaited(_syncAppProxy(enabled: false));
         egressIp.value = null;
         egressIpLoading.value = false;
         activeTransport.value = null;
@@ -139,7 +142,9 @@ class VpnController extends GetxController {
   Future<void> syncWithNative() async {
     _syncingNative = true;
     try {
-      final native = await _engine.stage().catchError((_) => VpnStage.disconnected);
+      final native = await _engine.stage().catchError(
+        (_) => VpnStage.disconnected,
+      );
       final session = await VpnSessionStore.load();
 
       if (native == VpnStage.connected) {
@@ -150,10 +155,11 @@ class VpnController extends GetxController {
         error.value = null;
         if (session?.killSwitchActive == true) {
           await VpnSessionStore.clear();
-          debugPrint('[VPN] sync: cleared stale kill-switch session (tunnel is up)');
+          debugPrint(
+            '[VPN] sync: cleared stale kill-switch session (tunnel is up)',
+          );
         }
         _applySession(session);
-        unawaited(_syncAppProxy(enabled: true));
         unawaited(_probeEgressIp());
         debugPrint(
           '[VPN] sync: native connected'
@@ -165,7 +171,8 @@ class VpnController extends GetxController {
       if (killSwitchBlocking.value || session?.killSwitchActive == true) {
         _wasConnected = true;
         stage.value = VpnStage.error;
-        error.value = 'Kill switch active — traffic blocked until you reconnect';
+        error.value =
+            'Kill switch active — traffic blocked until you reconnect';
         killSwitchBlocking.value = true;
         _applySession(session);
         debugPrint('[VPN] sync: kill switch session restored');
@@ -242,9 +249,15 @@ class VpnController extends GetxController {
 
   /// Connects to [node] (or the currently selected node) using the current mode,
   /// trying each candidate transport in order until one connects.
-  Future<void> connect({VpnNode? node, CredentialBundle? providedBundle, String? clientPrivateKey}) async {
+  Future<void> connect({
+    VpnNode? node,
+    CredentialBundle? providedBundle,
+    String? clientPrivateKey,
+  }) async {
     if (_connectInProgress) {
-      debugPrint('[VPN] connect already in progress — ignoring duplicate request');
+      debugPrint(
+        '[VPN] connect already in progress — ignoring duplicate request',
+      );
       return;
     }
     final target = node ?? selectedNode.value;
@@ -278,7 +291,8 @@ class VpnController extends GetxController {
         try {
           stage.value = VpnStage.connecting;
           if (!await _engine.prepare()) {
-            error.value = _engine.desktopPrepareError ??
+            error.value =
+                _engine.desktopPrepareError ??
                 (PlatformCapabilities.isDesktop
                     ? 'sing-box missing — run ./scripts/fetch-singbox-cli.sh macos from the repo root'
                     : 'VPN permission denied');
@@ -299,7 +313,11 @@ class VpnController extends GetxController {
           } else {
             wgKeys = await _ensureWgKeys();
             privateToUse = wgKeys.private;
-            bundle = await _provision!(node: target, wgPublicKey: wgKeys.public, name: _clientName());
+            bundle = await _provision!(
+              node: target,
+              wgPublicKey: wgKeys.public,
+              name: _clientName(),
+            );
           }
           if (_cancelRequested) {
             await _finishCancelled();
@@ -312,7 +330,9 @@ class VpnController extends GetxController {
               !bundle.hasStealth &&
               Get.isRegistered<GatewayController>()) {
             final gw = Get.find<GatewayController>();
-            debugPrint('[VPN] bundle missing stealth — refreshing from gateway');
+            debugPrint(
+              '[VPN] bundle missing stealth — refreshing from gateway',
+            );
             try {
               final fresh = await gw.client.fetchExistingClientBundle(
                 nodeId: target.id,
@@ -377,20 +397,28 @@ class VpnController extends GetxController {
               );
               if (!ok) {
                 // Native tunnel may be up while EventChannel/method-channel was blocked (e.g. main-thread ANR).
-                final native = await _engine.stage().catchError((_) => VpnStage.disconnected);
+                final native = await _engine.stage().catchError(
+                  (_) => VpnStage.disconnected,
+                );
                 if (native == VpnStage.connected) {
                   ok = true;
-                  debugPrint('[VPN] ${t.label} native connected (stage event missed)');
+                  debugPrint(
+                    '[VPN] ${t.label} native connected (stage event missed)',
+                  );
                 }
               }
-              debugPrint('[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok');
+              debugPrint(
+                '[VPN] ${t.label} finished stage=${stage.value.name} ok=$ok',
+              );
               if (ok) {
                 final ready = t == Transport.wireguard
                     ? await _waitWireGuardReady()
                     : await _waitStealthReady();
                 if (_cancelRequested) break;
                 if (!ready) {
-                  debugPrint('[VPN] ${t.label} tunnel up but no egress — trying next transport');
+                  debugPrint(
+                    '[VPN] ${t.label} tunnel up but no egress — trying next transport',
+                  );
                   await _ensureTunnelStopped();
                   continue;
                 }
@@ -399,7 +427,6 @@ class VpnController extends GetxController {
                 _wasConnected = true;
                 stage.value = VpnStage.connected;
                 error.value = null;
-                unawaited(_syncAppProxy(enabled: true));
                 unawaited(_probeEgressIp());
                 debugPrint(
                   '[VPN] connected · mode=${mode.value.label} · transport=${t.label} · '
@@ -411,6 +438,13 @@ class VpnController extends GetxController {
                   mode: mode.value,
                   profileName: 'Erebrus · ${target.name}',
                 );
+                if (PlatformCapabilities.isIOS &&
+                    Get.isRegistered<AppSettingsController>() &&
+                    Get.find<AppSettingsController>()
+                        .autoConnectOnLaunch
+                        .value) {
+                  await _engine.setOnDemandEnabled(true);
+                }
                 return;
               }
             } catch (e, st) {
@@ -435,7 +469,9 @@ class VpnController extends GetxController {
             return;
           }
           if (attempt == 0 && _looksLikeMissingServerConfig(e)) {
-            debugPrint('[VPN] server config missing for current WG key — rotating and retrying once');
+            debugPrint(
+              '[VPN] server config missing for current WG key — rotating and retrying once',
+            );
             await _rotateWgKeys();
             continue;
           }
@@ -484,7 +520,6 @@ class VpnController extends GetxController {
     _cancelRequested = true;
     killSwitchBlocking.value = false;
     stage.value = VpnStage.disconnecting;
-    await _syncAppProxy(enabled: false);
     try {
       await _engine.stop();
       stage.value = await _engine.stage();
@@ -516,30 +551,6 @@ class VpnController extends GetxController {
   void _restorePreferredMode() {
     if (!Get.isRegistered<AppSettingsController>()) return;
     mode.value = Get.find<AppSettingsController>().defaultProtocol.value;
-  }
-
-  Future<void> _syncAppProxy({required bool enabled}) async {
-    final ok = enabled
-        ? await _engine.setAppProxy(
-            host: SingboxConfigBuilder.localProxyHost,
-            port: SingboxConfigBuilder.localProxyPort,
-          )
-        : await _engine.clearAppProxy();
-    if (!ok && !PlatformCapabilities.isDesktop) {
-      _showWebViewProxyWarning();
-    }
-  }
-
-  void _showWebViewProxyWarning() {
-    if (Get.isDialogOpen ?? false) return;
-    Get.defaultDialog(
-      title: 'WebView proxy not supported',
-      middleText:
-          'Your system WebView does not support proxy override. The in-app browser may not route through the VPN tunnel. Use an external browser to ensure traffic goes through the tunnel.',
-      textConfirm: 'OK',
-      barrierDismissible: false,
-      onConfirm: Get.back,
-    );
   }
 
   Future<void> _probeEgressIp() async {
@@ -610,7 +621,9 @@ class VpnController extends GetxController {
       Get.find<AppSettingsController>().killSwitchEnabled.value;
 
   SplitTunnelConfig _splitTunnelConfig() {
-    if (!Get.isRegistered<AppSettingsController>()) return const SplitTunnelConfig();
+    if (!Get.isRegistered<AppSettingsController>()) {
+      return const SplitTunnelConfig();
+    }
     return Get.find<AppSettingsController>().activeSplitTunnelConfig();
   }
 
@@ -637,7 +650,9 @@ class VpnController extends GetxController {
           killSwitchActive: true,
         );
       }
-      debugPrint('[VPN] kill switch engaged — replaced tunnel with block config');
+      debugPrint(
+        '[VPN] kill switch engaged — replaced tunnel with block config',
+      );
     } catch (e) {
       debugPrint('[VPN] kill switch engage failed: $e');
       killSwitchBlocking.value = false;
@@ -694,7 +709,9 @@ class VpnController extends GetxController {
 
   /// Direct WireGuard: TUN may be up before UDP handshake completes — verify egress.
   Future<bool> _waitWireGuardReady() async {
-    if (Platform.isAndroid && !await _waitLocalMixedProxy(attempts: 24)) return false;
+    if (Platform.isAndroid && !await _waitLocalMixedProxy(attempts: 24)) {
+      return false;
+    }
     return _waitTunnelEgress(label: 'WireGuard', attempts: 6);
   }
 
@@ -719,7 +736,9 @@ class VpnController extends GetxController {
       if (s == VpnStage.disconnected) return;
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
-    debugPrint('[VPN] stop: timed out waiting for disconnected before transport retry');
+    debugPrint(
+      '[VPN] stop: timed out waiting for disconnected before transport retry',
+    );
   }
 
   /// Subscribes before [startFuture] completes so fast native errors are not missed.
@@ -732,10 +751,13 @@ class VpnController extends GetxController {
       if (native.contains('ParsePrefix') || native.contains('ipcidr')) {
         return 'VPN config error — update the Erebrus app to the latest build';
       }
-      final short = native.length > 160 ? '${native.substring(0, 160)}…' : native;
+      final short = native.length > 160
+          ? '${native.substring(0, 160)}…'
+          : native;
       return 'Could not connect — $short';
     }
-    final desktop = _engine.desktopPrepareError ?? SingboxDesktopRunner.instance.lastError;
+    final desktop =
+        _engine.desktopPrepareError ?? SingboxDesktopRunner.instance.lastError;
     if (desktop != null && desktop.isNotEmpty) {
       return 'Could not connect — $desktop';
     }
@@ -752,8 +774,12 @@ class VpnController extends GetxController {
     final completer = Completer<bool>();
     late StreamSubscription<VpnStage> sub;
     sub = _engine.onStage.listen((s) {
-      if (s == VpnStage.connected && !completer.isCompleted) completer.complete(true);
-      if (s == VpnStage.error && !completer.isCompleted) completer.complete(false);
+      if (s == VpnStage.connected && !completer.isCompleted) {
+        completer.complete(true);
+      }
+      if (s == VpnStage.error && !completer.isCompleted) {
+        completer.complete(false);
+      }
     });
     try {
       await startFuture;
@@ -766,9 +792,13 @@ class VpnController extends GetxController {
         if (now == VpnStage.error) return false;
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
-      final finalStage = await _engine.stage().catchError((_) => VpnStage.disconnected);
+      final finalStage = await _engine.stage().catchError(
+        (_) => VpnStage.disconnected,
+      );
       if (finalStage == VpnStage.connected) return true;
-      debugPrint('[VPN] _armAndStart timed out after ${timeout.inSeconds}s (native=${finalStage.name})');
+      debugPrint(
+        '[VPN] _armAndStart timed out after ${timeout.inSeconds}s (native=${finalStage.name})',
+      );
       return false;
     } finally {
       await sub.cancel();
@@ -787,9 +817,11 @@ class VpnController extends GetxController {
     return keys;
   }
 
-  Future<String?> _readStoredSecret(String key) => ErebrusSecureStorage.read(key);
+  Future<String?> _readStoredSecret(String key) =>
+      ErebrusSecureStorage.read(key);
 
-  Future<void> _writeStoredSecret(String key, String value) => ErebrusSecureStorage.write(key, value);
+  Future<void> _writeStoredSecret(String key, String value) =>
+      ErebrusSecureStorage.write(key, value);
 
   Future<void> _deleteStoredSecret(String key) async {
     try {

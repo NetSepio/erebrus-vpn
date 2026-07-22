@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
-import '../../vpn/vpn_models.dart';
 import 'browser_link_menu.dart';
 
 /// The private start page (the "Sovereign web." service grid). New tabs open
@@ -62,7 +60,7 @@ class BrowserController extends GetxController {
   /// Set by [BrowserView] to present the native link long-press menu.
   void Function(BrowserLinkHit hit)? linkContextMenuHandler;
 
-  Timer? _proxySyncDebounce;
+  Timer? _tunnelReloadDebounce;
 
   @override
   void onInit() {
@@ -70,51 +68,48 @@ class BrowserController extends GetxController {
     if (tabs.isEmpty) addTab();
     if (Get.isRegistered<VpnController>()) {
       final vpn = Get.find<VpnController>();
-      ever(vpn.stage, (_) => _debouncedSyncTunnelProxy(vpn));
-      _debouncedSyncTunnelProxy(vpn);
+      ever(vpn.stage, (_) => _debouncedReloadForTunnelChange());
     }
   }
 
   @override
   void onClose() {
-    _proxySyncDebounce?.cancel();
+    _tunnelReloadDebounce?.cancel();
     super.onClose();
   }
 
-  void _debouncedSyncTunnelProxy(VpnController vpn) {
-    _proxySyncDebounce?.cancel();
-    _proxySyncDebounce = Timer(const Duration(milliseconds: 500), () => _syncTunnelProxy(vpn));
-  }
-
-  Future<void> _syncTunnelProxy(VpnController vpn) async {
-    if (vpn.isConnected) {
-      await SingboxEngine.instance.setAppProxy(
-        host: SingboxConfigBuilder.localProxyHost,
-        port: SingboxConfigBuilder.localProxyPort,
-      );
-    } else {
-      await SingboxEngine.instance.clearAppProxy();
-    }
-    await reload();
+  void _debouncedReloadForTunnelChange() {
+    _tunnelReloadDebounce?.cancel();
+    _tunnelReloadDebounce = Timer(const Duration(milliseconds: 500), reload);
   }
 
   void addTab({String? url, bool activate = true}) {
     final u = url == null ? kStartPage : _normalizeUrl(url);
-    final tab = BrowserTab(id: DateTime.now().microsecondsSinceEpoch.toString(), url: u, title: kStartTitle);
+    final tab = BrowserTab(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      url: u,
+      title: kStartTitle,
+    );
     tabs.add(tab);
     if (activate) {
       activeIndex.value = tabs.length - 1;
       addressBar.value = u;
     }
     tabs.refresh();
-    if (!tab.isStart && shellTabVisible.value && activate) unawaited(_loadActiveTabIfNeeded());
+    if (!tab.isStart && shellTabVisible.value && activate) {
+      unawaited(_loadActiveTabIfNeeded());
+    }
   }
 
   void closeTab(int index) {
     if (index < 0 || index >= tabs.length) return;
     if (tabs.length <= 1) {
       // Always keep ≥1 tab — closing the last spawns a fresh start page.
-      final fresh = BrowserTab(id: DateTime.now().microsecondsSinceEpoch.toString(), url: kStartPage, title: kStartTitle);
+      final fresh = BrowserTab(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        url: kStartPage,
+        title: kStartTitle,
+      );
       tabs[0] = fresh;
       activeIndex.value = 0;
       addressBar.value = kStartPage;
@@ -267,19 +262,24 @@ class BrowserController extends GetxController {
           onPageFinished: (url) async {
             isLoading.value = false;
             tab.url = url;
-            if (tabs.isNotEmpty && tabs[activeIndex.value.clamp(0, tabs.length - 1)] == tab) {
+            if (tabs.isNotEmpty &&
+                tabs[activeIndex.value.clamp(0, tabs.length - 1)] == tab) {
               addressBar.value = url;
             }
             await _refreshNavigationState(tab);
             await _injectLinkContextMenu(tab);
             final title = await tab.controller.getTitle();
             if (title != null && title.isNotEmpty) {
-              tab.title = title.length > 24 ? '${title.substring(0, 24)}…' : title;
+              tab.title = title.length > 24
+                  ? '${title.substring(0, 24)}…'
+                  : title;
               tabs.refresh();
             }
           },
           onWebResourceError: (error) {
-            debugPrint('[Browser] resource error: ${error.description} (${error.errorCode})');
+            debugPrint(
+              '[Browser] resource error: ${error.description} (${error.errorCode})',
+            );
           },
           onNavigationRequest: (req) {
             if (!req.isMainFrame) {

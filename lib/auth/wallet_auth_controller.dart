@@ -26,11 +26,9 @@ import '../vpn/vpn_controller.dart';
 
 /// Wallet login via MWA on Solana Mobile, Reown elsewhere, and gateway v2 auth.
 class WalletAuthController extends GetxController {
-  WalletAuthController({
-    GatewayAuthClient? authClient,
-    AuthSessionStore? store,
-  })  : _authClient = authClient ?? GatewayAuthClient(),
-        _store = store ?? AuthSessionStore();
+  WalletAuthController({GatewayAuthClient? authClient, AuthSessionStore? store})
+    : _authClient = authClient ?? GatewayAuthClient(),
+      _store = store ?? AuthSessionStore();
 
   final GatewayAuthClient _authClient;
   final AuthSessionStore _store;
@@ -85,12 +83,13 @@ class WalletAuthController extends GetxController {
 
   /// Native-login availability = gateway-configured AND app-side config present.
   bool get emailLoginAvailable => authMethods.value.email;
-  bool get googleLoginAvailable => authMethods.value.google && googleSignInSupported;
-  bool get appleLoginAvailable => authMethods.value.apple && appleDeviceReady.value;
+  bool get googleLoginAvailable =>
+      authMethods.value.google && googleSignInSupported;
+  bool get appleLoginAvailable =>
+      authMethods.value.apple && appleDeviceReady.value;
 
   bool get isAuthenticated => sessionActive.value;
-  bool get isEntitled =>
-      entitlement.value.entitled || role.value == 'admin';
+  bool get isEntitled => entitlement.value.entitled || role.value == 'admin';
 
   /// Whether the user may connect to the currently selected node.
   bool canConnectVpn(VpnNode? node) {
@@ -101,6 +100,7 @@ class WalletAuthController extends GetxController {
     final gw = Get.find<GatewayController>();
     return gw.orgNodes.any((n) => n.id == node.id);
   }
+
   bool get usesReown => PlatformCapabilities.usesReown;
   bool get usesWebLogin => PlatformCapabilities.usesWebLogin;
   String? get bearerToken => _token;
@@ -170,7 +170,8 @@ class WalletAuthController extends GetxController {
       authError.value = e.message;
       debugPrint('[Auth] email verify failed: ${e.message}');
     } on TimeoutException {
-      authError.value = 'Sign-in timed out — check your connection and try again';
+      authError.value =
+          'Sign-in timed out — check your connection and try again';
     } catch (e) {
       authError.value = e.toString();
       debugPrint('[Auth] email verify error: $e');
@@ -206,9 +207,14 @@ class WalletAuthController extends GetxController {
     isAuthenticating.value = true;
     authError.value = null;
     try {
-      final idToken = await appleIdToken();
-      if (idToken == null) return; // cancelled
-      final session = await _authClient.appleLogin(idToken);
+      final credential = await appleCredential();
+      if (credential == null) return; // cancelled
+      final session = await _authClient.appleLogin(
+        idToken: credential.identityToken,
+        authorizationCode: credential.authorizationCode,
+        nonce: credential.nonce,
+        state: credential.state,
+      );
       await _persistSession(session, method: 'apple');
       await _afterLogin();
       debugPrint('[Auth] apple login OK');
@@ -289,17 +295,15 @@ class WalletAuthController extends GetxController {
     ReownAppKitModalNetworks.removeSupportedNetworks('eip155');
     ReownAppKitModalNetworks.removeTestNetworks();
 
-    final solanaChains =
-        ReownAppKitModalNetworks.getAllSupportedNetworks(namespace: 'solana');
+    final solanaChains = ReownAppKitModalNetworks.getAllSupportedNetworks(
+      namespace: 'solana',
+    );
     final solanaNamespaces = solanaChains.isEmpty
         ? null
         : {
             'solana': RequiredNamespace(
               chains: solanaChains.map((c) => c.chainId).toList(),
-              methods: const [
-                'solana_signMessage',
-                'solana_signTransaction',
-              ],
+              methods: const ['solana_signMessage', 'solana_signTransaction'],
               events: const [],
             ),
           };
@@ -366,7 +370,9 @@ class WalletAuthController extends GetxController {
     if (!usesWebLogin) return;
     DeepLinkHandler.bind(this);
     DeepLinkHandler.checkInitialLink();
-    debugPrint('[Auth] desktop web-login ready — origin ${RuntimeConfig.erebrusWebOrigin}');
+    debugPrint(
+      '[Auth] desktop web-login ready — origin ${RuntimeConfig.erebrusWebOrigin}',
+    );
   }
 
   /// Opens MWA on Solana Mobile, browser on desktop, Reown modal on other mobile.
@@ -392,10 +398,14 @@ class WalletAuthController extends GetxController {
       final url = DesktopWebAuth.buildLoginUrl();
       debugPrint('[Auth] opening web login: $url');
       final uri = Uri.parse(url);
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) {
         awaitingWebCallback.value = false;
-        authError.value = 'Could not open the browser — check your default browser';
+        authError.value =
+            'Could not open the browser — check your default browser';
       }
     } catch (e) {
       awaitingWebCallback.value = false;
@@ -411,7 +421,8 @@ class WalletAuthController extends GetxController {
     try {
       final callback = DesktopWebAuth.parseManualAuthInput(input);
       if (callback == null || callback.token.isEmpty) {
-        authError.value = 'Could not read a sign-in token — paste the PASETO or full callback URL';
+        authError.value =
+            'Could not read a sign-in token — paste the PASETO or full callback URL';
         return;
       }
 
@@ -453,7 +464,8 @@ class WalletAuthController extends GetxController {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim() ?? '';
     if (text.isEmpty) {
-      authError.value = 'Clipboard is empty — copy the PASETO from the browser first';
+      authError.value =
+          'Clipboard is empty — copy the PASETO from the browser first';
       return;
     }
     await signInWithPastedCredential(text);
@@ -501,7 +513,8 @@ class WalletAuthController extends GetxController {
   Future<void> openWalletModal() async {
     authError.value = null;
     if (appKitModal == null || !reownReady.value) {
-      authError.value = 'Wallet connect is still starting — try again in a moment';
+      authError.value =
+          'Wallet connect is still starting — try again in a moment';
       return;
     }
     await appKitModal!.openModalView();
@@ -510,7 +523,8 @@ class WalletAuthController extends GetxController {
   /// Mobile Wallet Adapter path — opens the native wallet selector on Seeker/Saga.
   Future<void> signInWithSolanaMobile() async {
     if (!isSolanaMobileDevice.value) {
-      authError.value = 'Solana Mobile sign-in is only available on Seeker and Saga';
+      authError.value =
+          'Solana Mobile sign-in is only available on Seeker and Saga';
       return;
     }
     // Guard against a double-tap opening two wallet associations at once.
@@ -526,8 +540,9 @@ class WalletAuthController extends GetxController {
       final result = await mwaSignIn(
         storedAuthToken: _mwaAuthToken,
         challengeBuilder: (address, publicKey) async {
-          final challenge =
-              await _authClient.fetchAuthChallenge(walletAddress: address);
+          final challenge = await _authClient.fetchAuthChallenge(
+            walletAddress: address,
+          );
           challengeId = challenge.challengeId;
           return challenge.message;
         },
@@ -539,7 +554,11 @@ class WalletAuthController extends GetxController {
         signature: result.signature,
         publicKey: result.address,
       );
-      await _persistSession(session, method: 'solana_mobile', mwaToken: result.authToken);
+      await _persistSession(
+        session,
+        method: 'solana_mobile',
+        mwaToken: result.authToken,
+      );
       await refreshEntitlement();
       await _refreshGatewayNodes();
       debugPrint('[MWA] gateway auth OK for ${result.address}');
@@ -568,7 +587,9 @@ class WalletAuthController extends GetxController {
     final mwaToken = _mwaAuthToken;
     _applyToken(null);
     _mwaAuthToken = null;
-    unawaited(googleSignOut()); // best-effort; lets the chooser reappear next time
+    unawaited(
+      googleSignOut(),
+    ); // best-effort; lets the chooser reappear next time
     walletAddress.value = '';
     userId.value = '';
     role.value = '';
@@ -576,7 +597,9 @@ class WalletAuthController extends GetxController {
     try {
       await _store.clear();
     } catch (e) {
-      debugPrint('[Auth] signOut: secure storage clear failed (session cleared in memory): $e');
+      debugPrint(
+        '[Auth] signOut: secure storage clear failed (session cleared in memory): $e',
+      );
     }
     if (Get.isRegistered<GatewayController>()) {
       await Get.find<GatewayController>().resetVpnLocalState();
@@ -709,7 +732,10 @@ class WalletAuthController extends GetxController {
     isLoadingProfile.value = true;
     profileError.value = null;
     try {
-      final profile = await _authClient.patchProfile(_token!, name: name.trim());
+      final profile = await _authClient.patchProfile(
+        _token!,
+        name: name.trim(),
+      );
       _applyProfile(profile);
     } on AuthException catch (e) {
       profileError.value = e.message;
@@ -736,12 +762,19 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  Future<void> verifyEmailLink({required String email, required String code}) async {
+  Future<void> verifyEmailLink({
+    required String email,
+    required String code,
+  }) async {
     if (!isAuthenticated) return;
     isLinkingEmail.value = true;
     profileError.value = null;
     try {
-      final profile = await _authClient.verifyEmailLink(_token!, email: email, code: code);
+      final profile = await _authClient.verifyEmailLink(
+        _token!,
+        email: email,
+        code: code,
+      );
       _applyProfile(profile);
     } on AuthException catch (e) {
       profileError.value = e.message;
@@ -897,7 +930,9 @@ class WalletAuthController extends GetxController {
         mwaAuthToken: mwaToken ?? _mwaAuthToken,
       );
     } catch (e) {
-      debugPrint('[Auth] session persist failed (in-memory session active): $e');
+      debugPrint(
+        '[Auth] session persist failed (in-memory session active): $e',
+      );
     }
     _syncGatewayToken();
     unawaited(refreshProfile());
@@ -947,8 +982,9 @@ class WalletAuthController extends GetxController {
     isAuthenticating.value = true;
     authError.value = null;
     try {
-      final challenge =
-          await _authClient.fetchAuthChallenge(walletAddress: address);
+      final challenge = await _authClient.fetchAuthChallenge(
+        walletAddress: address,
+      );
       final signature = await _signChallenge(modal, address, challenge.message);
       final session = await _authClient.authenticate(
         challengeId: challenge.challengeId,
@@ -972,8 +1008,9 @@ class WalletAuthController extends GetxController {
   Future<String?> _solanaAddress(ReownAppKitModal modal) async {
     final chainId = modal.selectedChain?.chainId ?? '';
     if (!chainId.startsWith('solana:')) {
-      final solChains =
-          ReownAppKitModalNetworks.getAllSupportedNetworks(namespace: 'solana');
+      final solChains = ReownAppKitModalNetworks.getAllSupportedNetworks(
+        namespace: 'solana',
+      );
       if (solChains.isNotEmpty) {
         await modal.selectChain(solChains.first);
       }

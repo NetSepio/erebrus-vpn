@@ -24,6 +24,9 @@ class PlatformCapabilities {
     return Platform.isMacOS || Platform.isWindows || Platform.isLinux;
   }
 
+  static bool get isMacOS => !kIsWeb && Platform.isMacOS;
+  static bool get isIOS => !kIsWeb && Platform.isIOS;
+
   /// Menu bar / system tray quick controls (macOS, Windows, Linux).
   static bool get supportsTray => isDesktop;
 

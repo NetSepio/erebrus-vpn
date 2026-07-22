@@ -15,8 +15,7 @@ final class SingboxBridge {
 
   private init() {
     TunnelManager.shared.onStageChange = { [weak self] stage in
-      self?.stage = stage
-      self?.emitStatus()
+      self?.publishStage(stage)
     }
   }
 
@@ -28,7 +27,7 @@ final class SingboxBridge {
       case "prepare":
         Task {
           let ok = await TunnelManager.shared.prepare()
-          result(ok)
+          self.complete(result, with: ok)
         }
       case "start":
         guard let args = call.arguments as? [String: Any],
@@ -40,22 +39,41 @@ final class SingboxBridge {
         Task {
           do {
             try await TunnelManager.shared.start(config: config, profileName: name)
-            result(nil)
+            self.complete(result, with: nil)
           } catch {
-            self.stage = "error"
-            self.emitStatus()
-            result(FlutterError(code: "START", message: error.localizedDescription, details: nil))
+            self.publishStage("error")
+            self.complete(
+              result,
+              with: FlutterError(
+                code: "START",
+                message: error.localizedDescription,
+                details: nil
+              )
+            )
           }
         }
       case "stop":
         Task {
           await TunnelManager.shared.stop()
-          result(nil)
+          self.complete(result, with: nil)
         }
       case "stage":
         result(self.stage)
       case "genWgKeys":
         result(self.generateWireGuardKeyPair())
+      case "setAppProxy", "clearAppProxy":
+        // WKWebView on iOS has no supported per-app proxy override equivalent
+        // to Android's WebView proxy API. Its traffic is already carried by the
+        // system packet tunnel, so the routing requirement is satisfied.
+        result(true)
+      case "setOnDemandEnabled":
+        let enabled = (call.arguments as? [String: Any])?["enabled"] as? Bool ?? false
+        Task {
+          let updated = await TunnelManager.shared.setOnDemandEnabled(enabled)
+          self.complete(result, with: updated)
+        }
+      case "lastError":
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -78,8 +96,26 @@ final class SingboxBridge {
     statusSink = nil
   }
 
-  func emitStatus() {
-    statusSink?(stage)
+  private func publishStage(_ value: String) {
+    onPlatformThread { [weak self] in
+      guard let self else { return }
+      self.stage = value
+      self.statusSink?(value)
+    }
+  }
+
+  private func complete(_ result: @escaping FlutterResult, with value: Any?) {
+    onPlatformThread {
+      result(value)
+    }
+  }
+
+  private func onPlatformThread(_ action: @escaping () -> Void) {
+    if Thread.isMainThread {
+      action()
+    } else {
+      DispatchQueue.main.async(execute: action)
+    }
   }
 
   private func generateWireGuardKeyPair() -> [String: String] {

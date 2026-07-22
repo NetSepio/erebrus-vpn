@@ -32,14 +32,13 @@ class _LoginViewState extends State<LoginView> {
     // best-effort, and a transient failure there would otherwise hide Google
     // sign-in until the app restarts.
     unawaited(Get.find<WalletAuthController>().loadAuthMethods());
-    _authWorker = ever(
-      Get.find<WalletAuthController>().sessionActive,
-      (isActive) {
-        if (isActive && mounted) {
-          Get.until((route) => route.isFirst);
-        }
-      },
-    );
+    _authWorker = ever(Get.find<WalletAuthController>().sessionActive, (
+      isActive,
+    ) {
+      if (isActive && mounted) {
+        Get.until((route) => route.isFirst);
+      }
+    });
   }
 
   @override
@@ -73,22 +72,62 @@ class _LoginViewState extends State<LoginView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const ValueKey('continue-as-guest'),
+                        onPressed: () => _continueAsGuest(auth),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 8,
+                          ),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.arrow_back, size: 17),
+                        label: Text(
+                          'CONTINUE AS GUEST',
+                          style: mono(
+                            size: 11,
+                            weight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                            letterSpacing: 11 * 0.08,
+                          ),
+                        ),
+                      ),
+                    ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 26, 0, 30),
+                      padding: const EdgeInsets.fromLTRB(0, 18, 0, 30),
                       child: Column(
                         children: [
-                          const BrandLogo(size: 56, radius: 16, showShadow: true),
+                          const BrandLogo(
+                            size: 56,
+                            radius: 16,
+                            showShadow: true,
+                          ),
                           const SizedBox(height: 18),
-                          Text('Welcome to Erebrus',
-                              textAlign: TextAlign.center,
-                              style: grotesk(size: 26, weight: FontWeight.w600, letterSpacing: -0.52)),
+                          Text(
+                            'Welcome to Erebrus',
+                            textAlign: TextAlign.center,
+                            style: grotesk(
+                              size: 26,
+                              weight: FontWeight.w600,
+                              letterSpacing: -0.52,
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           SizedBox(
                             width: 280,
                             child: Text(
                               'Sign in to enter your personal, private internet',
                               textAlign: TextAlign.center,
-                              style: grotesk(size: 14.5, weight: FontWeight.w400, color: AppColors.textTertiary, height: 1.4),
+                              style: grotesk(
+                                size: 14.5,
+                                weight: FontWeight.w400,
+                                color: AppColors.textTertiary,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ],
@@ -115,12 +154,23 @@ class _LoginViewState extends State<LoginView> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.lock_outline, size: 14, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.lock_outline,
+                            size: 14,
+                            color: AppColors.textMuted,
+                          ),
                           const SizedBox(width: 7),
                           Flexible(
-                            child: Text('Your wallet signs you in — no passwords, no email.',
-                                textAlign: TextAlign.center,
-                                style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.4)),
+                            child: Text(
+                              'Your wallet signs you in — no passwords, no email.',
+                              textAlign: TextAlign.center,
+                              style: grotesk(
+                                size: 12.5,
+                                weight: FontWeight.w400,
+                                color: AppColors.textMuted,
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -130,18 +180,47 @@ class _LoginViewState extends State<LoginView> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.open_in_browser, size: 20, color: AppColors.accent),
+                            const Icon(
+                              Icons.open_in_browser,
+                              size: 20,
+                              color: AppColors.accent,
+                            ),
                             const SizedBox(width: 11),
-                            Text('Sign in with browser', style: grotesk(size: 15, weight: FontWeight.w600)),
+                            Text(
+                              'Sign in with browser',
+                              style: grotesk(size: 15, weight: FontWeight.w600),
+                            ),
                           ],
                         ),
                       ),
+                      if (PlatformCapabilities.isMacOS)
+                        Obx(() {
+                          if (!auth.appleLoginAvailable) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 11),
+                            child: _SocialAuthButton(
+                              label: 'Continue with Apple',
+                              icon: Icons.apple,
+                              onTap: auth.signInWithApple,
+                            ),
+                          );
+                        }),
                       const SizedBox(height: 14),
                       Text(
-                        'Opens ${RuntimeConfig.erebrusWebOrigin} in your browser.\n'
-                        'After you sign in, you\'ll return here automatically.',
+                        PlatformCapabilities.isMacOS
+                            ? 'Use Apple here, or open ${RuntimeConfig.erebrusWebOrigin} in your browser.\n'
+                                  'Browser sign-in returns here automatically.'
+                            : 'Opens ${RuntimeConfig.erebrusWebOrigin} in your browser.\n'
+                                  'After you sign in, you\'ll return here automatically.',
                         textAlign: TextAlign.center,
-                        style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),
+                        style: grotesk(
+                          size: 12.5,
+                          weight: FontWeight.w400,
+                          color: AppColors.textMuted,
+                          height: 1.45,
+                        ),
                       ),
                     ] else ...[
                       Obx(() {
@@ -160,26 +239,29 @@ class _LoginViewState extends State<LoginView> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.mail_outline, size: 20, color: AppColors.accent),
+                                    const Icon(
+                                      Icons.mail_outline,
+                                      size: 20,
+                                      color: AppColors.accent,
+                                    ),
                                     const SizedBox(width: 11),
-                                    Text('Continue with Email', style: grotesk(size: 15, weight: FontWeight.w600)),
+                                    Text(
+                                      'Continue with Email',
+                                      style: grotesk(
+                                        size: 15,
+                                        weight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
-                            if (googleOk) ...[
-                              const SizedBox(height: 11),
-                              _SocialAuthButton(
-                                label: 'Continue with Google',
-                                icon: Icons.g_mobiledata_rounded,
-                                onTap: auth.signInWithGoogle,
-                              ),
-                            ],
-                            if (appleOk) ...[
-                              const SizedBox(height: 11),
-                              _SocialAuthButton(
-                                label: 'Continue with Apple',
-                                icon: Icons.apple,
-                                onTap: auth.signInWithApple,
+                            if (googleOk || appleOk) ...[
+                              if (emailOk) const SizedBox(height: 11),
+                              _SocialProviderButtons(
+                                google: googleOk,
+                                apple: appleOk,
+                                onGoogle: auth.signInWithGoogle,
+                                onApple: auth.signInWithApple,
                               ),
                             ],
                             const _AuthDivider(label: 'CONNECT A WALLET'),
@@ -223,12 +305,24 @@ class _LoginViewState extends State<LoginView> {
                         return Text(
                           "By continuing you agree to Erebrus's\nTerms of Service & Privacy Policy.",
                           textAlign: TextAlign.center,
-                          style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textDim, height: 1.5),
+                          style: grotesk(
+                            size: 11.5,
+                            weight: FontWeight.w400,
+                            color: AppColors.textDim,
+                            height: 1.5,
+                          ),
                         );
                       }
-                      return Text(err,
-                          textAlign: TextAlign.center,
-                          style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger, height: 1.4));
+                      return Text(
+                        err,
+                        textAlign: TextAlign.center,
+                        style: grotesk(
+                          size: 12.5,
+                          weight: FontWeight.w500,
+                          color: AppColors.danger,
+                          height: 1.4,
+                        ),
+                      );
                     }),
                   ],
                 ),
@@ -236,11 +330,14 @@ class _LoginViewState extends State<LoginView> {
 
               // connecting overlay
               Obx(() {
-                if (!auth.isAuthenticating.value && !auth.awaitingWebCallback.value) {
+                if (!auth.isAuthenticating.value &&
+                    !auth.awaitingWebCallback.value) {
                   return const SizedBox.shrink();
                 }
                 return _ConnectingOverlay(
-                  waitingForBrowser: auth.awaitingWebCallback.value && !auth.isAuthenticating.value,
+                  waitingForBrowser:
+                      auth.awaitingWebCallback.value &&
+                      !auth.isAuthenticating.value,
                   onPasteFromClipboard: () => auth.signInFromClipboard(),
                 );
               }),
@@ -255,6 +352,11 @@ class _LoginViewState extends State<LoginView> {
     auth.openSignIn();
   }
 
+  void _continueAsGuest(WalletAuthController auth) {
+    auth.authError.value = null;
+    Navigator.of(context).maybePop();
+  }
+
   void _openEmailLogin(BuildContext context, WalletAuthController auth) {
     auth.authError.value = null;
     showModalBottomSheet(
@@ -262,7 +364,9 @@ class _LoginViewState extends State<LoginView> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetContext).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
         child: const _EmailLoginSheet(),
       ),
     );
@@ -270,7 +374,11 @@ class _LoginViewState extends State<LoginView> {
 }
 
 class _SocialAuthButton extends StatelessWidget {
-  const _SocialAuthButton({required this.label, required this.icon, required this.onTap});
+  const _SocialAuthButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
   final String label;
   final IconData icon;
   final VoidCallback onTap;
@@ -286,6 +394,52 @@ class _SocialAuthButton extends StatelessWidget {
           Text(label, style: grotesk(size: 15, weight: FontWeight.w600)),
         ],
       ),
+    );
+  }
+}
+
+/// Keeps Apple beside Google when both providers are available. A sole
+/// provider retains the more descriptive full-width "Continue with …" label.
+class _SocialProviderButtons extends StatelessWidget {
+  const _SocialProviderButtons({
+    required this.google,
+    required this.apple,
+    required this.onGoogle,
+    required this.onApple,
+  });
+
+  final bool google;
+  final bool apple;
+  final VoidCallback onGoogle;
+  final VoidCallback onApple;
+
+  @override
+  Widget build(BuildContext context) {
+    if (google && apple) {
+      return Row(
+        children: [
+          Expanded(
+            child: _SocialAuthButton(
+              label: 'Google',
+              icon: Icons.g_mobiledata_rounded,
+              onTap: onGoogle,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: _SocialAuthButton(
+              label: 'Apple',
+              icon: Icons.apple,
+              onTap: onApple,
+            ),
+          ),
+        ],
+      );
+    }
+    return _SocialAuthButton(
+      label: google ? 'Continue with Google' : 'Continue with Apple',
+      icon: google ? Icons.g_mobiledata_rounded : Icons.apple,
+      onTap: google ? onGoogle : onApple,
     );
   }
 }
@@ -323,7 +477,10 @@ class _EmailLoginSheetState extends State<_EmailLoginSheet> {
 
   Future<void> _verify(WalletAuthController auth) async {
     setState(() => _busy = true);
-    await auth.verifyEmailLoginCode(email: _emailCtrl.text.trim(), code: _codeCtrl.text.trim());
+    await auth.verifyEmailLoginCode(
+      email: _emailCtrl.text.trim(),
+      code: _codeCtrl.text.trim(),
+    );
     if (!mounted) return;
     setState(() => _busy = false);
   }
@@ -345,42 +502,84 @@ class _EmailLoginSheetState extends State<_EmailLoginSheet> {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: AppColors.strokeHi, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                color: AppColors.strokeHi,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          Text(_codeSent ? 'Enter your code' : 'Sign in with email',
-              style: grotesk(size: 19, weight: FontWeight.w600)),
+          Text(
+            _codeSent ? 'Enter your code' : 'Sign in with email',
+            style: grotesk(size: 19, weight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
           Text(
             _codeSent
                 ? 'We sent a 6-digit code to ${_emailCtrl.text.trim()}'
                 : "We'll email you a one-time code — no password.",
-            style: grotesk(size: 13, color: AppColors.textTertiary, height: 1.4),
+            style: grotesk(
+              size: 13,
+              color: AppColors.textTertiary,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 18),
           if (!_codeSent) ...[
-            _SheetField(controller: _emailCtrl, hint: 'you@example.com', keyboardType: TextInputType.emailAddress, autofocus: true),
+            _SheetField(
+              controller: _emailCtrl,
+              hint: 'you@example.com',
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+            ),
             const SizedBox(height: 14),
-            _SheetPrimaryButton(label: 'Send code', busy: _busy, onTap: () => _send(auth)),
+            _SheetPrimaryButton(
+              label: 'Send code',
+              busy: _busy,
+              onTap: () => _send(auth),
+            ),
           ] else ...[
-            _SheetField(controller: _codeCtrl, hint: '6-digit code', keyboardType: TextInputType.number, autofocus: true, letterSpacing: 6),
+            _SheetField(
+              controller: _codeCtrl,
+              hint: '6-digit code',
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              letterSpacing: 6,
+            ),
             const SizedBox(height: 14),
-            _SheetPrimaryButton(label: 'Verify & sign in', busy: _busy, onTap: () => _verify(auth)),
+            _SheetPrimaryButton(
+              label: 'Verify & sign in',
+              busy: _busy,
+              onTap: () => _verify(auth),
+            ),
             const SizedBox(height: 12),
             GestureDetector(
-              onTap: _busy ? null : () => setState(() { _codeSent = false; _codeCtrl.clear(); }),
-              child: Text('← use a different email',
-                  textAlign: TextAlign.center, style: mono(size: 12, color: AppColors.textMuted)),
+              onTap: _busy
+                  ? null
+                  : () => setState(() {
+                      _codeSent = false;
+                      _codeCtrl.clear();
+                    }),
+              child: Text(
+                '← use a different email',
+                textAlign: TextAlign.center,
+                style: mono(size: 12, color: AppColors.textMuted),
+              ),
             ),
           ],
           const SizedBox(height: 14),
           Obx(() {
             final err = auth.authError.value;
             if (err == null || err.isEmpty) return const SizedBox.shrink();
-            return Text(err,
-                textAlign: TextAlign.center,
-                style: grotesk(size: 12.5, weight: FontWeight.w500, color: AppColors.danger));
+            return Text(
+              err,
+              textAlign: TextAlign.center,
+              style: grotesk(
+                size: 12.5,
+                weight: FontWeight.w500,
+                color: AppColors.danger,
+              ),
+            );
           }),
         ],
       ),
@@ -413,12 +612,19 @@ class _SheetField extends StatelessWidget {
         controller: controller,
         keyboardType: keyboardType,
         autofocus: autofocus,
-        style: grotesk(size: 15, weight: FontWeight.w500, letterSpacing: letterSpacing ?? 0),
+        style: grotesk(
+          size: 15,
+          weight: FontWeight.w500,
+          letterSpacing: letterSpacing ?? 0,
+        ),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: grotesk(size: 15, color: AppColors.textMuted),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -426,7 +632,11 @@ class _SheetField extends StatelessWidget {
 }
 
 class _SheetPrimaryButton extends StatelessWidget {
-  const _SheetPrimaryButton({required this.label, required this.busy, required this.onTap});
+  const _SheetPrimaryButton({
+    required this.label,
+    required this.busy,
+    required this.onTap,
+  });
   final String label;
   final bool busy;
   final VoidCallback onTap;
@@ -437,12 +647,27 @@ class _SheetPrimaryButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15),
         alignment: Alignment.center,
-        decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          gradient: AppGradients.brand,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: busy
             ? const SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onAccent))
-            : Text(label, style: grotesk(size: 15, weight: FontWeight.w600, color: AppColors.onAccent)),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.onAccent,
+                ),
+              )
+            : Text(
+                label,
+                style: grotesk(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  color: AppColors.onAccent,
+                ),
+              ),
       ),
     );
   }
@@ -502,16 +727,29 @@ class _WalletButton extends StatelessWidget {
             Container(
               width: 34,
               height: 34,
-              decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(9)),
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(9),
+              ),
             ),
             const SizedBox(width: 13),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: grotesk(size: 15, weight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: grotesk(size: 15, weight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 1),
-                  Text(subtitle, style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                  Text(
+                    subtitle,
+                    style: mono(
+                      size: 11,
+                      weight: FontWeight.w400,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -528,7 +766,9 @@ class _AuthDivider extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) {
-    final line = Expanded(child: Container(height: 1, color: Colors.white.withValues(alpha: 0.08)));
+    final line = Expanded(
+      child: Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 22),
       child: Row(
@@ -536,7 +776,15 @@ class _AuthDivider extends StatelessWidget {
           line,
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Text(label, style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textDim, letterSpacing: 11 * 0.15)),
+            child: Text(
+              label,
+              style: mono(
+                size: 11,
+                weight: FontWeight.w500,
+                color: AppColors.textDim,
+                letterSpacing: 11 * 0.15,
+              ),
+            ),
           ),
           line,
         ],
@@ -564,11 +812,16 @@ class _ConnectingOverlay extends StatelessWidget {
             const SizedBox(
               width: 46,
               height: 46,
-              child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: AppColors.accent,
+              ),
             ),
             const SizedBox(height: 22),
             Text(
-              waitingForBrowser ? 'Waiting for browser sign-in' : 'Connecting your account',
+              waitingForBrowser
+                  ? 'Waiting for browser sign-in'
+                  : 'Connecting your account',
               style: grotesk(size: 15, weight: FontWeight.w600),
             ),
             const SizedBox(height: 5),
@@ -576,13 +829,23 @@ class _ConnectingOverlay extends StatelessWidget {
               waitingForBrowser
                   ? 'complete sign-in in your browser…'
                   : 'verifying credentials…',
-              style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary),
+              style: mono(
+                size: 12,
+                weight: FontWeight.w400,
+                color: AppColors.textTertiary,
+              ),
             ),
-            if (waitingForBrowser && PlatformCapabilities.usesWebLogin && onPasteFromClipboard != null) ...[
+            if (waitingForBrowser &&
+                PlatformCapabilities.usesWebLogin &&
+                onPasteFromClipboard != null) ...[
               const SizedBox(height: 28),
               Text(
                 'Redirect didn\'t work?',
-                style: grotesk(size: 13, weight: FontWeight.w500, color: AppColors.textMuted),
+                style: grotesk(
+                  size: 13,
+                  weight: FontWeight.w500,
+                  color: AppColors.textMuted,
+                ),
               ),
               const SizedBox(height: 10),
               _PasteFromClipboardButton(onTap: onPasteFromClipboard!),
@@ -639,12 +902,20 @@ class _PasteTokenSectionState extends State<_PasteTokenSection> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.content_paste_go_outlined, size: 18, color: AppColors.textTertiary),
+                const Icon(
+                  Icons.content_paste_go_outlined,
+                  size: 18,
+                  color: AppColors.textTertiary,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Paste sign-in token from browser',
-                    style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textSecondary),
+                    style: grotesk(
+                      size: 14,
+                      weight: FontWeight.w500,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
                 Icon(
@@ -660,7 +931,12 @@ class _PasteTokenSectionState extends State<_PasteTokenSection> {
           const SizedBox(height: 10),
           Text(
             'Copy the PASETO from the browser sign-in page, then paste here if the app didn\'t open automatically.',
-            style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textMuted, height: 1.45),
+            style: grotesk(
+              size: 12,
+              weight: FontWeight.w400,
+              color: AppColors.textMuted,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 10),
           Container(
@@ -673,7 +949,11 @@ class _PasteTokenSectionState extends State<_PasteTokenSection> {
               controller: _controller,
               maxLines: 4,
               minLines: 2,
-              style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textPrimary),
+              style: mono(
+                size: 11,
+                weight: FontWeight.w400,
+                color: AppColors.textPrimary,
+              ),
               decoration: InputDecoration(
                 hintText: 'PASETO token or erebrusvpn://auth?token=…',
                 hintStyle: mono(size: 11, color: AppColors.textDim),
@@ -691,9 +971,16 @@ class _PasteTokenSectionState extends State<_PasteTokenSection> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.content_paste, size: 16, color: AppColors.textTertiary),
+                      const Icon(
+                        Icons.content_paste,
+                        size: 16,
+                        color: AppColors.textTertiary,
+                      ),
                       const SizedBox(width: 8),
-                      Text('Paste', style: grotesk(size: 14, weight: FontWeight.w600)),
+                      Text(
+                        'Paste',
+                        style: grotesk(size: 14, weight: FontWeight.w600),
+                      ),
                     ],
                   ),
                 ),
@@ -717,7 +1004,14 @@ class _PasteTokenSectionState extends State<_PasteTokenSection> {
                       gradient: AppGradients.brand,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Text('Sign in', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.onAccent)),
+                    child: Text(
+                      'Sign in',
+                      style: grotesk(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: AppColors.onAccent,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -747,14 +1041,19 @@ class _PasteFromClipboardButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.content_paste_go_outlined, size: 16, color: AppColors.accent),
+            const Icon(
+              Icons.content_paste_go_outlined,
+              size: 16,
+              color: AppColors.accent,
+            ),
             const SizedBox(width: 8),
-            Text('Paste token from clipboard', style: grotesk(size: 13, weight: FontWeight.w600)),
+            Text(
+              'Paste token from clipboard',
+              style: grotesk(size: 13, weight: FontWeight.w600),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
-

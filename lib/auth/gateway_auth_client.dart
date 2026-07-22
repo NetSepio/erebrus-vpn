@@ -16,7 +16,7 @@ export 'user_org_invite.dart';
 /// Wallet auth + subscriptions against the Erebrus gateway (v2).
 class GatewayAuthClient {
   GatewayAuthClient({String? gatewayUrl})
-      : _base = GatewayHttp.normalizeBase(gatewayUrl ?? resolveGatewayUrl());
+    : _base = GatewayHttp.normalizeBase(gatewayUrl ?? resolveGatewayUrl());
 
   static const _requestTimeout = Duration(seconds: 20);
 
@@ -36,7 +36,9 @@ class GatewayAuthClient {
       final req = await client.getUrl(uri).timeout(const Duration(seconds: 8));
       final res = await req.close().timeout(const Duration(seconds: 8));
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw AuthException('Gateway unreachable at $baseUrl (HTTP ${res.statusCode})');
+        throw AuthException(
+          'Gateway unreachable at $baseUrl (HTTP ${res.statusCode})',
+        );
       }
       await res.drain();
     } on SocketException catch (e) {
@@ -48,13 +50,18 @@ class GatewayAuthClient {
     }
   }
 
-  static String _networkErrorMessage(String? detail, {required String gateway}) {
+  static String _networkErrorMessage(
+    String? detail, {
+    required String gateway,
+  }) {
     final d = (detail ?? '').toLowerCase();
-    if (d.contains('failed host lookup') || d.contains('no address associated')) {
+    if (d.contains('failed host lookup') ||
+        d.contains('no address associated')) {
       return 'No internet or DNS cannot resolve the gateway ($gateway). '
           'Check Wi‑Fi/mobile data, turn off Private DNS temporarily, and retry.';
     }
-    if (d.contains('network is unreachable') || d.contains('connection refused')) {
+    if (d.contains('network is unreachable') ||
+        d.contains('connection refused')) {
       return 'Cannot reach the gateway ($gateway). Check your network connection.';
     }
     return 'Cannot reach gateway ($gateway)${detail == null || detail.isEmpty ? '' : ': $detail'}';
@@ -68,10 +75,7 @@ class GatewayAuthClient {
     final uri = GatewayHttp.apiUri(
       _base,
       path: '/api/v2/auth',
-      query: {
-        'wallet_address': walletAddress,
-        'chain': chain,
-      },
+      query: {'wallet_address': walletAddress, 'chain': chain},
     );
     final map = await _getJson(uri);
     return AuthChallenge(
@@ -151,21 +155,43 @@ class GatewayAuthClient {
     return _identitySession(map);
   }
 
-  /// `POST /api/v2/auth/apple` — exchange an Apple id_token for a session.
-  Future<AuthSession> appleLogin(String idToken) async {
+  /// `POST /api/v2/auth/apple` — exchange the complete Apple credential.
+  Future<AuthSession> appleLogin({
+    required String idToken,
+    required String authorizationCode,
+    required String nonce,
+    required String state,
+  }) async {
     final map = await _postJson(
       GatewayHttp.apiUri(_base, path: '/api/v2/auth/apple'),
-      {'id_token': idToken},
+      appleLoginPayload(
+        idToken: idToken,
+        authorizationCode: authorizationCode,
+        nonce: nonce,
+        state: state,
+      ),
     );
     return _identitySession(map);
   }
 
+  static Map<String, String> appleLoginPayload({
+    required String idToken,
+    required String authorizationCode,
+    required String nonce,
+    required String state,
+  }) => {
+    'id_token': idToken,
+    'authorization_code': authorizationCode,
+    'nonce': nonce,
+    'state': state,
+  };
+
   AuthSession _identitySession(Map<String, dynamic> map) => AuthSession(
-        token: (map['token'] ?? '').toString(),
-        userId: (map['user_id'] ?? '').toString(),
-        role: (map['role'] ?? 'user').toString(),
-        walletAddress: '',
-      );
+    token: (map['token'] ?? '').toString(),
+    userId: (map['user_id'] ?? '').toString(),
+    role: (map['role'] ?? 'user').toString(),
+    walletAddress: '',
+  );
 
   /// `GET /api/v2/subscriptions` — requires bearer token.
   Future<EntitlementState> fetchSubscription(String bearerToken) async {
@@ -203,7 +229,10 @@ class GatewayAuthClient {
   }
 
   /// `PATCH /api/v2/account/profile` — updates display name only.
-  Future<UserProfile> patchProfile(String bearerToken, {required String name}) async {
+  Future<UserProfile> patchProfile(
+    String bearerToken, {
+    required String name,
+  }) async {
     final map = await _patchJson(
       GatewayHttp.apiUri(_base, path: '/api/v2/account/profile'),
       {'name': name},
@@ -239,11 +268,9 @@ class GatewayAuthClient {
 
   /// `POST /api/v2/auth/email` — send OTP to link a recovery email.
   Future<void> startEmailLink(String bearerToken, String email) async {
-    await _postJson(
-      GatewayHttp.apiUri(_base, path: '/api/v2/auth/email'),
-      {'email': email.trim()},
-      bearerToken: bearerToken,
-    );
+    await _postJson(GatewayHttp.apiUri(_base, path: '/api/v2/auth/email'), {
+      'email': email.trim(),
+    }, bearerToken: bearerToken);
   }
 
   /// `POST /api/v2/auth/email/verify` — verify OTP and link email.
@@ -303,10 +330,7 @@ class GatewayAuthClient {
   }
 
   /// `POST /api/v2/account/org-invites/:orgId/accept`.
-  Future<void> acceptAccountOrgInvite(
-    String bearerToken,
-    String orgId,
-  ) async {
+  Future<void> acceptAccountOrgInvite(String bearerToken, String orgId) async {
     await _postJson(
       GatewayHttp.apiUri(
         _base,
@@ -318,10 +342,7 @@ class GatewayAuthClient {
   }
 
   /// `POST /api/v2/account/org-invites/:orgId/decline`.
-  Future<void> declineAccountOrgInvite(
-    String bearerToken,
-    String orgId,
-  ) async {
+  Future<void> declineAccountOrgInvite(String bearerToken, String orgId) async {
     await _postJson(
       GatewayHttp.apiUri(
         _base,

@@ -20,7 +20,8 @@ Future<void> showServerSheet(BuildContext context) {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.6),
-    builder: (_) => const SheetFrame(maxHeightFactor: 0.82, child: _ServerSheet()),
+    builder: (_) =>
+        const SheetFrame(maxHeightFactor: 0.82, child: _ServerSheet()),
   );
 }
 
@@ -50,6 +51,11 @@ class _ServerSheetState extends State<_ServerSheet> {
   @override
   void initState() {
     super.initState();
+    final selected = Get.find<VpnController>().selectedNode.value;
+    if (selected?.org != null) {
+      _tab = 1;
+      _privWorkspace = selected?.org?.slug;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAndProbe());
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       if (!mounted) return;
@@ -97,47 +103,56 @@ class _ServerSheetState extends State<_ServerSheet> {
   }
 
   List<VpnNode> _privateList(GatewayController gateway) {
+    final workspace = _effectivePrivateWorkspace(gateway);
+    if (workspace == null) return const [];
     final list = gateway.orgNodes.where((n) {
-      if (_privType != null && n.deploymentProfile.toLowerCase() != _privType) return false;
-      if (_privWorkspace != null && n.org?.slug != _privWorkspace) return false;
-      if (_privRegion != null && n.region.toUpperCase() != _privRegion) return false;
+      if (_privType != null && n.deploymentProfile.toLowerCase() != _privType) {
+        return false;
+      }
+      if (n.org?.slug != workspace) return false;
+      if (_privRegion != null && n.region.toUpperCase() != _privRegion) {
+        return false;
+      }
       return true;
     });
     return sortNodesForPicker(list, clientPingMs: _clientPingMs);
   }
 
-  /// Groups private nodes under their org (workspace), ordered by the org list.
-  /// Returns a flat item list of [_OrgHeader] section headers and [VpnNode]s.
-  List<Object> _groupByOrg(GatewayController gateway, List<VpnNode> nodes) {
-    final byOrg = <String, List<VpnNode>>{};
-    for (final n in nodes) {
-      (byOrg[n.org?.slug ?? ''] ??= <VpnNode>[]).add(n);
+  String? _effectivePrivateWorkspace(GatewayController gateway) {
+    final chosen = _privWorkspace;
+    if (chosen != null && gateway.orgs.any((o) => o.slug == chosen)) {
+      return chosen;
     }
-    final ordered = <String>[];
-    for (final o in gateway.orgs) {
-      if (byOrg.containsKey(o.slug)) ordered.add(o.slug);
+    final selectedSlug =
+        Get.find<VpnController>().selectedNode.value?.org?.slug;
+    if (selectedSlug != null &&
+        gateway.orgs.any((o) => o.slug == selectedSlug)) {
+      return selectedSlug;
     }
-    for (final s in byOrg.keys) {
-      if (!ordered.contains(s)) ordered.add(s);
+    return gateway.orgs.isEmpty ? null : gateway.orgs.first.slug;
+  }
+
+  VpnOrg? _effectivePrivateOrg(GatewayController gateway) {
+    final slug = _effectivePrivateWorkspace(gateway);
+    if (slug == null) return null;
+    for (final org in gateway.orgs) {
+      if (org.slug == slug) return org;
     }
-    final items = <Object>[];
-    for (final slug in ordered) {
-      final group = byOrg[slug]!;
-      VpnOrg? org;
-      for (final o in gateway.orgs) {
-        if (o.slug == slug) {
-          org = o;
-          break;
-        }
-      }
-      items.add(_OrgHeader(
-        name: org?.name ?? group.first.org?.name ?? 'Organization',
-        count: group.length,
-        verified: org?.verified ?? group.first.org?.verified ?? false,
-      ));
-      items.addAll(group);
-    }
-    return items;
+    return null;
+  }
+
+  List<VpnNode> _privateWorkspaceNodes(GatewayController gateway) {
+    final workspace = _effectivePrivateWorkspace(gateway);
+    if (workspace == null) return const [];
+    return gateway.orgNodes.where((n) => n.org?.slug == workspace).toList();
+  }
+
+  void _selectPrivateWorkspace(String slug) {
+    setState(() {
+      _privWorkspace = slug;
+      _privRegion = null;
+      _privType = null;
+    });
   }
 
   List<String> _regionsOf(Iterable<VpnNode> nodes) {
@@ -158,13 +173,15 @@ class _ServerSheetState extends State<_ServerSheet> {
     return Obx(() {
       final isPublic = _tab == 0;
       final nodeList = isPublic ? _publicList(gateway) : _privateList(gateway);
-      // Public: flat list. Private: grouped under org (workspace) headers.
-      final items = isPublic ? nodeList.cast<Object>() : _groupByOrg(gateway, nodeList);
-      final total = isPublic ? gateway.publicNodes.length : gateway.orgNodes.length;
+      final privateWorkspaceNodes = _privateWorkspaceNodes(gateway);
+      final activeOrg = _effectivePrivateOrg(gateway);
+      final total = isPublic
+          ? gateway.publicNodes.length
+          : privateWorkspaceNodes.length;
       final subtitle = _probing
           ? 'MEASURING PING…'
           : '${nodeList.length}${nodeList.length != total ? ' OF $total' : ''} NODES · '
-              '${_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING'}';
+                '${_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING'}';
       final err = gateway.error.value;
       final warn = gateway.warning.value;
 
@@ -172,11 +189,18 @@ class _ServerSheetState extends State<_ServerSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Header(subtitle: subtitle, onClose: () => Navigator.of(context).pop(), onRefresh: _refresh),
+          _Header(
+            subtitle: subtitle,
+            onClose: () => Navigator.of(context).pop(),
+            onRefresh: _refresh,
+          ),
           if (warn != null && warn.isNotEmpty && total > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
-              child: Text(warn, style: grotesk(size: 12, color: AppColors.warn)),
+              child: Text(
+                warn,
+                style: grotesk(size: 12, color: AppColors.warn),
+              ),
             ),
 
           // Public / Private tabs.
@@ -198,7 +222,10 @@ class _ServerSheetState extends State<_ServerSheet> {
                     label: 'PRIVATE',
                     icon: Icons.apartment_rounded,
                     active: !isPublic,
-                    onTap: () => setState(() => _tab = 1),
+                    onTap: () => setState(() {
+                      _tab = 1;
+                      _privWorkspace ??= _effectivePrivateWorkspace(gateway);
+                    }),
                   ),
                 ),
               ],
@@ -208,11 +235,21 @@ class _ServerSheetState extends State<_ServerSheet> {
           // Filters for the active tab.
           if (isPublic)
             _FilterChips(
-              options: [const _Opt(null, 'ALL'), for (final r in _regionsOf(gateway.publicNodes)) _Opt(r, r)],
+              options: [
+                const _Opt(null, 'ALL'),
+                for (final r in _regionsOf(gateway.publicNodes)) _Opt(r, r),
+              ],
               selected: _pubRegion,
               onSelect: (v) => setState(() => _pubRegion = v),
             )
           else ...[
+            if (activeOrg != null)
+              _OrganizationSwitcher(
+                organizations: gateway.orgs,
+                selected: activeOrg,
+                nodeCount: privateWorkspaceNodes.length,
+                onSelect: _selectPrivateWorkspace,
+              ),
             _FilterChips(
               options: const [
                 _Opt(null, 'ALL TYPES'),
@@ -223,17 +260,11 @@ class _ServerSheetState extends State<_ServerSheet> {
               selected: _privType,
               onSelect: (v) => setState(() => _privType = v),
             ),
-            if (gateway.orgs.length > 1)
-              _FilterChips(
-                options: [
-                  const _Opt(null, 'ALL WORKSPACES'),
-                  for (final o in gateway.orgs) _Opt(o.slug, o.name.toUpperCase()),
-                ],
-                selected: _privWorkspace,
-                onSelect: (v) => setState(() => _privWorkspace = v),
-              ),
             _FilterChips(
-              options: [const _Opt(null, 'ALL REGIONS'), for (final r in _regionsOf(gateway.orgNodes)) _Opt(r, r)],
+              options: [
+                const _Opt(null, 'ALL REGIONS'),
+                for (final r in _regionsOf(privateWorkspaceNodes)) _Opt(r, r),
+              ],
               selected: _privRegion,
               onSelect: (v) => setState(() => _privRegion = v),
             ),
@@ -244,13 +275,9 @@ class _ServerSheetState extends State<_ServerSheet> {
                 ? _emptyState(gateway: gateway, isPublic: isPublic, err: err)
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(18, 4, 18, 28),
-                    itemCount: items.length,
+                    itemCount: nodeList.length,
                     itemBuilder: (_, i) {
-                      final item = items[i];
-                      if (item is _OrgHeader) {
-                        return _OrgSectionHeader(header: item);
-                      }
-                      final node = item as VpnNode;
+                      final node = nodeList[i];
                       final selected = vpn.selectedNode.value?.id == node.id;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
@@ -271,19 +298,26 @@ class _ServerSheetState extends State<_ServerSheet> {
     });
   }
 
-  Widget _emptyState({required GatewayController gateway, required bool isPublic, required String? err}) {
+  Widget _emptyState({
+    required GatewayController gateway,
+    required bool isPublic,
+    required String? err,
+  }) {
     if (!isPublic) {
       if (gateway.orgs.isEmpty) {
         return const NodesEmptyPanel(
           title: 'No private nodes',
-          subtitle: "You're not in any organization yet. Private nodes appear here once you own or "
+          subtitle:
+              "You're not in any organization yet. Private nodes appear here once you own or "
               'join an org that has enrolled nodes.',
         );
       }
-      if (gateway.orgNodes.isEmpty) {
-        return const NodesEmptyPanel(
-          title: 'No nodes in your organizations',
-          subtitle: 'The workspace owner or a manager can enroll a Standard, Shield or Sentinel node — it will show up here.',
+      final activeOrg = _effectivePrivateOrg(gateway);
+      if (_privateWorkspaceNodes(gateway).isEmpty) {
+        return NodesEmptyPanel(
+          title: 'No nodes in ${activeOrg?.name ?? 'this organization'}',
+          subtitle:
+              'The workspace owner or a manager can enroll a Standard, Shield or Sentinel node — it will show up here.',
         );
       }
       return NodesEmptyPanel(
@@ -305,9 +339,15 @@ class _ServerSheetState extends State<_ServerSheet> {
         onRetry: () => setState(() => _pubRegion = null),
       );
     }
-    if (gateway.loading.value) return NodesEmptyPanel.registryEmpty(loading: true);
+    if (gateway.loading.value) {
+      return NodesEmptyPanel.registryEmpty(loading: true);
+    }
     if (err != null && err.isNotEmpty) {
-      return NodesEmptyPanel.registryError(message: err, gatewayUrl: gateway.gatewayUrl.value, onRetry: _refresh);
+      return NodesEmptyPanel.registryError(
+        message: err,
+        gatewayUrl: gateway.gatewayUrl.value,
+        onRetry: _refresh,
+      );
     }
     return NodesEmptyPanel.registryEmpty(onRetry: _refresh);
   }
@@ -323,7 +363,11 @@ class _ServerSheetState extends State<_ServerSheet> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.subtitle, required this.onClose, required this.onRefresh});
+  const _Header({
+    required this.subtitle,
+    required this.onClose,
+    required this.onRefresh,
+  });
   final String subtitle;
   final VoidCallback onClose;
   final Future<void> Function() onRefresh;
@@ -338,10 +382,20 @@ class _Header extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Select node', style: grotesk(size: 18, weight: FontWeight.w600)),
+              Text(
+                'Select node',
+                style: grotesk(size: 18, weight: FontWeight.w600),
+              ),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textMuted, letterSpacing: 11 * 0.04)),
+              Text(
+                subtitle,
+                style: mono(
+                  size: 11,
+                  weight: FontWeight.w400,
+                  color: AppColors.textMuted,
+                  letterSpacing: 11 * 0.04,
+                ),
+              ),
             ],
           ),
           const Spacer(),
@@ -353,9 +407,18 @@ class _Header extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: busy
                     ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
-                    : const Icon(Icons.refresh, size: 20, color: AppColors.textSecondary),
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.accent,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.refresh,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
               ),
             );
           }),
@@ -367,7 +430,12 @@ class _Header extends StatelessWidget {
 }
 
 class _TabButton extends StatelessWidget {
-  const _TabButton({required this.label, required this.icon, required this.active, required this.onTap});
+  const _TabButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
   final String label;
   final IconData icon;
   final bool active;
@@ -380,21 +448,34 @@ class _TabButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 11),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: active ? AppColors.accent.withValues(alpha: 0.16) : AppColors.surface2,
+          color: active
+              ? AppColors.accent.withValues(alpha: 0.16)
+              : AppColors.surface2,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.stroke),
+          border: Border.all(
+            color: active
+                ? AppColors.accent.withValues(alpha: 0.5)
+                : AppColors.stroke,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: active ? AppColors.accent : AppColors.textTertiary),
+            Icon(
+              icon,
+              size: 15,
+              color: active ? AppColors.accent : AppColors.textTertiary,
+            ),
             const SizedBox(width: 8),
-            Text(label,
-                style: mono(
-                    size: 12,
-                    weight: FontWeight.w600,
-                    color: active ? AppColors.accent : AppColors.textTertiary,
-                    letterSpacing: 12 * 0.05)),
+            Text(
+              label,
+              style: mono(
+                size: 12,
+                weight: FontWeight.w600,
+                color: active ? AppColors.accent : AppColors.textTertiary,
+                letterSpacing: 12 * 0.05,
+              ),
+            ),
           ],
         ),
       ),
@@ -410,7 +491,11 @@ class _Opt {
 }
 
 class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.options, required this.selected, required this.onSelect});
+  const _FilterChips({
+    required this.options,
+    required this.selected,
+    required this.onSelect,
+  });
   final List<_Opt> options;
   final String? selected;
   final ValueChanged<String?> onSelect;
@@ -426,7 +511,11 @@ class _FilterChips extends StatelessWidget {
             for (final o in options)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: _Chip(label: o.label, active: selected == o.value, onTap: () => onSelect(o.value)),
+                child: _Chip(
+                  label: o.label,
+                  active: selected == o.value,
+                  onTap: () => onSelect(o.value),
+                ),
               ),
           ],
         ),
@@ -447,54 +536,163 @@ class _Chip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? AppColors.accent.withValues(alpha: 0.16) : Colors.transparent,
+          color: active
+              ? AppColors.accent.withValues(alpha: 0.16)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.5) : AppColors.strokeHi),
+          border: Border.all(
+            color: active
+                ? AppColors.accent.withValues(alpha: 0.5)
+                : AppColors.strokeHi,
+          ),
         ),
-        child: Text(label,
-            style: mono(
-                size: 11,
-                weight: FontWeight.w500,
-                color: active ? AppColors.accent : AppColors.textTertiary,
-                letterSpacing: 11 * 0.04)),
+        child: Text(
+          label,
+          style: mono(
+            size: 11,
+            weight: FontWeight.w500,
+            color: active ? AppColors.accent : AppColors.textTertiary,
+            letterSpacing: 11 * 0.04,
+          ),
+        ),
       ),
     );
   }
 }
 
-class _OrgHeader {
-  const _OrgHeader({required this.name, required this.count, required this.verified});
-  final String name;
-  final int count;
-  final bool verified;
-}
+class _OrganizationSwitcher extends StatelessWidget {
+  const _OrganizationSwitcher({
+    required this.organizations,
+    required this.selected,
+    required this.nodeCount,
+    required this.onSelect,
+  });
 
-class _OrgSectionHeader extends StatelessWidget {
-  const _OrgSectionHeader({required this.header});
-  final _OrgHeader header;
+  final List<VpnOrg> organizations;
+  final VpnOrg selected;
+  final int nodeCount;
+  final ValueChanged<String> onSelect;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
-      child: Row(
-        children: [
-          const Icon(Icons.apartment_rounded, size: 13, color: AppColors.textTertiary),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(header.name.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: mono(size: 11, weight: FontWeight.w600, color: AppColors.textSecondary, letterSpacing: 11 * 0.06)),
-          ),
-          if (header.verified) ...[
-            const SizedBox(width: 5),
-            const Icon(Icons.verified, size: 12, color: AppColors.accent),
-          ],
-          const SizedBox(width: 8),
-          Text('${header.count}', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted)),
-          const SizedBox(width: 10),
-          Expanded(child: Container(height: 1, color: AppColors.stroke)),
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 10),
+      child: PopupMenuButton<String>(
+        onSelected: onSelect,
+        color: AppColors.surface2,
+        surfaceTintColor: Colors.transparent,
+        position: PopupMenuPosition.under,
+        constraints: const BoxConstraints(minWidth: 240, maxWidth: 340),
+        itemBuilder: (_) => [
+          for (final org in organizations)
+            PopupMenuItem<String>(
+              value: org.slug,
+              child: Row(
+                children: [
+                  Icon(
+                    org.slug == selected.slug
+                        ? Icons.check_circle_rounded
+                        : Icons.apartment_rounded,
+                    size: 17,
+                    color: org.slug == selected.slug
+                        ? AppColors.accent
+                        : AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      org.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: grotesk(size: 13.5, weight: FontWeight.w600),
+                    ),
+                  ),
+                  if (org.verified)
+                    const Icon(
+                      Icons.verified,
+                      size: 14,
+                      color: AppColors.accent,
+                    ),
+                ],
+              ),
+            ),
         ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: AppColors.strokeHi),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.apartment_rounded,
+                  size: 18,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ORGANIZATION',
+                      style: mono(
+                        size: 9.5,
+                        weight: FontWeight.w500,
+                        color: AppColors.textMuted,
+                        letterSpacing: 9.5 * 0.08,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            selected.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: grotesk(size: 14, weight: FontWeight.w600),
+                          ),
+                        ),
+                        if (selected.verified) ...[
+                          const SizedBox(width: 5),
+                          const Icon(
+                            Icons.verified,
+                            size: 13,
+                            color: AppColors.accent,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '$nodeCount ${nodeCount == 1 ? 'NODE' : 'NODES'}',
+                style: mono(size: 10, color: AppColors.textMuted),
+              ),
+              if (organizations.length > 1) ...[
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.unfold_more_rounded,
+                  size: 18,
+                  color: AppColors.accent,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -529,11 +727,20 @@ class _NodeRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: selected ? AppColors.accent.withValues(alpha: 0.08) : AppColors.surface2,
+          color: selected
+              ? AppColors.accent.withValues(alpha: 0.08)
+              : AppColors.surface2,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? AppColors.accent.withValues(alpha: 0.55) : AppColors.stroke),
+          border: Border.all(
+            color: selected
+                ? AppColors.accent.withValues(alpha: 0.55)
+                : AppColors.stroke,
+          ),
         ),
-        child: NodeCompactRow(display: d, metrics: NodeMetricsColumn(display: d, probing: probing)),
+        child: NodeCompactRow(
+          display: d,
+          metrics: NodeMetricsColumn(display: d, probing: probing),
+        ),
       ),
     );
   }

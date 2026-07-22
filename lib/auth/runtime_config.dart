@@ -15,6 +15,14 @@ class RuntimeConfig {
 
   static bool get hasReownProjectId => reownProjectId.isNotEmpty;
 
+  /// Google web/server client whose audience the gateway validates. A
+  /// compile-time override wins, followed by `.env`, then production default.
+  static String get googleServerClientId => _firstNonEmpty([
+    kGoogleServerClientId,
+    _values['GOOGLE_SERVER_CLIENT_ID'],
+    kDefaultGoogleServerClientId,
+  ]);
+
   static String get gatewayUrl => _values['GATEWAY_URL'] ?? '';
 
   /// Erebrus webapp origin for desktop browser sign-in (`.env` may use localhost).
@@ -32,10 +40,12 @@ class RuntimeConfig {
   }
 
   /// WalletConnect / Reown metadata `url`.
-  static String get erebrusSiteUrl => erebrusSiteUrlFromOrigin(erebrusWalletOrigin);
+  static String get erebrusSiteUrl =>
+      erebrusSiteUrlFromOrigin(erebrusWalletOrigin);
 
   /// Reown modal + WalletConnect pairing icon (`{origin}/vpn/logo.png`).
-  static String get erebrusSiteIcon => erebrusSiteIconFromOrigin(erebrusWalletOrigin);
+  static String get erebrusSiteIcon =>
+      erebrusSiteIconFromOrigin(erebrusWalletOrigin);
 
   /// MWA authorize identity URI (`{origin}/vpn/` + relative `logo.png`).
   static String get erebrusMwaIdentityUrl =>
@@ -54,13 +64,10 @@ class RuntimeConfig {
   }
 
   static Future<void> load() async {
+    await _loadDotEnvAsset('.env');
     if (kReownProjectId.isNotEmpty) {
       debugPrint('[Config] REOWN_PROJECT_ID from --dart-define');
-      return;
-    }
-    await _loadDotEnvAsset('.env');
-    final reown = _values['REOWN_PROJECT_ID'];
-    if (reown != null && reown.isNotEmpty) {
+    } else if ((_values['REOWN_PROJECT_ID'] ?? '').isNotEmpty) {
       debugPrint('[Config] REOWN_PROJECT_ID loaded from bundled env');
     } else {
       debugPrint('[Config] REOWN_PROJECT_ID missing — add to .env and rebuild');

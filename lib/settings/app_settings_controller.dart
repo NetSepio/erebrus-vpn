@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../platform/platform_capabilities.dart';
 import '../vpn/vpn_controller.dart';
 import '../vpn/vpn_models.dart';
+import '../vpn/singbox_engine.dart';
 import 'split_tunnel_config.dart';
 
 /// Persisted user preferences (protocol default, kill switch, diagnostics).
@@ -37,7 +38,8 @@ class AppSettingsController extends GetxController {
 
   final diagnosticsStatus = RxnString();
 
-  RxList<String> get splitTunnelActivePackages => switch (splitTunnelMode.value) {
+  RxList<String> get splitTunnelActivePackages =>
+      switch (splitTunnelMode.value) {
         SplitTunnelMode.include => splitTunnelIncludePackages,
         SplitTunnelMode.exclude => splitTunnelExcludePackages,
       };
@@ -57,8 +59,11 @@ class AppSettingsController extends GetxController {
     dnsResolver.value = prefs.getString(_kDnsResolver) ?? 'system';
     onboardingSeen.value = prefs.getBool(_kOnboardingSeen) ?? false;
     splitTunnelEnabled.value = prefs.getBool(_kSplitTunnelEnabled) ?? false;
-    splitTunnelMode.value = SplitTunnelMode.fromName(prefs.getString(_kSplitTunnelMode));
-    splitTunnelIncludePackages.value = prefs.getStringList(_kSplitTunnelInclude) ?? [];
+    splitTunnelMode.value = SplitTunnelMode.fromName(
+      prefs.getString(_kSplitTunnelMode),
+    );
+    splitTunnelIncludePackages.value =
+        prefs.getStringList(_kSplitTunnelInclude) ?? [];
     var excluded = prefs.getStringList(_kSplitTunnelExclude) ?? [];
     if (excluded.isEmpty) {
       excluded = prefs.getStringList(_kSplitTunnelExcludedLegacy) ?? [];
@@ -68,7 +73,12 @@ class AppSettingsController extends GetxController {
     if (Get.isRegistered<VpnController>()) {
       Get.find<VpnController>().setMode(defaultProtocol.value);
     }
-    debugPrint('[Settings] loaded default=${defaultProtocol.value.label} killSwitch=${killSwitchEnabled.value}');
+    if (PlatformCapabilities.isIOS && autoConnectOnLaunch.value) {
+      await SingboxEngine.instance.setOnDemandEnabled(true);
+    }
+    debugPrint(
+      '[Settings] loaded default=${defaultProtocol.value.label} killSwitch=${killSwitchEnabled.value}',
+    );
   }
 
   Future<void> setDefaultProtocol(ConnectMode mode) async {
@@ -91,6 +101,9 @@ class AppSettingsController extends GetxController {
     autoConnectOnLaunch.value = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAutoConnect, value);
+    if (PlatformCapabilities.isIOS) {
+      await SingboxEngine.instance.setOnDemandEnabled(value);
+    }
   }
 
   Future<void> setSplitTunnelEnabled(bool value) async {
@@ -133,7 +146,8 @@ class AppSettingsController extends GetxController {
   }
 
   SplitTunnelConfig activeSplitTunnelConfig() {
-    if (!PlatformCapabilities.supportsSplitTunnel || !splitTunnelEnabled.value) {
+    if (!PlatformCapabilities.supportsSplitTunnel ||
+        !splitTunnelEnabled.value) {
       return const SplitTunnelConfig();
     }
     return SplitTunnelConfig(
@@ -199,10 +213,7 @@ class AppSettingsController extends GetxController {
         'vpn_stage': v.stage.value.name,
         'active_transport': v.activeTransport.value?.name,
         'kill_switch': v.killSwitchBlocking.value,
-        if (node != null) ...{
-          'node_id': node.id,
-          'node_region': node.region,
-        },
+        if (node != null) ...{'node_id': node.id, 'node_region': node.region},
       },
     };
     debugPrint('[Diagnostics] mock upload: $payload');
@@ -218,8 +229,8 @@ class AppSettingsController extends GetxController {
   }
 
   static ConnectMode _parseMode(String? raw) => switch (raw) {
-        'stealth' => ConnectMode.stealth,
-        'wireguard' => ConnectMode.wireguard,
-        _ => ConnectMode.auto,
-      };
+    'stealth' => ConnectMode.stealth,
+    'wireguard' => ConnectMode.wireguard,
+    _ => ConnectMode.auto,
+  };
 }

@@ -332,19 +332,22 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
 
         when {
             enabled && mode == "include" && packages.isNotEmpty() -> {
+                // Erebrus itself must remain in the tunnel so its WebView and
+                // HTTP clients use the VPN even when only selected apps are included.
+                runCatching { builder.addAllowedApplication(packageName) }
                 for (pkg in packages) {
                     runCatching { builder.addAllowedApplication(pkg) }
                 }
             }
             enabled && mode == "exclude" -> {
-                runCatching { builder.addDisallowedApplication(packageName) }
                 for (pkg in packages) {
                     runCatching { builder.addDisallowedApplication(pkg) }
                 }
             }
             else -> {
-                // Default: all apps through VPN except Erebrus (WireGuard must not loop).
-                runCatching { builder.addDisallowedApplication(packageName) }
+                // No app filter: all apps, including Erebrus WebView, use the TUN.
+                // sing-box carrier sockets avoid recursion via protect(fd) in
+                // autoDetectInterfaceControl().
             }
         }
     }

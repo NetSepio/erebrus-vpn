@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../platform/platform_capabilities.dart';
 import '../../auth/gateway_auth_client.dart';
@@ -32,7 +33,20 @@ String _formatChainLabel(String chain) {
 
 String _formatMemberSinceLabel(DateTime? createdAt) {
   if (createdAt == null) return '—';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   return '${months[createdAt.month - 1]} ${createdAt.year}';
 }
 
@@ -47,9 +61,12 @@ class SettingsView extends StatefulWidget {
 }
 
 class _SettingsViewState extends State<SettingsView> {
+  String _appVersion = '';
+
   @override
   void initState() {
     super.initState();
+    _loadAppVersion();
     final auth = Get.find<WalletAuthController>();
     if (auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,6 +74,16 @@ class _SettingsViewState extends State<SettingsView> {
         auth.refreshReferrals();
         Get.find<GatewayController>().refreshNodes();
       });
+    }
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = info.version);
+    } catch (_) {
+      // The footer can gracefully show only the publisher when platform
+      // package metadata is unavailable (for example, in widget previews).
     }
   }
 
@@ -78,46 +105,68 @@ class _SettingsViewState extends State<SettingsView> {
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 26),
           children: [
-            Text('Settings', style: grotesk(size: 24, weight: FontWeight.w600, letterSpacing: -0.48)),
+            Text(
+              'Settings',
+              style: grotesk(
+                size: 24,
+                weight: FontWeight.w600,
+                letterSpacing: -0.48,
+              ),
+            ),
             const SizedBox(height: 18),
 
-            Obx(() => auth.isAuthenticated
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // profile
-                      Obx(() => _ProfileCard(
+            Obx(
+              () => auth.isAuthenticated
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // profile
+                        Obx(
+                          () => _ProfileCard(
                             walletAddress: auth.walletAddress.value,
                             authMethod: auth.authMethod.value,
                             displayName: auth.profileName.value,
                             chain: auth.profileChain.value,
                             email: auth.profileEmail.value,
-                          )),
-                      const SizedBox(height: 14),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
 
-                      // subscription
-                      _SubscriptionCard(auth: auth),
-                      const SizedBox(height: 22),
+                        // subscription
+                        _SubscriptionCard(auth: auth),
+                        const SizedBox(height: 22),
 
-                      // account
-                      const SectionLabel('ACCOUNT'),
-                      const SizedBox(height: 9),
-                      _GroupCard(children: [
+                        // account
+                        const SectionLabel('ACCOUNT'),
+                        const SizedBox(height: 9),
+                        _GroupCard(
+                          children: [
                             _EmailRow(auth: auth),
                             _RowDivider(),
-                            Obx(() => _GroupRow(
-                                  icon: Icons.edit_outlined,
-                                  title: 'Display name',
-                                  subtitle: auth.profileName.value.isEmpty ? 'Set a display name' : auth.profileName.value,
-                                  onTap: () => showEditProfileSheet(context, auth),
-                                  trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                                )),
+                            Obx(
+                              () => _GroupRow(
+                                icon: Icons.edit_outlined,
+                                title: 'Display name',
+                                subtitle: auth.profileName.value.isEmpty
+                                    ? 'Set a display name'
+                                    : auth.profileName.value,
+                                onTap: () =>
+                                    showEditProfileSheet(context, auth),
+                                trailing: const Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
                             _RowDivider(),
                             _GroupRow(
                               icon: Icons.calendar_today_outlined,
                               title: 'Member since',
-                              subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
+                              subtitle: _formatMemberSinceLabel(
+                                auth.profileCreatedAt.value,
+                              ),
                             ),
                             _RowDivider(),
                             _GroupRow(
@@ -125,194 +174,279 @@ class _SettingsViewState extends State<SettingsView> {
                               title: 'Request account deletion',
                               titleColor: AppColors.danger,
                               iconColor: AppColors.danger,
-                              onTap: () => showDeleteAccountSheet(context, auth),
+                              onTap: () =>
+                                  showDeleteAccountSheet(context, auth),
                             ),
-                          ]),
-                      const SizedBox(height: 18),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
 
-                      // referrals — mirrors the webapp profile "Invite friends" card
-                      _ReferralSection(auth: auth),
+                        // referrals — mirrors the webapp profile "Invite friends" card
+                        _ReferralSection(auth: auth),
 
-                      // organizations
-                      const SectionLabel('ORGANIZATIONS'),
-                      const SizedBox(height: 9),
-                      Obx(() => _GroupCard(children: [
-                            _GroupRow(
-                              icon: Icons.business_outlined,
-                              title: 'Organizations',
-                              subtitle: 'Manage workspaces and invites',
-                              onTap: () => showOrganizationsSheet(context, auth),
-                              trailing: (gateway?.orgs.isNotEmpty ?? false)
-                                  ? Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.accent.withValues(alpha: 0.16),
-                                        borderRadius: BorderRadius.circular(7),
-                                      ),
-                                      child: Text(
-                                        '${gateway?.orgs.length ?? 0}',
-                                        style: mono(size: 11, weight: FontWeight.w600, color: AppColors.accent),
-                                      ),
-                                    )
-                                  : const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                            ),
-                            if (auth.accountOrgInvites.isNotEmpty) ...[
-                              _RowDivider(),
+                        // organizations
+                        const SectionLabel('ORGANIZATIONS'),
+                        const SizedBox(height: 9),
+                        Obx(
+                          () => _GroupCard(
+                            children: [
                               _GroupRow(
-                                icon: Icons.mail_outline,
-                                title: 'Pending invites',
-                                subtitle: '${auth.accountOrgInvites.length} invitation${auth.accountOrgInvites.length == 1 ? '' : 's'}',
-                                onTap: () => showOrganizationsSheet(context, auth),
-                                trailing: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.accent,
-                                    shape: BoxShape.circle,
+                                icon: Icons.business_outlined,
+                                title: 'Organizations',
+                                subtitle: 'Manage workspaces and invites',
+                                onTap: () =>
+                                    showOrganizationsSheet(context, auth),
+                                trailing: (gateway?.orgs.isNotEmpty ?? false)
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent.withValues(
+                                            alpha: 0.16,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            7,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${gateway?.orgs.length ?? 0}',
+                                          style: mono(
+                                            size: 11,
+                                            weight: FontWeight.w600,
+                                            color: AppColors.accent,
+                                          ),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.chevron_right,
+                                        size: 18,
+                                        color: AppColors.textSecondary,
+                                      ),
+                              ),
+                              if (auth.accountOrgInvites.isNotEmpty) ...[
+                                _RowDivider(),
+                                _GroupRow(
+                                  icon: Icons.mail_outline,
+                                  title: 'Pending invites',
+                                  subtitle:
+                                      '${auth.accountOrgInvites.length} invitation${auth.accountOrgInvites.length == 1 ? '' : 's'}',
+                                  onTap: () =>
+                                      showOrganizationsSheet(context, auth),
+                                  trailing: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.accent,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ])),
-                      const SizedBox(height: 18),
-                    ],
-                  )
-                : const _GuestSignInCard()),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+                    )
+                  : const _GuestSignInCard(),
+            ),
             const SizedBox(height: 18),
 
             // vpn & security
             const SectionLabel('VPN & SECURITY'),
             const SizedBox(height: 9),
-            _GroupCard(children: [
-                  Obx(() => _GroupRow(
-                        icon: Icons.shield_outlined,
-                        title: 'Default protocol',
-                        subtitle: settings.defaultProtocol.value.blurb,
-                        onTap: () => _pickProtocol(context, settings, vpn),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(settings.defaultProtocol.value.label.toUpperCase(),
-                                style: mono(size: 12, weight: FontWeight.w500, color: AppColors.textTertiary)),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                          ],
+            _GroupCard(
+              children: [
+                Obx(
+                  () => _GroupRow(
+                    icon: Icons.shield_outlined,
+                    title: 'Default protocol',
+                    subtitle: settings.defaultProtocol.value.blurb,
+                    onTap: () => _pickProtocol(context, settings, vpn),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          settings.defaultProtocol.value.label.toUpperCase(),
+                          style: mono(
+                            size: 12,
+                            weight: FontWeight.w500,
+                            color: AppColors.textTertiary,
+                          ),
                         ),
-                      )),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.power_settings_new,
-                    title: 'Auto-connect',
-                    subtitle: 'Connect to your last server when the app opens',
-                    trailing: Obx(() => EreToggle(value: settings.autoConnectOnLaunch.value, onChanged: settings.setAutoConnect)),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
                   ),
-                  _RowDivider(),
-                  _GroupRow(
-                    icon: Icons.lock_outline,
-                    title: 'Kill switch',
-                    subtitle: 'Block internet if the VPN drops unexpectedly',
-                    trailing: Obx(() => EreToggle(value: settings.killSwitchEnabled.value, onChanged: settings.setKillSwitch)),
+                ),
+                _RowDivider(),
+                _GroupRow(
+                  icon: Icons.power_settings_new,
+                  title: 'Auto-connect',
+                  subtitle: PlatformCapabilities.isIOS
+                      ? 'Reconnect on demand when your network changes'
+                      : 'Connect to your last server when the app opens',
+                  trailing: Obx(
+                    () => EreToggle(
+                      value: settings.autoConnectOnLaunch.value,
+                      onChanged: settings.setAutoConnect,
+                    ),
                   ),
+                ),
+                _RowDivider(),
+                _GroupRow(
+                  icon: Icons.lock_outline,
+                  title: 'Kill switch',
+                  subtitle: 'Block internet if the VPN drops unexpectedly',
+                  trailing: Obx(
+                    () => EreToggle(
+                      value: settings.killSwitchEnabled.value,
+                      onChanged: settings.setKillSwitch,
+                    ),
+                  ),
+                ),
+                _RowDivider(),
+                Obx(
+                  () => _GroupRow(
+                    icon: Icons.dns_outlined,
+                    title: 'DNS resolver',
+                    subtitle: settings.dnsResolverLabel,
+                    onTap: () => _pickDnsResolver(context, settings),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                if (PlatformCapabilities.supportsSplitTunnel) ...[
                   _RowDivider(),
-                  Obx(() => _GroupRow(
-                        icon: Icons.dns_outlined,
-                        title: 'DNS resolver',
-                        subtitle: settings.dnsResolverLabel,
-                        onTap: () => _pickDnsResolver(context, settings),
-                        trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                      )),
-                  if (PlatformCapabilities.supportsSplitTunnel) ...[
-                    _RowDivider(),
-                    Obx(() {
-                      final enabled = settings.splitTunnelEnabled.value;
-                      final mode = settings.splitTunnelMode.value;
-                      final count = settings.splitTunnelActivePackages.length;
-                      final subtitle = enabled
-                          ? mode.settingsSubtitle(count)
-                          : 'Per-app VPN routing';
-                      return _GroupRow(
-                        icon: Icons.alt_route,
-                        title: 'Split tunneling',
-                        subtitle: subtitle,
-                        onTap: () => showSplitTunnelSheet(context, settings),
-                        trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-                      );
-                    }),
-                  ],
-                ]),
+                  Obx(() {
+                    final enabled = settings.splitTunnelEnabled.value;
+                    final mode = settings.splitTunnelMode.value;
+                    final count = settings.splitTunnelActivePackages.length;
+                    final subtitle = enabled
+                        ? mode.settingsSubtitle(count)
+                        : 'Per-app VPN routing';
+                    return _GroupRow(
+                      icon: Icons.alt_route,
+                      title: 'Split tunneling',
+                      subtitle: subtitle,
+                      onTap: () => showSplitTunnelSheet(context, settings),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
             const SizedBox(height: 18),
 
             // about
             const SectionLabel('ABOUT'),
             const SizedBox(height: 9),
-            _GroupCard(children: [
-              _GroupRow(
-                title: 'About',
-                onTap: () => Get.to(() => const AboutView()),
-                trailing: const Icon(Icons.chevron_right, size: 18, color: AppColors.textSecondary),
-              ),
-            ]),
+            _GroupCard(
+              children: [
+                _GroupRow(
+                  title: 'About',
+                  onTap: () => Get.to(() => const AboutView()),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 22),
 
-            // log out / sign in
-            Obx(() => auth.isAuthenticated
-                ? GestureDetector(
-                    onTap: auth.signOut,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.danger.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(13),
-                        border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                      ),
-                      child: Text('Log out', style: grotesk(size: 14, weight: FontWeight.w600, color: AppColors.danger)),
+            // The guest CTA already lives in [_GuestSignInCard]. Keep only the
+            // authenticated sign-out action here, matching Erebrus Drop.
+            Obx(() {
+              if (!auth.isAuthenticated) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: auth.signOut,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: AppColors.danger.withValues(alpha: 0.3),
                     ),
-                  )
-                : GestureDetector(
-                    onTap: () => Get.to(() => const LoginView()),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(13),
-                      ),
-                      child: Text('SIGN IN / REGISTER',
-                          style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+                  ),
+                  child: Text(
+                    'Log out',
+                    style: grotesk(
+                      size: 14,
+                      weight: FontWeight.w600,
+                      color: AppColors.danger,
                     ),
-                  )),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+            _SettingsFooter(version: _appVersion),
           ],
         ),
       ),
     );
   }
 
-  void _pickProtocol(BuildContext context, AppSettingsController settings, VpnController vpn) {
+  void _pickProtocol(
+    BuildContext context,
+    AppSettingsController settings,
+    VpnController vpn,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.raised,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
       ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: ConnectMode.values.map((m) {
-            return Obx(() => ListTile(
-                  title: Text(m.label, style: grotesk(size: 15, weight: FontWeight.w600)),
-                  subtitle: Text(m.blurb, style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textMuted)),
-                  trailing: settings.defaultProtocol.value == m
-                      ? const Icon(Icons.check, color: AppColors.accent)
-                      : null,
-                  onTap: () {
-                    settings.setDefaultProtocol(m);
-                    vpn.setMode(m);
-                    Navigator.pop(context);
-                  },
-                ));
+            return Obx(
+              () => ListTile(
+                title: Text(
+                  m.label,
+                  style: grotesk(size: 15, weight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  m.blurb,
+                  style: grotesk(
+                    size: 12.5,
+                    weight: FontWeight.w400,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                trailing: settings.defaultProtocol.value == m
+                    ? const Icon(Icons.check, color: AppColors.accent)
+                    : null,
+                onTap: () {
+                  settings.setDefaultProtocol(m);
+                  vpn.setMode(m);
+                  Navigator.pop(context);
+                },
+              ),
+            );
           }).toList(),
         ),
       ),
@@ -344,7 +478,9 @@ class _SettingsViewState extends State<SettingsView> {
       isScrollControlled: true,
       backgroundColor: AppColors.raised,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => SafeArea(
@@ -354,9 +490,19 @@ class _SettingsViewState extends State<SettingsView> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('DNS resolver', style: grotesk(size: 18, weight: FontWeight.w600)),
+                Text(
+                  'DNS resolver',
+                  style: grotesk(size: 18, weight: FontWeight.w600),
+                ),
                 const SizedBox(height: 4),
-                Text('Fallback used when system DNS fails', style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.textMuted)),
+                Text(
+                  'Fallback used when system DNS fails',
+                  style: grotesk(
+                    size: 12,
+                    weight: FontWeight.w400,
+                    color: AppColors.textMuted,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 RadioGroup<String>(
                   groupValue: selected,
@@ -367,16 +513,24 @@ class _SettingsViewState extends State<SettingsView> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: options.entries
-                        .map((e) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              leading: Radio<String>(
-                                value: e.key,
-                                activeColor: AppColors.accent,
+                        .map(
+                          (e) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            leading: Radio<String>(
+                              value: e.key,
+                              activeColor: AppColors.accent,
+                            ),
+                            title: Text(
+                              e.value,
+                              style: grotesk(
+                                size: 14.5,
+                                weight: FontWeight.w500,
                               ),
-                              title: Text(e.value, style: grotesk(size: 14.5, weight: FontWeight.w500)),
-                              onTap: () => setSheetState(() => selected = e.key),
-                            ))
+                            ),
+                            onTap: () => setSheetState(() => selected = e.key),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -389,9 +543,19 @@ class _SettingsViewState extends State<SettingsView> {
                     style: mono(size: 13, weight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: 'https://doh.example.com/dns-query',
-                      hintStyle: mono(size: 13, weight: FontWeight.w400, color: AppColors.textMuted),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.strokeSoft)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      hintStyle: mono(
+                        size: 13,
+                        weight: FontWeight.w400,
+                        color: AppColors.textMuted,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: AppColors.strokeSoft),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -400,7 +564,11 @@ class _SettingsViewState extends State<SettingsView> {
                   onTap: () {
                     final value = selected == 'custom' ? customUrl : selected;
                     if (selected == 'custom' && !value.startsWith('https://')) {
-                      Get.snackbar('Invalid URL', 'Custom resolver must be an https:// URL', snackPosition: SnackPosition.BOTTOM);
+                      Get.snackbar(
+                        'Invalid URL',
+                        'Custom resolver must be an https:// URL',
+                        snackPosition: SnackPosition.BOTTOM,
+                      );
                       return;
                     }
                     settings.setDnsResolver(value);
@@ -410,13 +578,45 @@ class _SettingsViewState extends State<SettingsView> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
-                    child: Text('SAVE', style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'SAVE',
+                      style: mono(
+                        size: 13,
+                        weight: FontWeight.w600,
+                        color: AppColors.onAccent,
+                        letterSpacing: 13 * 0.05,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsFooter extends StatelessWidget {
+  const _SettingsFooter({required this.version});
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = version.isEmpty ? 'NetSepio' : 'v$version · NetSepio';
+    return Center(
+      child: Text(
+        label,
+        style: mono(
+          size: 12,
+          weight: FontWeight.w500,
+          color: AppColors.textMuted,
         ),
       ),
     );
@@ -434,7 +634,10 @@ class _GuestSignInCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.accent.withValues(alpha: 0.14), AppColors.accent.withValues(alpha: 0.04)],
+          colors: [
+            AppColors.accent.withValues(alpha: 0.14),
+            AppColors.accent.withValues(alpha: 0.04),
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
@@ -442,10 +645,20 @@ class _GuestSignInCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Unlock the full network', style: grotesk(size: 15, weight: FontWeight.w600)),
+          Text(
+            'Unlock the full network',
+            style: grotesk(size: 15, weight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
-          Text('Sign in or register to browse nodes, manage subscriptions, and earn rewards.',
-              style: grotesk(size: 12.5, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.4)),
+          Text(
+            'Sign in or register to browse nodes, manage subscriptions, and earn rewards.',
+            style: grotesk(
+              size: 12.5,
+              weight: FontWeight.w400,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: 14),
           GestureDetector(
             onTap: () => Get.to(() => const LoginView()),
@@ -453,9 +666,19 @@ class _GuestSignInCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12),
               alignment: Alignment.center,
-              decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
-              child: Text('SIGN IN / REGISTER',
-                  style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'SIGN IN / REGISTER',
+                style: mono(
+                  size: 13,
+                  weight: FontWeight.w600,
+                  color: AppColors.onAccent,
+                  letterSpacing: 13 * 0.05,
+                ),
+              ),
             ),
           ),
         ],
@@ -487,19 +710,28 @@ class _ProfileCardState extends State<_ProfileCard> {
   String get _short {
     final a = widget.walletAddress;
     if (a.isEmpty) return 'Not connected';
-    return a.length < 10 ? a : '${a.substring(0, 4)}…${a.substring(a.length - 4)}';
+    return a.length < 10
+        ? a
+        : '${a.substring(0, 4)}…${a.substring(a.length - 4)}';
   }
 
   String get _initials {
     final name = widget.displayName.trim();
     if (name.isNotEmpty) {
-      final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+      final parts = name
+          .split(RegExp(r'\s+'))
+          .where((p) => p.isNotEmpty)
+          .toList();
       if (parts.length >= 2) {
         return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
       }
-      return name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
+      return name.length >= 2
+          ? name.substring(0, 2).toUpperCase()
+          : name.toUpperCase();
     }
-    final a = widget.walletAddress.isNotEmpty ? widget.walletAddress : widget.email.trim();
+    final a = widget.walletAddress.isNotEmpty
+        ? widget.walletAddress
+        : widget.email.trim();
     if (a.length < 2) return 'ER';
     return a.substring(0, 2).toUpperCase();
   }
@@ -519,7 +751,9 @@ class _ProfileCardState extends State<_ProfileCard> {
     if (name.isNotEmpty && widget.walletAddress.isNotEmpty) {
       return '${_formatChainLabel(widget.chain)} · $_short';
     }
-    return widget.authMethod.isEmpty ? 'Solana wallet' : 'Signed in · ${widget.authMethod}';
+    return widget.authMethod.isEmpty
+        ? 'Solana wallet'
+        : 'Signed in · ${widget.authMethod}';
   }
 
   void _copy() {
@@ -541,23 +775,41 @@ class _ProfileCardState extends State<_ProfileCard> {
             width: 48,
             height: 48,
             alignment: Alignment.center,
-            decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(14)),
-            child: Text(_initials, style: mono(size: 16, weight: FontWeight.w600, color: AppColors.onAccent)),
+            decoration: BoxDecoration(
+              gradient: AppGradients.brand,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              _initials,
+              style: mono(
+                size: 16,
+                weight: FontWeight.w600,
+                color: AppColors.onAccent,
+              ),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: grotesk(size: 16, weight: FontWeight.w600)),
+                Text(
+                  _title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: grotesk(size: 16, weight: FontWeight.w600),
+                ),
                 const SizedBox(height: 2),
-                Text(_subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textTertiary)),
+                Text(
+                  _subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: mono(
+                    size: 12,
+                    weight: FontWeight.w400,
+                    color: AppColors.textTertiary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -567,9 +819,15 @@ class _ProfileCardState extends State<_ProfileCard> {
               child: Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(10)),
-                child: Icon(_copied ? Icons.check : Icons.copy_outlined,
-                    size: 16, color: _copied ? AppColors.success : AppColors.textSecondary),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _copied ? Icons.check : Icons.copy_outlined,
+                  size: 16,
+                  color: _copied ? AppColors.success : AppColors.textSecondary,
+                ),
               ),
             ),
         ],
@@ -592,7 +850,8 @@ class _SubscriptionCard extends StatelessWidget {
     final entitled = ent.entitled;
     final source = ent.source;
     final days = ent.daysRemaining;
-    final busy = auth.isLoadingEntitlement.value ||
+    final busy =
+        auth.isLoadingEntitlement.value ||
         auth.isStartingTrial.value ||
         auth.isRefreshingNft.value;
 
@@ -607,12 +866,15 @@ class _SubscriptionCard extends StatelessWidget {
     final sub = busy
         ? 'Checking subscription…'
         : entitled
-            ? (days != null ? '$days of $kTrialPeriodDays days remaining' : 'Active')
-            : ent.trialConsumed
-                ? 'Trial ended — verify your gating NFT or renew on erebrus.io'
-                : 'Start a free $kTrialPeriodDays-day trial to connect';
-    final progress =
-        entitled && days != null ? (days / kTrialPeriodDays).clamp(0.0, 1.0) : 0.0;
+        ? (days != null
+              ? '$days of $kTrialPeriodDays days remaining'
+              : 'Active')
+        : ent.trialConsumed
+        ? 'Trial ended — verify your gating NFT or renew on erebrus.io'
+        : 'Start a free $kTrialPeriodDays-day trial to connect';
+    final progress = entitled && days != null
+        ? (days / kTrialPeriodDays).clamp(0.0, 1.0)
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -620,7 +882,10 @@ class _SubscriptionCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.accent.withValues(alpha: 0.14), AppColors.accent.withValues(alpha: 0.04)],
+          colors: [
+            AppColors.accent.withValues(alpha: 0.14),
+            AppColors.accent.withValues(alpha: 0.04),
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
@@ -632,11 +897,22 @@ class _SubscriptionCard extends StatelessWidget {
             children: [
               Text(title, style: grotesk(size: 15, weight: FontWeight.w600)),
               const Spacer(),
-              MonoChip(label: badge, color: AppColors.accent, background: AppColors.accent.withValues(alpha: 0.16)),
+              MonoChip(
+                label: badge,
+                color: AppColors.accent,
+                background: AppColors.accent.withValues(alpha: 0.16),
+              ),
             ],
           ),
           const SizedBox(height: 9),
-          Text(sub, style: mono(size: 12, weight: FontWeight.w400, color: AppColors.textSecondary)),
+          Text(
+            sub,
+            style: mono(
+              size: 12,
+              weight: FontWeight.w400,
+              color: AppColors.textSecondary,
+            ),
+          ),
           if (entitled) ...[
             const SizedBox(height: 8),
             ClipRRect(
@@ -658,9 +934,19 @@ class _SubscriptionCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(11)),
-                child: Text(busy ? 'STARTING…' : 'START FREE TRIAL',
-                    style: mono(size: 13, weight: FontWeight.w600, color: AppColors.onAccent, letterSpacing: 13 * 0.05)),
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Text(
+                  busy ? 'STARTING…' : 'START FREE TRIAL',
+                  style: mono(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.onAccent,
+                    letterSpacing: 13 * 0.05,
+                  ),
+                ),
               ),
             ),
           ] else if (ent.nftGatingEnabled) ...[
@@ -674,16 +960,33 @@ class _SubscriptionCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.35),
+                  ),
                 ),
-                child: Text(busy ? 'CHECKING…' : 'VERIFY GATING NFT',
-                    style: mono(size: 13, weight: FontWeight.w600, color: AppColors.accent, letterSpacing: 13 * 0.05)),
+                child: Text(
+                  busy ? 'CHECKING…' : 'VERIFY GATING NFT',
+                  style: mono(
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.accent,
+                    letterSpacing: 13 * 0.05,
+                  ),
+                ),
               ),
             ),
           ],
-          if (auth.entitlementError.value != null && auth.entitlementError.value!.isNotEmpty) ...[
+          if (auth.entitlementError.value != null &&
+              auth.entitlementError.value!.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(auth.entitlementError.value!, style: grotesk(size: 12, weight: FontWeight.w400, color: AppColors.danger)),
+            Text(
+              auth.entitlementError.value!,
+              style: grotesk(
+                size: 12,
+                weight: FontWeight.w400,
+                color: AppColors.danger,
+              ),
+            ),
           ],
         ],
       ),
@@ -700,8 +1003,19 @@ class _DisabledButton extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 11),
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(11)),
-      child: Text(label, style: mono(size: 13, weight: FontWeight.w600, color: AppColors.textMuted, letterSpacing: 13 * 0.05)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Text(
+        label,
+        style: mono(
+          size: 13,
+          weight: FontWeight.w600,
+          color: AppColors.textMuted,
+          letterSpacing: 13 * 0.05,
+        ),
+      ),
     );
   }
 }
@@ -721,7 +1035,8 @@ class _GroupCard extends StatelessWidget {
 
 class _RowDivider extends StatelessWidget {
   @override
-  Widget build(BuildContext context) => Container(height: 1, color: AppColors.strokeSoft);
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: AppColors.strokeSoft);
 }
 
 class _GroupRow extends StatelessWidget {
@@ -751,21 +1066,36 @@ class _GroupRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
         child: Row(
           children: [
-            if (icon != null) ...[Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary), const SizedBox(width: 13)],
+            if (icon != null) ...[
+              Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary),
+              const SizedBox(width: 13),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: grotesk(size: 14.5, weight: FontWeight.w500, color: titleColor ?? AppColors.textPrimary)),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(
+                      size: 14.5,
+                      weight: FontWeight.w500,
+                      color: titleColor ?? AppColors.textPrimary,
+                    ),
+                  ),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
-                    Text(subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: grotesk(size: 11.5, weight: FontWeight.w400, color: AppColors.textMuted)),
+                    Text(
+                      subtitle!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: grotesk(
+                        size: 11.5,
+                        weight: FontWeight.w400,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -812,10 +1142,17 @@ class _ReferralSectionState extends State<_ReferralSection> {
     try {
       await widget.auth.redeemReferralCode(code);
       _codeCtrl.clear();
-      Get.snackbar('Invite code applied', 'You both earn XP',
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Invite code applied',
+        'You both earn XP',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } on AuthException catch (e) {
-      Get.snackbar('Invite code', e.message, snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Invite code',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     }
   }
 
@@ -842,56 +1179,81 @@ class _ReferralSectionState extends State<_ReferralSection> {
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.25),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Invite friends, earn XP',
-                    style: grotesk(size: 15, weight: FontWeight.w600)),
+                Text(
+                  'Invite friends, earn XP',
+                  style: grotesk(size: 15, weight: FontWeight.w600),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   'Share your code — when a friend joins and starts their trial, '
                   'you both earn XP. Claim XP here for plan upgrades and to extend your free trial.',
                   style: grotesk(
-                      size: 12, weight: FontWeight.w400, color: AppColors.textSecondary, height: 1.45),
+                    size: 12,
+                    weight: FontWeight.w400,
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 11,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.accent.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(sum.code,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: mono(
-                                size: 15,
-                                weight: FontWeight.w600,
-                                color: AppColors.accentHi,
-                                letterSpacing: 15 * 0.12)),
+                        child: Text(
+                          sum.code,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: mono(
+                            size: 15,
+                            weight: FontWeight.w600,
+                            color: AppColors.accentHi,
+                            letterSpacing: 15 * 0.12,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () => _copy(sum.code),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
-                            color: (_copied ? AppColors.success : AppColors.accent)
-                                .withValues(alpha: 0.16),
+                            color:
+                                (_copied ? AppColors.success : AppColors.accent)
+                                    .withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(_copied ? 'COPIED' : 'COPY',
-                              style: mono(
-                                  size: 11,
-                                  weight: FontWeight.w500,
-                                  color: _copied ? AppColors.success : AppColors.accent,
-                                  letterSpacing: 11 * 0.06)),
+                          child: Text(
+                            _copied ? 'COPIED' : 'COPY',
+                            style: mono(
+                              size: 11,
+                              weight: FontWeight.w500,
+                              color: _copied
+                                  ? AppColors.success
+                                  : AppColors.accent,
+                              letterSpacing: 11 * 0.06,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -902,21 +1264,35 @@ class _ReferralSectionState extends State<_ReferralSection> {
                   children: [
                     _ReferralStat(value: sum.referredCount, label: 'invited'),
                     const SizedBox(width: 28),
-                    _ReferralStat(value: sum.qualifiedCount, label: 'qualified'),
+                    _ReferralStat(
+                      value: sum.qualifiedCount,
+                      label: 'qualified',
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Container(height: 1, color: AppColors.strokeSoft),
                 const SizedBox(height: 12),
                 if (sum.referredBy.isNotEmpty)
-                  Text('Invited by ${sum.referredBy}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: mono(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary))
+                  Text(
+                    'Invited by ${sum.referredBy}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: mono(
+                      size: 11,
+                      weight: FontWeight.w400,
+                      color: AppColors.textTertiary,
+                    ),
+                  )
                 else ...[
-                  Text('Were you invited? Enter the code — you both earn XP.',
-                      style: grotesk(
-                          size: 12, weight: FontWeight.w400, color: AppColors.textSecondary)),
+                  Text(
+                    'Were you invited? Enter the code — you both earn XP.',
+                    style: grotesk(
+                      size: 12,
+                      weight: FontWeight.w400,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -927,26 +1303,42 @@ class _ReferralSectionState extends State<_ReferralSection> {
                           autocorrect: false,
                           enableSuggestions: false,
                           onSubmitted: (_) => _redeem(),
-                          style: mono(size: 13, weight: FontWeight.w500, letterSpacing: 13 * 0.1),
-                          decoration: const InputDecoration(hintText: 'Invite code', isDense: true),
+                          style: mono(
+                            size: 13,
+                            weight: FontWeight.w500,
+                            letterSpacing: 13 * 0.1,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: 'Invite code',
+                            isDense: true,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       GestureDetector(
-                        onTap: widget.auth.isRedeemingReferral.value ? null : _redeem,
+                        onTap: widget.auth.isRedeemingReferral.value
+                            ? null
+                            : _redeem,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.accent,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
-                              widget.auth.isRedeemingReferral.value ? 'APPLYING…' : 'APPLY',
-                              style: mono(
-                                  size: 12,
-                                  weight: FontWeight.w600,
-                                  color: AppColors.onAccent,
-                                  letterSpacing: 12 * 0.05)),
+                            widget.auth.isRedeemingReferral.value
+                                ? 'APPLYING…'
+                                : 'APPLY',
+                            style: mono(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: AppColors.onAccent,
+                              letterSpacing: 12 * 0.05,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -973,7 +1365,14 @@ class _ReferralStat extends StatelessWidget {
       children: [
         Text('$value', style: grotesk(size: 18, weight: FontWeight.w700)),
         const SizedBox(height: 1),
-        Text(label, style: grotesk(size: 11, weight: FontWeight.w400, color: AppColors.textMuted)),
+        Text(
+          label,
+          style: grotesk(
+            size: 11,
+            weight: FontWeight.w400,
+            color: AppColors.textMuted,
+          ),
+        ),
       ],
     );
   }
@@ -1000,18 +1399,29 @@ class _EmailRow extends StatelessWidget {
     return _GroupRow(
       icon: Icons.mail_outline,
       title: 'Email',
-      subtitle: linked && email.isNotEmpty ? email : 'Add a recovery email (OTP)',
+      subtitle: linked && email.isNotEmpty
+          ? email
+          : 'Add a recovery email (OTP)',
       onTap: linked ? null : () => showEmailLinkSheet(context, auth),
       trailing: GestureDetector(
         onTap: linked ? null : () => showEmailLinkSheet(context, auth),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: (linked ? AppColors.success : AppColors.accent).withValues(alpha: linked ? 0.14 : 0.16),
+            color: (linked ? AppColors.success : AppColors.accent).withValues(
+              alpha: linked ? 0.14 : 0.16,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(linked ? 'LINKED' : 'LINK',
-              style: mono(size: 11, weight: FontWeight.w500, color: linked ? AppColors.success : AppColors.accent, letterSpacing: 11 * 0.06)),
+          child: Text(
+            linked ? 'LINKED' : 'LINK',
+            style: mono(
+              size: 11,
+              weight: FontWeight.w500,
+              color: linked ? AppColors.success : AppColors.accent,
+              letterSpacing: 11 * 0.06,
+            ),
+          ),
         ),
       ),
     );

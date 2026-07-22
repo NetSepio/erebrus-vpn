@@ -11,23 +11,27 @@ enum ConnectMode { auto, stealth, wireguard }
 
 extension ConnectModeX on ConnectMode {
   String get label => switch (this) {
-        ConnectMode.auto => 'Auto',
-        ConnectMode.stealth => 'Stealth',
-        ConnectMode.wireguard => 'WireGuard',
-      };
+    ConnectMode.auto => 'Auto',
+    ConnectMode.stealth => 'Stealth',
+    ConnectMode.wireguard => 'WireGuard',
+  };
 
   String get blurb => switch (this) {
-        ConnectMode.auto => 'Fastest path, falls back to stealth if blocked',
-        ConnectMode.stealth => 'Disguises traffic as normal HTTPS / QUIC',
-        ConnectMode.wireguard => 'Fast direct tunnel for normal use',
-      };
+    ConnectMode.auto => 'Fastest path, falls back to stealth if blocked',
+    ConnectMode.stealth => 'Disguises traffic as normal HTTPS / QUIC',
+    ConnectMode.wireguard => 'Fast direct tunnel for normal use',
+  };
 
   /// Ordered transports the controller tries for this mode.
   List<Transport> get transports => switch (this) {
-        ConnectMode.auto => const [Transport.wireguard, Transport.vlessReality, Transport.hysteria2],
-        ConnectMode.stealth => const [Transport.vlessReality, Transport.hysteria2],
-        ConnectMode.wireguard => const [Transport.wireguard],
-      };
+    ConnectMode.auto => const [
+      Transport.wireguard,
+      Transport.vlessReality,
+      Transport.hysteria2,
+    ],
+    ConnectMode.stealth => const [Transport.vlessReality, Transport.hysteria2],
+    ConnectMode.wireguard => const [Transport.wireguard],
+  };
 }
 
 /// Concrete transport the sing-box engine runs.
@@ -35,16 +39,16 @@ enum Transport { wireguard, vlessReality, hysteria2 }
 
 extension TransportX on Transport {
   String get label => switch (this) {
-        Transport.wireguard => 'WireGuard',
-        Transport.vlessReality => 'VLESS · REALITY',
-        Transport.hysteria2 => 'Hysteria2',
-      };
+    Transport.wireguard => 'WireGuard',
+    Transport.vlessReality => 'VLESS · REALITY',
+    Transport.hysteria2 => 'Hysteria2',
+  };
 
   /// UI protocol segment for the transport actually running the tunnel.
   ConnectMode get connectMode => switch (this) {
-        Transport.wireguard => ConnectMode.wireguard,
-        Transport.vlessReality || Transport.hysteria2 => ConnectMode.stealth,
-      };
+    Transport.wireguard => ConnectMode.wireguard,
+    Transport.vlessReality || Transport.hysteria2 => ConnectMode.stealth,
+  };
 }
 
 /// Org summary embedded on gateway node discovery (`GET /api/v2/nodes`) and the
@@ -69,6 +73,7 @@ class VpnNodeOrg {
   final String name;
   final String? id;
   final String? kind;
+
   /// Derived from [verificationStatus] == 'verified'.
   final bool verified;
   final String? verificationStatus;
@@ -213,6 +218,7 @@ class VpnNode {
   final double loadPct;
   final String status;
   final String accessMode;
+
   /// Node type: `standard` | `shield` | `sentinel`.
   final String deploymentProfile;
   final int minTier;
@@ -261,6 +267,7 @@ class VpnNode {
         return 'Standard';
     }
   }
+
   bool get requiresHigherTier => minTier > 0;
 
   bool get hasLatency => latencyMs != null && latencyMs! > 0;
@@ -280,7 +287,8 @@ class VpnNode {
 
   bool get isSolana => chain?.toUpperCase() == 'SOLANA';
 
-  bool get canProbe => probeHost != null && probeHost!.isNotEmpty && probePorts.isNotEmpty;
+  bool get canProbe =>
+      probeHost != null && probeHost!.isNotEmpty && probePorts.isNotEmpty;
 
   /// True when the node is online and has room for another VPN peer.
   bool get canAcceptClients => acceptingClients != false && !isOffline;
@@ -307,17 +315,22 @@ class VpnNode {
     final ipHash = (j['ip_hash'] ?? '').toString().trim();
     final version = (j['version'] ?? '').toString().trim();
     final lastHeartbeat = (j['last_heartbeat'] ?? '').toString().trim();
-    final lastPeerHandshake = (j['last_peer_handshake'] ?? '').toString().trim();
+    final lastPeerHandshake = (j['last_peer_handshake'] ?? '')
+        .toString()
+        .trim();
     final createdAt = (j['created_at'] ?? '').toString().trim();
     return VpnNode(
       id: (j['node_id'] ?? j['id'] ?? '').toString(),
       name: (j['name'] ?? 'Erebrus node').toString(),
       region: (j['region'] ?? '').toString(),
       did: (j['did'] ?? '').toString(),
-      protocols: ((j['protocols'] as List?) ?? const []).map((e) => e.toString()).toList(),
+      protocols: ((j['protocols'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
       loadPct: (j['load_pct'] as num?)?.toDouble() ?? 0,
       status: (j['status'] ?? 'online').toString(),
-      accessMode: (j['access_mode'] ?? caps?['access_mode'] ?? 'public').toString(),
+      accessMode: (j['access_mode'] ?? caps?['access_mode'] ?? 'public')
+          .toString(),
       deploymentProfile: (j['deployment_profile'] ?? 'standard').toString(),
       minTier: (j['min_tier'] as num?)?.toInt() ?? 0,
       zone: zone.isEmpty ? null : zone,
@@ -341,11 +354,15 @@ class VpnNode {
       probePorts: probe.$2,
       wgPeersRegistered: (j['wg_peers_registered'] as num?)?.toInt(),
       wgPeersConnected: (j['wg_peers_connected'] as num?)?.toInt(),
-      acceptingClients: j['accepting_clients'] == true ? true : (j['accepting_clients'] == false ? false : null),
+      acceptingClients: j['accepting_clients'] == true
+          ? true
+          : (j['accepting_clients'] == false ? false : null),
     );
   }
 
-  static (String?, List<int>) _parseProbeTargets(Map<String, dynamic>? endpoints) {
+  static (String?, List<int>) _parseProbeTargets(
+    Map<String, dynamic>? endpoints,
+  ) {
     if (endpoints == null) return (null, const []);
     final wg = (endpoints['wireguard'] as Map?)?.cast<String, dynamic>();
     final vless = (endpoints['vless_reality'] as Map?)?.cast<String, dynamic>();
@@ -356,6 +373,7 @@ class VpnNode {
       final port = (value as num?)?.toInt();
       if (port != null && port > 0 && !ports.contains(port)) ports.add(port);
     }
+
     addPort(vless?['port']);
     addPort(hy2?['port']);
     addPort(wg?['port']);
@@ -379,14 +397,21 @@ int _clientPingSortKey(VpnNode node, Map<String, int>? clientPingMs) {
   return ms;
 }
 
-int _compareNodesForPicker(VpnNode a, VpnNode b, {Map<String, int>? clientPingMs}) {
+int _compareNodesForPicker(
+  VpnNode a,
+  VpnNode b, {
+  Map<String, int>? clientPingMs,
+}) {
   // Prefer nodes that are actively accepting new clients.
   final aAccept = a.canAcceptClients ? 1 : 0;
   final bAccept = b.canAcceptClients ? 1 : 0;
   if (aAccept != bAccept) return bAccept - aAccept;
 
   if (clientPingMs != null && clientPingMs.isNotEmpty) {
-    final ping = _clientPingSortKey(a, clientPingMs).compareTo(_clientPingSortKey(b, clientPingMs));
+    final ping = _clientPingSortKey(
+      a,
+      clientPingMs,
+    ).compareTo(_clientPingSortKey(b, clientPingMs));
     if (ping != 0) return ping;
   }
 
@@ -419,7 +444,9 @@ class CredentialBundle {
 
   factory CredentialBundle.fromJson(Map<String, dynamic> j) {
     final wg = (j['wireguard'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final profile = (j['singbox_profile'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+    final profile =
+        (j['singbox_profile'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
     // Gateway may put the WG endpoint at wireguard.endpoint or transports[0].uri.
     var endpoint = (wg['endpoint'] ?? '').toString();
     if (endpoint.isEmpty) {
@@ -443,21 +470,23 @@ class CredentialBundle {
   }
 
   Map<String, dynamic> toJson() => {
-        'wireguard': {
-          'server_public_key': serverPublicKey,
-          'endpoint': endpoint,
-          'address': address,
-          'dns': dns,
-        },
-        'vless_uri': vlessUri,
-        'hysteria2_uri': hysteria2Uri,
-        'singbox_profile': singboxProfile,
-      };
+    'wireguard': {
+      'server_public_key': serverPublicKey,
+      'endpoint': endpoint,
+      'address': address,
+      'dns': dns,
+    },
+    'vless_uri': vlessUri,
+    'hysteria2_uri': hysteria2Uri,
+    'singbox_profile': singboxProfile,
+  };
 
   bool get hasWireGuard =>
       serverPublicKey.isNotEmpty && endpoint.isNotEmpty && address.isNotEmpty;
 
-  bool get hasStealth => singboxProfile.isNotEmpty && (vlessUri.isNotEmpty || hysteria2Uri.isNotEmpty);
+  bool get hasStealth =>
+      singboxProfile.isNotEmpty &&
+      (vlessUri.isNotEmpty || hysteria2Uri.isNotEmpty);
 
   /// Host:port the client actually dials for [transport] (for logs / diagnostics).
   String dialTarget(Transport transport) {
@@ -465,11 +494,15 @@ class CredentialBundle {
       case Transport.wireguard:
         return endpoint;
       case Transport.vlessReality:
-        final m = RegExp(r'^vless://[^@]+@([^:/?#]+):(\d+)').firstMatch(vlessUri);
+        final m = RegExp(
+          r'^vless://[^@]+@([^:/?#]+):(\d+)',
+        ).firstMatch(vlessUri);
         if (m != null) return '${m.group(1)}:${m.group(2)}';
         return endpoint;
       case Transport.hysteria2:
-        final m = RegExp(r'^hysteria2://[^@]+@([^:/?#]+):(\d+)').firstMatch(hysteria2Uri);
+        final m = RegExp(
+          r'^hysteria2://[^@]+@([^:/?#]+):(\d+)',
+        ).firstMatch(hysteria2Uri);
         if (m != null) return '${m.group(1)}:${m.group(2)}';
         return endpoint;
     }
@@ -490,8 +523,8 @@ class SingboxConfigBuilder {
   static const String tunAddress = '172.19.0.1/30';
   static const String tunDnsAddress = '172.19.0.2';
 
-  /// Local mixed inbound so the app UID (excluded from system TUN) can still
-  /// reach the tunnel via 127.0.0.1.
+  /// Local mixed inbound used by desktop system proxy mode and explicit tunnel
+  /// health probes. Mobile WebViews travel through the system TUN directly.
   static const String localProxyHost = '127.0.0.1';
   static const int localProxyPort = 10808;
   static const String localMixedInboundTag = 'mixed-in';
@@ -518,7 +551,9 @@ class SingboxConfigBuilder {
 
   /// Resolves dial hostnames to IPv4 so WireGuard can handshake before tunnel DNS
   /// (hostname → dns-remote → wg-out chicken-and-egg on Android).
-  static Future<Map<String, String>> resolveDialHosts(CredentialBundle bundle) async {
+  static Future<Map<String, String>> resolveDialHosts(
+    CredentialBundle bundle,
+  ) async {
     final hosts = <String>{};
     final (wgHost, _) = _splitHostPort(bundle.endpoint);
     if (wgHost.isNotEmpty && !_isIpLiteral(wgHost)) hosts.add(wgHost);
@@ -556,9 +591,11 @@ class SingboxConfigBuilder {
     required CredentialBundle bundle,
     required Transport transport,
     required String clientPrivateKey,
+
     /// When false (desktop CLI / unsigned macOS), only the local mixed proxy
     /// inbound is used — no TUN (avoids needing root). Pair with system HTTP proxy.
     bool useSystemTunnel = true,
+
     /// Hostname → IPv4 from [resolveDialHosts]; avoids WG handshake DNS deadlock.
     Map<String, String>? resolvedHosts,
   }) {
@@ -591,8 +628,9 @@ class SingboxConfigBuilder {
   }) {
     final (host, port) = _splitHostPort(bundle.endpoint);
     final peerHost = _peerHost(host, resolvedHosts);
-    final clientAddr =
-        bundle.address.contains('/') ? bundle.address : '${bundle.address}/32';
+    final clientAddr = bundle.address.contains('/')
+        ? bundle.address
+        : '${bundle.address}/32';
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
 
     return _withClashApi({
@@ -639,9 +677,12 @@ class SingboxConfigBuilder {
   }) {
     final profile =
         jsonDecode(jsonEncode(bundle.singboxProfile)) as Map<String, dynamic>;
-    final endpoints = (profile['endpoints'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final endpoints =
+        (profile['endpoints'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (endpoints.isEmpty) {
-      throw StateError('credential bundle has no sing-box endpoints for stealth');
+      throw StateError(
+        'credential bundle has no sing-box endpoints for stealth',
+      );
     }
     final wg = endpoints.first;
     wg['private_key'] = clientPrivateKey;
@@ -667,9 +708,11 @@ class SingboxConfigBuilder {
     }
 
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
-    final profileRoute = (profile['route'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final profileRoute =
+        (profile['route'] as Map?)?.cast<String, dynamic>() ?? const {};
     final extraRules =
-        (profileRoute['rules'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+        (profileRoute['rules'] as List?)?.cast<Map<String, dynamic>>() ??
+        const [];
 
     final outbounds =
         ((profile['outbounds'] as List?)?.cast<Map<String, dynamic>>() ?? [])
@@ -679,7 +722,12 @@ class SingboxConfigBuilder {
     if (!outbounds.any((o) => o['tag'] == 'direct')) {
       outbounds.add({'type': 'direct', 'tag': 'direct'});
     }
-    _patchStealthOutbounds(outbounds, transport, bundle, resolvedHosts: resolvedHosts);
+    _patchStealthOutbounds(
+      outbounds,
+      transport,
+      bundle,
+      resolvedHosts: resolvedHosts,
+    );
 
     // Dial the carrier (VLESS/Hy2) on the underlying network, not through the TUN.
     final carrierHost = _carrierBypassHost(outbounds, transport, bundle);
@@ -735,9 +783,14 @@ class SingboxConfigBuilder {
     }
   }
 
-  static void _patchVlessFromUri(Map<String, dynamic> outbound, String vlessUri) {
+  static void _patchVlessFromUri(
+    Map<String, dynamic> outbound,
+    String vlessUri,
+  ) {
     if (vlessUri.isEmpty) return;
-    final m = RegExp(r'^vless://([^@]+)@([^:/?#]+):(\d+)\?([^#]*)').firstMatch(vlessUri);
+    final m = RegExp(
+      r'^vless://([^@]+)@([^:/?#]+):(\d+)\?([^#]*)',
+    ).firstMatch(vlessUri);
     if (m == null) return;
     final uuid = m.group(1) ?? '';
     final host = m.group(2) ?? '';
@@ -752,10 +805,7 @@ class SingboxConfigBuilder {
     );
     tls['enabled'] = true;
     tls['server_name'] = q['sni'] ?? tls['server_name'] ?? 'www.microsoft.com';
-    tls['utls'] = {
-      'enabled': true,
-      'fingerprint': q['fp'] ?? 'chrome',
-    };
+    tls['utls'] = {'enabled': true, 'fingerprint': q['fp'] ?? 'chrome'};
     final reality = Map<String, dynamic>.from(
       (tls['reality'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
@@ -820,7 +870,11 @@ class SingboxConfigBuilder {
     ];
     final rules = <Map<String, dynamic>>[
       for (final domain in bootstrapDomains)
-        if (domain.isNotEmpty) {'domain': [domain], 'server': 'dns-direct'},
+        if (domain.isNotEmpty)
+          {
+            'domain': [domain],
+            'server': 'dns-direct',
+          },
     ];
     return {
       'servers': servers,
@@ -872,9 +926,15 @@ class SingboxConfigBuilder {
   static Map<String, dynamic> _directBypassRule(String host) {
     if (_isIpLiteral(host)) {
       final cidr = host.contains(':') ? '$host/128' : '$host/32';
-      return {'ip_cidr': [cidr], 'outbound': 'direct'};
+      return {
+        'ip_cidr': [cidr],
+        'outbound': 'direct',
+      };
     }
-    return {'domain': [host], 'outbound': 'direct'};
+    return {
+      'domain': [host],
+      'outbound': 'direct',
+    };
   }
 
   /// Local/bypass rules that must run before [final]. Tunnel DNS capture comes
@@ -883,7 +943,10 @@ class SingboxConfigBuilder {
   static List<Map<String, dynamic>> _localRouteRules({String? wgServerHost}) {
     final rules = <Map<String, dynamic>>[
       {'protocol': 'dns', 'action': 'hijack-dns'},
-      {'ip_cidr': ['127.0.0.0/8'], 'outbound': 'direct'},
+      {
+        'ip_cidr': ['127.0.0.0/8'],
+        'outbound': 'direct',
+      },
     ];
     if (wgServerHost != null &&
         wgServerHost.isNotEmpty &&
@@ -897,12 +960,11 @@ class SingboxConfigBuilder {
     required String finalTag,
     String? wgServerHost,
     List<Map<String, dynamic>> extraRules = const [],
-  }) =>
-      {
-        'rules': [..._localRouteRules(wgServerHost: wgServerHost), ...extraRules],
-        'final': finalTag,
-        'auto_detect_interface': true,
-      };
+  }) => {
+    'rules': [..._localRouteRules(wgServerHost: wgServerHost), ...extraRules],
+    'final': finalTag,
+    'auto_detect_interface': true,
+  };
 
   static (String, int) _splitHostPort(String hostPort) {
     // Bracketed IPv6 with port: [2001:db8::1]:51820
@@ -945,10 +1007,7 @@ class SingboxConfigBuilder {
         'outbounds': [
           {'type': 'block', 'tag': 'block'},
         ],
-        'route': {
-          'final': 'block',
-          'auto_detect_interface': true,
-        },
+        'route': {'final': 'block', 'auto_detect_interface': true},
       });
     }
 
@@ -974,10 +1033,7 @@ class SingboxConfigBuilder {
       'outbounds': [
         {'type': 'block', 'tag': 'block'},
       ],
-      'route': {
-        'final': 'block',
-        'auto_detect_interface': true,
-      },
+      'route': {'final': 'block', 'auto_detect_interface': true},
     };
   }
 }
