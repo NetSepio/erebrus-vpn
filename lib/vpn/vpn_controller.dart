@@ -64,6 +64,7 @@ class VpnController extends GetxController {
   bool _syncingNative = false;
   bool _connectInProgress = false;
   bool _cancelRequested = false;
+  Transport? _confirmedTransport;
 
   static const _kWgPrivate = 'erebrus_wg_private';
   static const _kWgPublic = 'erebrus_wg_public';
@@ -112,12 +113,24 @@ class VpnController extends GetxController {
       if (s == VpnStage.connected) {
         _wasConnected = true;
         killSwitchBlocking.value = false;
+        // iOS may deliver a delayed disconnected/connected pair after a
+        // fallback transport has already succeeded. Restore the transport that
+        // passed egress verification so Diagnostics reflects the actual path.
+        if (activeTransport.value == null && _confirmedTransport != null) {
+          activeTransport.value = _confirmedTransport;
+        }
         unawaited(_probeEgressIp());
       }
       if (s == VpnStage.disconnected || s == VpnStage.error) {
         egressIp.value = null;
         egressIpLoading.value = false;
-        activeTransport.value = null;
+        // A delayed "disconnected" event from the previous candidate can
+        // arrive after the next candidate has already been selected. Keep the
+        // in-flight transport so Diagnostics does not lose VLESS/Hy2 while a
+        // fallback connection is succeeding.
+        if (!_connectInProgress) {
+          activeTransport.value = null;
+        }
         if (!_connectInProgress) {
           _restorePreferredMode();
         }
@@ -134,7 +147,6 @@ class VpnController extends GetxController {
       }
     });
     _statsSub = _engine.onStats.listen((s) => stats.value = s);
-    unawaited(syncWithNative());
   }
 
   /// Reconciles Flutter observables with the native tunnel and persisted session.
@@ -194,6 +206,7 @@ class VpnController extends GetxController {
   void _applySession(VpnSessionSnapshot? session) {
     if (session == null) return;
     mode.value = session.mode;
+    _confirmedTransport = session.transport;
     activeTransport.value = session.transport;
     final matched = _matchNode(session);
     if (matched != null) {
@@ -241,6 +254,7 @@ class VpnController extends GetxController {
   Future<void> resetLocalVpnData() async {
     await disconnect().catchError((_) {});
     selectedNode.value = null;
+    _confirmedTransport = null;
     activeTransport.value = null;
     await _deleteStoredSecret(_kWgPrivate);
     await _deleteStoredSecret(_kWgPublic);
@@ -425,6 +439,8 @@ class VpnController extends GetxController {
               }
               if (ok) {
                 _wasConnected = true;
+                _confirmedTransport = t;
+                activeTransport.value = t;
                 stage.value = VpnStage.connected;
                 error.value = null;
                 unawaited(_probeEgressIp());
@@ -460,6 +476,8 @@ class VpnController extends GetxController {
             return;
           }
           await _engine.stop().catchError((_) {});
+          _confirmedTransport = null;
+          activeTransport.value = null;
           error.value = await _connectFailureMessage();
           stage.value = VpnStage.error;
         } on GatewayException catch (e) {
@@ -475,6 +493,8 @@ class VpnController extends GetxController {
             await _rotateWgKeys();
             continue;
           }
+          _confirmedTransport = null;
+          activeTransport.value = null;
           error.value = friendlyGatewayError(e, nodeName: target.name);
           stage.value = VpnStage.error;
           break;
@@ -484,6 +504,8 @@ class VpnController extends GetxController {
             await _finishCancelled();
             return;
           }
+          _confirmedTransport = null;
+          activeTransport.value = null;
           error.value = friendlyGatewayError(e, nodeName: target.name);
           stage.value = VpnStage.error;
           break;
@@ -507,6 +529,7 @@ class VpnController extends GetxController {
   Future<void> _finishCancelled() async {
     await _engine.stop().catchError((_) {});
     await _ensureTunnelStopped();
+    _confirmedTransport = null;
     activeTransport.value = null;
     error.value = null;
     stage.value = VpnStage.disconnected;
@@ -527,6 +550,7 @@ class VpnController extends GetxController {
       stage.value = VpnStage.disconnected;
     }
     _wasConnected = false;
+    _confirmedTransport = null;
     activeTransport.value = null;
     error.value = null;
     egressIp.value = null;
@@ -555,9 +579,12 @@ class VpnController extends GetxController {
 
   Future<void> _probeEgressIp() async {
     if (!isConnected || killSwitchBlocking.value) return;
+    if (egressIpLoading.value) return;
     egressIpLoading.value = true;
     try {
-      final ip = await EgressIpProbe.fetch(useTunnelProxy: true);
+      final ip = await EgressIpProbe.fetch(
+        useTunnelProxy: PlatformCapabilities.isDesktop,
+      );
       if (isConnected) _recordEgressResult(ip);
       debugPrint('[VPN] egress IP probe → ${ip ?? "failed"}');
     } finally {
@@ -591,7 +618,7 @@ class VpnController extends GetxController {
       if (!isConnected || killSwitchBlocking.value) return;
       final ip = await EgressIpProbe.fetch(
         timeout: const Duration(seconds: 6),
-        useTunnelProxy: true,
+        useTunnelProxy: PlatformCapabilities.isDesktop,
       );
       if (!isConnected) return;
       _recordEgressResult(ip);
@@ -689,14 +716,14 @@ class VpnController extends GetxController {
 
   Future<bool> _waitTunnelEgress({
     required String label,
-    int attempts = 8,
-    Duration interval = const Duration(milliseconds: 500),
+    int attempts = 4,
+    Duration interval = const Duration(milliseconds: 400),
   }) async {
     for (var i = 0; i < attempts; i++) {
       if (_cancelRequested) return false;
       final ip = await EgressIpProbe.fetch(
-        timeout: const Duration(seconds: 4),
-        useTunnelProxy: true,
+        timeout: const Duration(seconds: 3),
+        useTunnelProxy: PlatformCapabilities.isDesktop,
       );
       if (ip != null) {
         debugPrint('[VPN] $label egress ready → $ip');
@@ -712,18 +739,17 @@ class VpnController extends GetxController {
     if (Platform.isAndroid && !await _waitLocalMixedProxy(attempts: 24)) {
       return false;
     }
-    return _waitTunnelEgress(label: 'WireGuard', attempts: 6);
+    return _waitTunnelEgress(label: 'WireGuard');
   }
 
   /// Stealth: wait for mixed-in, then carrier + inner WG, before showing connected.
-  /// Probes run in parallel with a hard 4s cap each, so the worst case here is
-  /// ~36s before falling through to the next transport (was minutes when the
-  /// probe timeout leaked — see EgressIpProbe._get).
+  /// Probes run in parallel with a hard 3s cap each, so a dead carrier falls
+  /// through to the next transport in about 13s instead of appearing hung.
   Future<bool> _waitStealthReady() async {
     if (!await _waitLocalMixedProxy()) return false;
     // Carrier (VLESS/Hy2) and loopback WG peer need a beat after mixed-in is up.
     await Future<void>.delayed(const Duration(milliseconds: 800));
-    return _waitTunnelEgress(label: 'Stealth', attempts: 8);
+    return _waitTunnelEgress(label: 'Stealth');
   }
 
   /// Fully tears down the native tunnel before the next transport attempt.

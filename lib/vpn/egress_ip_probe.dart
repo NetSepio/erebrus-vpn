@@ -30,6 +30,7 @@ class EgressIpProbe {
   ];
 
   static final _rng = Random.secure();
+  static Future<String?>? _inFlight;
 
   static const _genericUserAgent =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -38,12 +39,29 @@ class EgressIpProbe {
     Duration timeout = const Duration(seconds: 8),
     bool useTunnelProxy = false,
   }) {
-    // Always include the IP literal, plus a randomized sample of hostnames.
+    // Connection readiness, the initial IP lookup, and the periodic health
+    // monitor can all request a probe at once. Share one bounded operation so a
+    // degraded tunnel cannot accumulate HttpClients and TLS handshakes.
+    final existing = _inFlight;
+    if (existing != null) return existing;
+
+    late final Future<String?> operation;
+    operation = _fetchOnce(timeout: timeout, useTunnelProxy: useTunnelProxy)
+        .whenComplete(() {
+          if (identical(_inFlight, operation)) _inFlight = null;
+        });
+    _inFlight = operation;
+    return operation;
+  }
+
+  static Future<String?> _fetchOnce({
+    required Duration timeout,
+    required bool useTunnelProxy,
+  }) {
+    // One IP literal plus one randomized hostname keeps DNS coverage without
+    // opening four simultaneous proxy/TLS connections per health check.
     final hostPool = List<String>.of(_hostEndpoints)..shuffle(_rng);
-    final endpoints = [
-      _ipLiteralEndpoint,
-      ...hostPool.take(3),
-    ];
+    final endpoints = [_ipLiteralEndpoint, hostPool.first];
 
     final completer = Completer<String?>();
     var pending = endpoints.length;
@@ -73,7 +91,8 @@ class EgressIpProbe {
   }) async {
     final client = HttpClient()..connectionTimeout = timeout;
     if (useTunnelProxy) {
-      final proxy = '${SingboxConfigBuilder.localProxyHost}:${SingboxConfigBuilder.localProxyPort}';
+      final proxy =
+          '${SingboxConfigBuilder.localProxyHost}:${SingboxConfigBuilder.localProxyPort}';
       client.findProxy = (_) => 'PROXY $proxy';
     }
     try {
@@ -85,10 +104,12 @@ class EgressIpProbe {
         req.headers.set(HttpHeaders.userAgentHeader, _genericUserAgent);
         final res = await req.close();
         if (res.statusCode != 200) return null;
-        final body = await res.transform(utf8.decoder).join();
+        // IP services should return only a few bytes. Cap unexpected responses
+        // so a captive portal or proxy error page cannot grow memory unchecked.
+        final bytes = await res.expand((chunk) => chunk).take(4096).toList();
+        final body = utf8.decode(bytes, allowMalformed: true);
         return _extractIp(url, body);
-      }()
-          .timeout(timeout);
+      }().timeout(timeout);
     } finally {
       client.close(force: true);
     }

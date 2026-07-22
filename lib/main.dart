@@ -39,6 +39,7 @@ Future<void> main() async {
   Get.put(auth, permanent: true);
   await auth.detectDevice();
   await auth.loadPersistedSession();
+  unawaited(auth.loadAuthMethods());
   Get.put(GatewayController(), permanent: true);
   // Refresh nodes and native state after the first frame so the app renders faster.
   WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -48,7 +49,9 @@ Future<void> main() async {
   Timer.periodic(const Duration(minutes: 5), (_) {
     if (Get.isRegistered<AppSettingsController>()) {
       Get.find<AppSettingsController>().pingDiagnosticsIfEnabled(
-        vpn: Get.isRegistered<VpnController>() ? Get.find<VpnController>() : null,
+        vpn: Get.isRegistered<VpnController>()
+            ? Get.find<VpnController>()
+            : null,
       );
     }
   });
@@ -56,11 +59,13 @@ Future<void> main() async {
     '[Erebrus] started — platform=${PlatformCapabilities.platformLabel} '
     'solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
   );
-  runApp(ErebrusVpnApp(
-    usesReown: auth.usesReown,
-    usesWebLogin: auth.usesWebLogin,
-    useDesktopShell: PlatformCapabilities.supportsTray,
-  ));
+  runApp(
+    ErebrusVpnApp(
+      usesReown: auth.usesReown,
+      usesWebLogin: auth.usesWebLogin,
+      useDesktopShell: PlatformCapabilities.supportsTray,
+    ),
+  );
 }
 
 class ErebrusVpnApp extends StatelessWidget {

@@ -105,13 +105,6 @@ class WalletAuthController extends GetxController {
   bool get usesWebLogin => PlatformCapabilities.usesWebLogin;
   String? get bearerToken => _token;
 
-  @override
-  void onInit() {
-    super.onInit();
-    loadPersistedSession();
-    unawaited(loadAuthMethods());
-  }
-
   /// Best-effort discovery of which login methods the gateway has configured, so
   /// the UI hides providers whose secrets are absent (no errors). Also probes
   /// native Apple availability. Failures leave the optimistic defaults.

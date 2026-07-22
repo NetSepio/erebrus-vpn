@@ -9,16 +9,10 @@ final class TunnelManager {
     var onStageChange: ((String) -> Void)?
 
     private var statusObserver: NSObjectProtocol?
+    private var currentManager: NETunnelProviderManager?
+    private weak var observedConnection: NEVPNConnection?
 
-    private init() {
-        statusObserver = NotificationCenter.default.addObserver(
-            forName: .NEVPNStatusDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.refreshStageFromSystem()
-        }
-    }
+    private init() {}
 
     deinit {
         if let statusObserver {
@@ -48,6 +42,7 @@ final class TunnelManager {
             manager.isOnDemandEnabled = false
             try await manager.saveToPreferences()
             try await manager.loadFromPreferences()
+            observeStatus(of: manager)
         }
 
         if manager.connection.status != .disconnected &&
@@ -71,6 +66,7 @@ final class TunnelManager {
         // the just-saved configuration before starting so the connection uses
         // the current generation rather than a stale in-memory manager.
         try await manager.loadFromPreferences()
+        observeStatus(of: manager)
         try manager.connection.startVPNTunnel()
         refreshStageFromSystem()
     }
@@ -115,6 +111,10 @@ final class TunnelManager {
     }
 
     func refreshStageFromSystem() {
+        if let manager = currentManager {
+            setStage(mapStatus(manager.connection.status))
+            return
+        }
         Task {
             guard let manager = try? await loadManager() else {
                 setStage("disconnected")
@@ -157,12 +157,42 @@ final class TunnelManager {
         onStageChange?(value)
     }
 
+    /// Observe only the connection we manage. Never load VPN preferences from
+    /// inside NEVPNStatusDidChange: loading creates connection objects and can
+    /// recursively generate more status notifications/XPC work.
+    private func observeStatus(of manager: NETunnelProviderManager) {
+        let install = { [weak self] in
+            guard let self else { return }
+            let connection = manager.connection
+            self.currentManager = manager
+            if self.observedConnection === connection { return }
+            if let statusObserver = self.statusObserver {
+                NotificationCenter.default.removeObserver(statusObserver)
+            }
+            self.observedConnection = connection
+            self.statusObserver = NotificationCenter.default.addObserver(
+                forName: .NEVPNStatusDidChange,
+                object: connection,
+                queue: .main
+            ) { [weak self, weak connection] _ in
+                guard let self, let connection else { return }
+                self.setStage(self.mapStatus(connection.status))
+            }
+        }
+        if Thread.isMainThread {
+            install()
+        } else {
+            DispatchQueue.main.async(execute: install)
+        }
+    }
+
     private func loadManager() async throws -> NETunnelProviderManager {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if let existing = managers.first(where: {
             ($0.protocolConfiguration as? NETunnelProviderProtocol)?
                 .providerBundleIdentifier == TunnelConstants.tunnelBundleId
         }) {
+            observeStatus(of: existing)
             return existing
         }
         throw NSError(domain: "ErebrusTunnel", code: 1, userInfo: [
@@ -178,6 +208,7 @@ final class TunnelManager {
         proto.serverAddress = TunnelConstants.providerDescription
         manager.protocolConfiguration = proto
         manager.localizedDescription = TunnelConstants.providerDescription
+        observeStatus(of: manager)
         return manager
     }
 }

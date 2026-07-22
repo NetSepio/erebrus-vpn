@@ -44,12 +44,6 @@ class AppSettingsController extends GetxController {
         SplitTunnelMode.exclude => splitTunnelExcludePackages,
       };
 
-  @override
-  void onInit() {
-    super.onInit();
-    load();
-  }
-
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     defaultProtocol.value = _parseMode(prefs.getString(_kDefaultProtocol));

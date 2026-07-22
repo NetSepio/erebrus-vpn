@@ -19,7 +19,7 @@ import 'vpn_session_store.dart';
 /// connect screen.
 class GatewayController extends GetxController {
   GatewayController({GatewayClient? client, String? gatewayUrl})
-      : _client = client ?? GatewayClient(baseUrl: gatewayUrl);
+    : _client = client ?? GatewayClient(baseUrl: gatewayUrl);
 
   final GatewayClient _client;
   GatewayClient get client => _client;
@@ -40,7 +40,8 @@ class GatewayController extends GetxController {
   Map<String, List<VpnNode>> _orgNodesBySlug = {};
 
   Timer? _refreshTimer;
-  static const _registryPollInterval = Duration(seconds: 30);
+  Future<void>? _refreshInFlight;
+  static const _registryPollInterval = Duration(minutes: 2);
 
   @override
   void onInit() {
@@ -51,7 +52,7 @@ class GatewayController extends GetxController {
     }
     _wireProvisioner();
     _refreshTimer = Timer.periodic(_registryPollInterval, (_) {
-      if (!loading.value) refreshNodes(silent: true);
+      refreshNodes(silent: true);
     });
   }
 
@@ -82,38 +83,69 @@ class GatewayController extends GetxController {
 
   void _wireProvisioner() {
     final vpn = Get.find<VpnController>();
-    vpn.provisioner = ({
-      required VpnNode node,
-      required String wgPublicKey,
-      required String name,
-    }) async {
-      try {
-        final bundle = await _client.provisionClient(
-          nodeId: node.id,
-          wgPublicKey: wgPublicKey,
-          name: name,
-        );
-        await _bundleCache.write(nodeId: node.id, wgPublicKey: wgPublicKey, bundle: bundle);
-        return bundle;
-      } on GatewayException {
-        final cached = await _bundleCache.read(nodeId: node.id, wgPublicKey: wgPublicKey);
-        if (cached != null && cached.hasWireGuard && cached.hasStealth) {
-          debugPrint('[Gateway] using cached credential bundle for ${node.name}');
-          return cached;
-        }
-        final reused = await _client.fetchExistingClientBundle(nodeId: node.id, wgPublicKey: wgPublicKey);
-        if (reused != null) {
-          debugPrint('[Gateway] reusing existing VPN client for ${node.name}');
-          await _bundleCache.write(nodeId: node.id, wgPublicKey: wgPublicKey, bundle: reused);
-          return reused;
-        }
-        rethrow;
-      }
-    };
+    vpn.provisioner =
+        ({
+          required VpnNode node,
+          required String wgPublicKey,
+          required String name,
+        }) async {
+          try {
+            final bundle = await _client.provisionClient(
+              nodeId: node.id,
+              wgPublicKey: wgPublicKey,
+              name: name,
+            );
+            await _bundleCache.write(
+              nodeId: node.id,
+              wgPublicKey: wgPublicKey,
+              bundle: bundle,
+            );
+            return bundle;
+          } on GatewayException {
+            final cached = await _bundleCache.read(
+              nodeId: node.id,
+              wgPublicKey: wgPublicKey,
+            );
+            if (cached != null && cached.hasWireGuard && cached.hasStealth) {
+              debugPrint(
+                '[Gateway] using cached credential bundle for ${node.name}',
+              );
+              return cached;
+            }
+            final reused = await _client.fetchExistingClientBundle(
+              nodeId: node.id,
+              wgPublicKey: wgPublicKey,
+            );
+            if (reused != null) {
+              debugPrint(
+                '[Gateway] reusing existing VPN client for ${node.name}',
+              );
+              await _bundleCache.write(
+                nodeId: node.id,
+                wgPublicKey: wgPublicKey,
+                bundle: reused,
+              );
+              return reused;
+            }
+            rethrow;
+          }
+        };
   }
 
   /// Fetches the live node registry (public pool + the caller's org nodes).
-  Future<void> refreshNodes({bool silent = false}) async {
+  Future<void> refreshNodes({bool silent = false}) {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+
+    late final Future<void> operation;
+    operation = _refreshNodesOnce(silent: silent).whenComplete(() {
+      if (identical(_refreshInFlight, operation)) _refreshInFlight = null;
+    });
+    _refreshInFlight = operation;
+    return operation;
+  }
+
+  Future<void> _refreshNodesOnce({required bool silent}) async {
     if (!silent) loading.value = true;
     error.value = null;
     if (!silent) warning.value = null;
@@ -125,7 +157,9 @@ class GatewayController extends GetxController {
       if (nodes.isEmpty) {
         warning.value = 'No servers available — try refresh again in a moment';
       }
-      debugPrint('[Gateway] ${publicNodes.length} public + ${orgNodes.length} org node(s)');
+      debugPrint(
+        '[Gateway] ${publicNodes.length} public + ${orgNodes.length} org node(s)',
+      );
     } on GatewayException catch (e) {
       debugPrint('[Gateway] error: ${e.message}');
       error.value = '${e.message} · ${gatewayUrl.value}';
@@ -160,11 +194,15 @@ class GatewayController extends GetxController {
       for (final entry in bySlug.entries) {
         if (known.contains(entry.key)) continue;
         final orgBlock = entry.value.first.org;
-        merged.add(VpnOrg(
-          name: orgBlock?.name ?? entry.key,
-          slug: entry.key,
-          verificationStatus: orgBlock?.verified == true ? 'verified' : orgBlock?.verificationStatus,
-        ));
+        merged.add(
+          VpnOrg(
+            name: orgBlock?.name ?? entry.key,
+            slug: entry.key,
+            verificationStatus: orgBlock?.verified == true
+                ? 'verified'
+                : orgBlock?.verificationStatus,
+          ),
+        );
         known.add(entry.key);
       }
       orgs.assignAll(merged);
@@ -181,7 +219,6 @@ class GatewayController extends GetxController {
       if (seen.add(n.id)) union.add(n);
     }
     nodes.assignAll(union);
-    nodes.refresh();
     _reconcileSelection(union);
     if (Get.isRegistered<VpnController>()) {
       Get.find<VpnController>().reconcileNodeFromGateway();
@@ -192,7 +229,6 @@ class GatewayController extends GetxController {
     if (previous.isNotEmpty) {
       warning.value = 'Showing last known servers — refresh failed';
       nodes.assignAll(previous);
-      nodes.refresh();
     } else {
       nodes.clear();
       _reconcileSelection(const []);
@@ -219,7 +255,8 @@ class GatewayController extends GetxController {
         vpn.clearSelectedNode();
         if (list.isNotEmpty) {
           vpn.selectNode(list.first);
-          warning.value ??= 'Previous server is no longer available — picked ${list.first.name}';
+          warning.value ??=
+              'Previous server is no longer available — picked ${list.first.name}';
         } else {
           warning.value ??= 'Previous server is no longer available';
         }

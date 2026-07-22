@@ -67,14 +67,6 @@ class _SettingsViewState extends State<SettingsView> {
   void initState() {
     super.initState();
     _loadAppVersion();
-    final auth = Get.find<WalletAuthController>();
-    if (auth.isAuthenticated) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        auth.refreshProfile();
-        auth.refreshReferrals();
-        Get.find<GatewayController>().refreshNodes();
-      });
-    }
   }
 
   Future<void> _loadAppVersion() async {
