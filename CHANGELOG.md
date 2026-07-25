@@ -47,3 +47,5 @@
 - Browser single-word searches incorrectly being treated as hostnames.
 - Several iOS connection hangs, native callback threading issues, and tunnel
   health/probe performance problems.
+- Missing macOS Utilities category metadata required for Mac App Store archive
+  validation.
