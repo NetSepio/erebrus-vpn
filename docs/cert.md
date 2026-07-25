@@ -75,27 +75,22 @@ If `Signing.xcconfig` is missing:
 - Auth session uses the desktop fallback in `lib/auth/auth_session_store.dart`
 - Gateway subscription is still tied to your **wallet on the server** — only local token storage differs
 
-## VPN on macOS (unsigned)
+## VPN on macOS
 
-1. Install the CLI: `./scripts/setup-macos-dev.sh`
-2. Tap **Connect** — sing-box starts as a normal process with a local mixed proxy on `127.0.0.1:10808`
-3. The app sets **system HTTP/HTTPS/SOCKS proxy** on your active network services so **Safari and Chrome** use the same path as the in-app egress check
-
-Unsigned desktop builds use **proxy mode** (not TUN). That avoids the administrator password prompt and fixes the case where the in-app browser shows the correct egress IP but system browsers have no internet (TUN DNS is unreliable without a signed Network Extension).
-
-Non-browser apps may not use the VPN until you ship a signed Network Extension build.
-
-**Disconnect** in the app before quitting — proxy settings are restored on disconnect. If the Mac has no internet after a crash:
+macOS uses a signed, sandboxed `ErebrusTunnel` Network Extension and the
+universal `Libbox.xcframework`. It no longer launches a CLI, requests
+administrator elevation, or changes system proxy settings. Build the framework
+and configure the target before running:
 
 ```bash
-networksetup -setwebproxystate Wi-Fi off
-networksetup -setsecurewebproxystate Wi-Fi off
-networksetup -setsocksfirewallproxystate Wi-Fi off
+./scripts/build-libbox-macos.sh
+ruby ./scripts/setup-macos-tunnel.rb
+flutter run -d macos
 ```
 
-(Replace `Wi-Fi` with your service from `networksetup -listallnetworkservices`.)
-
-For production-quality VPN without a password prompt each session, use a **signed Network Extension** + `Libbox.xcframework` (see `docs/BUILD.md`).
+The first connection asks for normal macOS VPN configuration approval. App
+Store and development provisioning must include Packet Tunnel Provider and the
+shared App Group on both bundle identifiers.
 
 Check **Egress IP** on the server card after connect.
 

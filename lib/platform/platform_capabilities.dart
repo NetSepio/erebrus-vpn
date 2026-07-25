@@ -27,6 +27,16 @@ class PlatformCapabilities {
   static bool get isMacOS => !kIsWeb && Platform.isMacOS;
   static bool get isIOS => !kIsWeb && Platform.isIOS;
 
+  /// Camera-based VPN configuration import is intentionally phone/tablet only.
+  static bool get supportsQrScanner => isMobile;
+
+  /// Platforms that still run the bundled sing-box CLI and manage a local
+  /// system proxy. macOS uses its sandboxed Network Extension, like iOS.
+  static bool get usesDesktopVpnRunner {
+    if (kIsWeb) return false;
+    return Platform.isWindows || Platform.isLinux;
+  }
+
   /// Menu bar / system tray quick controls (macOS, Windows, Linux).
   static bool get supportsTray => isDesktop;
 

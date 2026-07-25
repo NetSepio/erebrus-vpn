@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 
 import '../../guest/guest_config_model.dart';
 import '../../guest/guest_config_store.dart';
+import '../../platform/platform_capabilities.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
@@ -101,7 +102,9 @@ class _GuestConnectViewState extends State<GuestConnectView> {
       HapticFeedback.lightImpact();
       Get.snackbar(
         'No config selected',
-        'Import a configuration file or scan a QR code first.',
+        PlatformCapabilities.supportsQrScanner
+            ? 'Import a configuration file or scan a QR code first.'
+            : 'Import a configuration file first.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
@@ -217,7 +220,12 @@ class _GuestConnectViewState extends State<GuestConnectView> {
               children: [
                 _Header(),
                 SizedBox(height: sectionGap),
-                _ImportRow(onUpload: _importFromFile, onScan: _importFromQr),
+                _ImportRow(
+                  onUpload: _importFromFile,
+                  onScan: PlatformCapabilities.supportsQrScanner
+                      ? _importFromQr
+                      : null,
+                ),
                 SizedBox(height: importGap),
                 Obx(
                   () => _ConfigList(
@@ -345,10 +353,17 @@ class _Header extends StatelessWidget {
 class _ImportRow extends StatelessWidget {
   const _ImportRow({required this.onUpload, required this.onScan});
   final VoidCallback onUpload;
-  final VoidCallback onScan;
+  final VoidCallback? onScan;
 
   @override
   Widget build(BuildContext context) {
+    if (onScan == null) {
+      return _ImportButton(
+        icon: Icons.upload_file_outlined,
+        label: 'Upload config',
+        onTap: onUpload,
+      );
+    }
     return Row(
       children: [
         Expanded(
@@ -363,7 +378,7 @@ class _ImportRow extends StatelessWidget {
           child: _ImportButton(
             icon: Icons.qr_code_scanner,
             label: 'Scan QR',
-            onTap: onScan,
+            onTap: onScan!,
           ),
         ),
       ],

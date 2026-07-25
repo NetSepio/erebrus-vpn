@@ -14,8 +14,7 @@ final class SingboxBridge {
 
     private init() {
         TunnelManager.shared.onStageChange = { [weak self] stage in
-            self?.stage = stage
-            self?.emitStatus()
+            self?.publishStage(stage)
         }
     }
 
@@ -27,7 +26,7 @@ final class SingboxBridge {
             case "prepare":
                 Task {
                     let ok = await TunnelManager.shared.prepare()
-                    result(ok)
+                    self.complete(result, with: ok)
                 }
             case "start":
                 guard let args = call.arguments as? [String: Any],
@@ -39,22 +38,41 @@ final class SingboxBridge {
                 Task {
                     do {
                         try await TunnelManager.shared.start(config: config, profileName: name)
-                        result(nil)
+                        self.complete(result, with: nil)
                     } catch {
-                        self.stage = "error"
-                        self.emitStatus()
-                        result(FlutterError(code: "START", message: error.localizedDescription, details: nil))
+                        self.publishStage("error")
+                        self.complete(
+                            result,
+                            with: FlutterError(
+                                code: "START",
+                                message: error.localizedDescription,
+                                details: nil
+                            )
+                        )
                     }
                 }
             case "stop":
                 Task {
                     await TunnelManager.shared.stop()
-                    result(nil)
+                    self.complete(result, with: nil)
                 }
             case "stage":
                 result(self.stage)
             case "genWgKeys":
                 result(self.generateWireGuardKeyPair())
+            case "setAppProxy", "clearAppProxy":
+                // WKWebView and all other app traffic already traverse the
+                // full-device packet tunnel.
+                result(true)
+            case "setOnDemandEnabled":
+                let enabled =
+                    (call.arguments as? [String: Any])?["enabled"] as? Bool ?? false
+                Task {
+                    let updated = await TunnelManager.shared.setOnDemandEnabled(enabled)
+                    self.complete(result, with: updated)
+                }
+            case "lastError":
+                result(nil)
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -69,6 +87,7 @@ final class SingboxBridge {
 
     func bindStatusSink(_ sink: @escaping FlutterEventSink) {
         statusSink = sink
+        TunnelManager.shared.refreshStageFromSystem()
         sink(stage)
     }
 
@@ -76,8 +95,26 @@ final class SingboxBridge {
         statusSink = nil
     }
 
-    func emitStatus() {
-        statusSink?(stage)
+    private func publishStage(_ value: String) {
+        onPlatformThread { [weak self] in
+            guard let self else { return }
+            self.stage = value
+            self.statusSink?(value)
+        }
+    }
+
+    private func complete(_ result: @escaping FlutterResult, with value: Any?) {
+        onPlatformThread {
+            result(value)
+        }
+    }
+
+    private func onPlatformThread(_ action: @escaping () -> Void) {
+        if Thread.isMainThread {
+            action()
+        } else {
+            DispatchQueue.main.async(execute: action)
+        }
     }
 
     private func generateWireGuardKeyPair() -> [String: String] {
@@ -106,15 +143,41 @@ private final class StatusStreamHandler: NSObject, FlutterStreamHandler {
 }
 
 private final class StatsStreamHandler: NSObject, FlutterStreamHandler {
+    private var timer: Timer?
+    private var eventSink: FlutterEventSink?
+
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
-        events([
-            "rx_bytes": 0,
-            "tx_bytes": 0,
-            "downlink_bps": 0,
-            "uplink_bps": 0,
-        ])
+        eventSink = events
+        emitStats()
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) {
+            [weak self] _ in
+            self?.emitStats()
+        }
         return nil
     }
 
-    func onCancel(withArguments arguments: Any?) -> FlutterError? { nil }
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        timer?.invalidate()
+        timer = nil
+        eventSink = nil
+        return nil
+    }
+
+    private func emitStats() {
+        let defaults = sharedAppGroupDefaults
+        eventSink?([
+            "rx_bytes": defaults.integer(forKey: TunnelConstants.StatsKeys.rxBytes),
+            "tx_bytes": defaults.integer(forKey: TunnelConstants.StatsKeys.txBytes),
+            "downlink_bps": defaults.integer(
+                forKey: TunnelConstants.StatsKeys.downlinkBps
+            ),
+            "uplink_bps": defaults.integer(
+                forKey: TunnelConstants.StatsKeys.uplinkBps
+            ),
+        ])
+    }
+
+    private var sharedAppGroupDefaults: UserDefaults {
+        UserDefaults(suiteName: TunnelConstants.appGroup) ?? .standard
+    }
 }

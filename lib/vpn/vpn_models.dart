@@ -838,9 +838,6 @@ class SingboxConfigBuilder {
     return host.isNotEmpty ? host : null;
   }
 
-  static bool get _isMacOS =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
-
   // NOTE: the pinned sing-box (v1.11.15) rejects unknown DNS fields at config
   // decode — validate additions with `bin/sing-box/<os>/sing-box check` first.
   static Map<String, dynamic> _dnsConfig({
@@ -849,21 +846,8 @@ class SingboxConfigBuilder {
     required bool tunInbound,
     List<String> bootstrapDomains = const [],
   }) {
-    if (tunInbound && _isMacOS) {
-      return {
-        'servers': [
-          {'tag': 'dns-local', 'address': 'local'},
-          {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
-        ],
-        'rules': [
-          {'inbound': 'tun-in', 'server': 'dns-remote'},
-        ],
-        'final': 'dns-remote',
-        'strategy': 'prefer_ipv4',
-      };
-    }
-    // Mobile TUN: bootstrap resolver on the underlying network so peer hostnames
-    // can be resolved before the WireGuard endpoint is up.
+    // Native TUN: bootstrap resolver on the underlying network so peer
+    // hostnames can be resolved before the WireGuard endpoint is up.
     final servers = <Map<String, dynamic>>[
       {'tag': 'dns-direct', 'address': '1.1.1.1', 'detour': 'direct'},
       {'tag': 'dns-remote', 'address': remoteServer, 'detour': wgTag},
@@ -892,9 +876,8 @@ class SingboxConfigBuilder {
         'tag': 'tun-in',
         'address': [tunAddress],
         'auto_route': true,
-        // macOS CLI TUN: strict_route often breaks DNS for system browsers.
-        'strict_route': !_isMacOS,
-        'stack': _isMacOS ? 'system' : 'gvisor',
+        'strict_route': true,
+        'stack': 'gvisor',
         'sniff': true,
       });
     }
@@ -992,7 +975,7 @@ class SingboxConfigBuilder {
   /// Desktop (proxy-only) uses the local mixed inbound so the system proxy is
   /// pointed at a dead end; mobile uses the TUN to block system-wide.
   static Map<String, dynamic> killSwitchBlockConfig() {
-    if (PlatformCapabilities.isDesktop) {
+    if (PlatformCapabilities.usesDesktopVpnRunner) {
       return _withClashApi({
         'log': {'level': 'warn'},
         'inbounds': [

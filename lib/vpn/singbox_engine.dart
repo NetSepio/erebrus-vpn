@@ -42,8 +42,8 @@ class VpnStats {
 
 /// Dart facade over the native sing-box (libbox) tunnel.
 ///
-/// On mobile: Android `VpnService` + libbox AAR, iOS Network Extension.
-/// On desktop: bundled sing-box CLI subprocess ([SingboxDesktopRunner]).
+/// Android uses `VpnService`; iOS and macOS use a Network Extension.
+/// Windows and Linux use a bundled sing-box CLI subprocess.
 class SingboxEngine {
   SingboxEngine._();
   static final SingboxEngine instance = SingboxEngine._();
@@ -61,7 +61,7 @@ class SingboxEngine {
   Stream<VpnStage>? _stage;
   Stream<VpnStats>? _stats;
 
-  bool get _useDesktopRunner => PlatformCapabilities.isDesktop;
+  bool get _useDesktopRunner => PlatformCapabilities.usesDesktopVpnRunner;
 
   /// Stream of lifecycle stages.
   Stream<VpnStage> get onStage => _stage ??= _useDesktopRunner
@@ -172,7 +172,7 @@ class SingboxEngine {
     }
   }
 
-  /// Configures iOS VPN On Demand. Other platforms retain their existing
+  /// Configures Apple VPN On Demand. Other platforms retain their existing
   /// app-launch auto-connect behavior and report this capability as absent.
   Future<bool> setOnDemandEnabled(bool enabled) async {
     if (_useDesktopRunner) return false;

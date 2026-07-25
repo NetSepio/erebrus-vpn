@@ -22,4 +22,18 @@ void main() {
     expect(PlatformCapabilities.usesWebLogin, isTrue);
     expect(PlatformCapabilities.usesReown, isFalse);
   });
+
+  test('desktop VPN runner is reserved for Windows and Linux', () {
+    if (!PlatformCapabilities.isDesktop) return;
+    expect(
+      PlatformCapabilities.usesDesktopVpnRunner,
+      PlatformCapabilities.platformLabel == 'windows' ||
+          PlatformCapabilities.platformLabel == 'linux',
+    );
+  });
+
+  test('desktop platforms never expose the QR camera scanner', () {
+    if (!PlatformCapabilities.isDesktop) return;
+    expect(PlatformCapabilities.supportsQrScanner, isFalse);
+  });
 }

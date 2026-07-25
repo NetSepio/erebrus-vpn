@@ -17,6 +17,8 @@
   FAST.com, public IP, DNS leak, WebRTC leak, IPv6, and Cloudflare connection
   diagnostics.
 - VPN On Demand support for the iOS system tunnel profile.
+- A sandboxed macOS Packet Tunnel Provider with native WireGuard,
+  VLESS/REALITY, and Hysteria2 support for Mac App Store distribution.
 
 ### Improved
 
@@ -30,6 +32,8 @@
 - Android release packaging is explicitly ARM64-only so every supported variant
   includes the native sing-box VPN core.
 - Apple app and packet-tunnel targets now inherit the canonical Flutter version.
+- Desktop config import is file-only and no longer links or requests camera
+  access; Android and iOS retain QR-camera import.
 
 ### Fixed
 

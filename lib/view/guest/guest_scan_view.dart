@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 
 import '../../theme/app_theme.dart';
 
@@ -13,22 +13,18 @@ class GuestScanView extends StatefulWidget {
 }
 
 class _GuestScanViewState extends State<GuestScanView> {
-  final MobileScannerController _controller = MobileScannerController();
+  final GlobalKey _scannerKey = GlobalKey(debugLabel: 'guest-config-qr');
   bool _handled = false;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    if (_handled) return;
-    final barcode = capture.barcodes.firstOrNull;
-    final raw = barcode?.rawValue;
-    if (raw == null || raw.isEmpty) return;
-    _handled = true;
-    Get.back<String>(result: raw);
+  void _onViewCreated(QRViewController controller) {
+    controller.scannedDataStream.listen((scan) {
+      if (_handled) return;
+      final raw = scan.code;
+      if (raw == null || raw.isEmpty) return;
+      _handled = true;
+      controller.pauseCamera();
+      Get.back<String>(result: raw);
+    });
   }
 
   @override
@@ -39,9 +35,16 @@ class _GuestScanViewState extends State<GuestScanView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            MobileScanner(
-              controller: _controller,
-              onDetect: _onDetect,
+            QRView(
+              key: _scannerKey,
+              onQRViewCreated: _onViewCreated,
+              overlay: QrScannerOverlayShape(
+                borderColor: AppColors.accent,
+                borderRadius: 14,
+                borderLength: 30,
+                borderWidth: 4,
+                cutOutSize: MediaQuery.sizeOf(context).shortestSide * 0.72,
+              ),
             ),
             Column(
               children: [
@@ -57,14 +60,22 @@ class _GuestScanViewState extends State<GuestScanView> {
                             color: Colors.black.withValues(alpha: 0.45),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                          child: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
                           'Scan VPN config QR',
-                          style: grotesk(size: 17, weight: FontWeight.w600, color: Colors.white),
+                          style: grotesk(
+                            size: 17,
+                            weight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -73,14 +84,21 @@ class _GuestScanViewState extends State<GuestScanView> {
                 const Spacer(),
                 Container(
                   margin: const EdgeInsets.only(bottom: 34),
-                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 22,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
                     'Position the QR code inside the frame',
-                    style: grotesk(size: 13, weight: FontWeight.w500, color: Colors.white.withValues(alpha: 0.9)),
+                    style: grotesk(
+                      size: 13,
+                      weight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
                   ),
                 ),
               ],

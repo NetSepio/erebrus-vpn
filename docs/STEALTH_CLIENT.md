@@ -90,26 +90,25 @@ The current stage is replayed on (re)subscribe.
 Requires physical device + Apple Developer App Group + Network Extension entitlements.
 See [BUILD.md](BUILD.md) and [STATUS.md](STATUS.md).
 
-### macOS (`macos`) — partial
+### macOS (`macos`) — shipped
 
-**Today (unsigned dev):** `SingboxDesktopRunner` runs the **sing-box CLI** in proxy mode
-(`./scripts/setup-macos-dev.sh`). Not the Network Extension.
-
-**TODO for system TUN:** Wire libbox into `macos/ErebrusTunnel/PacketTunnelProvider.swift`
-(same pattern as iOS), add NE target in Xcode, embed `macos/Frameworks/Libbox.xcframework`.
-`TunnelManager.swift` + channels exist but the extension is still a lifecycle stub.
+1. Build the universal framework: `./scripts/build-libbox-macos.sh`.
+2. Run the idempotent wiring: `ruby ./scripts/setup-macos-tunnel.rb`.
+3. `ErebrusTunnel` runs libbox inside `NEPacketTunnelProvider`.
+4. `TunnelManager.swift` and `SingboxPlugin.swift` provide status, On Demand,
+   traffic stats, and the shared Flutter channel contract.
 
 ### Windows / Linux — CLI proxy mode (partial)
 
-Dart uses `SingboxDesktopRunner` on **all** desktop platforms (`SingboxEngine._useDesktopRunner`).
+Dart uses `SingboxDesktopRunner` only on Windows and Linux.
 The C++ plugins in `windows/runner/singbox_plugin.cpp` and `linux/runner/singbox_plugin.cc`
 register `dev.erebrus/singbox` but are **never called** from Dart on desktop.
 
 1. Fetch CLI: `./scripts/fetch-singbox-cli.sh windows` (or `linux`).
 2. Build: `./scripts/build-desktop.sh windows` (or `linux`) — embeds `sing-box` next to the app.
 3. Config: `useSystemTunnel: false` → mixed inbound on `127.0.0.1:10808` only (no TUN).
-4. `DesktopSystemProxy` applies the local mixed proxy to macOS
-   (`networksetup`), Windows (registry), and Linux (`gsettings`). The in-app
+4. `DesktopSystemProxy` applies the local mixed proxy to Windows (registry)
+   and Linux (`gsettings`). The in-app
    WebView and system browsers follow that proxy while connected.
 5. **Optional later:** wire libbox TUN in the native plugins for system-wide VPN without CLI.
 

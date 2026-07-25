@@ -14,18 +14,21 @@ source "${SCRIPT_DIR}/libbox-common.sh"
 
 OUT_DIR="${ROOT_DIR}/macos/Frameworks"
 WORK="$(mktemp -d)"
-JAVA_PKG="io.nekohasekai.libbox"
-
+EREBRUS_MACOS_DEPLOYMENT_TARGET="${EREBRUS_MACOS_DEPLOYMENT_TARGET:-11.0}"
 echo "▸ sing-box ${SING_BOX_VERSION} (${SING_BOX_COMMIT}) → ${OUT_DIR}/Libbox.xcframework"
 echo "▸ gomobile ${GOMOBILE_VERSION} · targets macos/arm64 + macos/amd64"
+echo "▸ minimum macOS ${EREBRUS_MACOS_DEPLOYMENT_TARGET}"
 
 ensure_gomobile
 prepare_singbox_source "${WORK}"
 
 mkdir -p "${OUT_DIR}"
+MACOSX_DEPLOYMENT_TARGET="${EREBRUS_MACOS_DEPLOYMENT_TARGET}" \
+CGO_CFLAGS="-mmacosx-version-min=${EREBRUS_MACOS_DEPLOYMENT_TARGET}" \
+CGO_LDFLAGS="-mmacosx-version-min=${EREBRUS_MACOS_DEPLOYMENT_TARGET}" \
 gomobile bind -v \
   -target=macos,macos/arm64,macos/amd64 \
-  -javapkg="${JAVA_PKG}" \
+  -macosversion="${EREBRUS_MACOS_DEPLOYMENT_TARGET}" \
   -tags="${LIBBOX_TAGS}" \
   -trimpath -ldflags="-s -w" \
   -o "${OUT_DIR}/Libbox.xcframework" \

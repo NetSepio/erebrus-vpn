@@ -19,7 +19,7 @@ flutter run          # launches on a connected device / emulator
 ```
 
 At this point the UI runs on every platform. **Tunnel traffic** needs the native
-engine below (Android/iOS: libbox; desktop: sing-box CLI via `SingboxDesktopRunner`).
+engine below (Android/iOS/macOS: libbox; Windows/Linux: sing-box CLI).
 See [STATUS.md](STATUS.md) for platform-specific tunnel and proxy differences.
 
 The canonical application version is the `version:` field in `pubspec.yaml`.
@@ -42,7 +42,7 @@ All scripts share pinned versions via `scripts/libbox-common.sh`
 | All of the above | `./scripts/build-libbox-all.sh` | Android + iOS + macOS |
 
 Windows and Linux have **no libbox** — `gomobile bind` only targets
-android/ios/macos. Desktop tunnels through the sing-box CLI instead
+android/ios/macos. Those platforms tunnel through the sing-box CLI instead
 (`./scripts/fetch-singbox-cli.sh`); the `build-libbox-{windows,linux}.sh`
 scripts are fail-fast placeholders that explain this.
 
@@ -69,27 +69,28 @@ The app needs a server config (a "credential bundle"). Wire one of:
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how a bundle becomes a live tunnel.
 
-## macOS (menu bar + stealth)
+## macOS (App Sandbox + Network Extension)
 
 ```bash
-./scripts/setup-macos-dev.sh    # fetch sing-box CLI
+./scripts/build-libbox-macos.sh
+ruby ./scripts/setup-macos-tunnel.rb
 flutter run -d macos
 ```
 
-**Unsigned dev (today):** the desktop runner uses the **sing-box CLI in proxy mode**
-— no libbox build required. Browser and in-app traffic can use the tunnel; other apps
-may not until a signed Network Extension ships.
-
-**Signed system TUN (TODO):** build `Libbox.xcframework`, wire libbox into
-`macos/ErebrusTunnel/PacketTunnelProvider.swift`, add the NE target in Xcode
-(see `macos/ErebrusTunnel/README.md`). See [cert.md](cert.md) for signing.
+macOS uses the sandboxed **ErebrusTunnel Packet Tunnel Provider**. The extension
+runs libbox and supports WireGuard, VLESS + REALITY, and Hysteria2 with the same
+configuration and fallback path as iOS. The OS routes the in-app browser and
+other apps through the full-device tunnel; `networksetup`, administrator
+elevation, and a separate sing-box executable are not used.
 
 Auth on desktop uses **web login** (not Reown). Stealth configs use the same Dart
-`SingboxConfigBuilder` as mobile.
+`SingboxConfigBuilder` as mobile. Guest configuration import on desktop uses
+the file picker only; camera scanning and camera entitlements are intentionally
+excluded from every desktop build.
 
 ## Windows / Linux
 
-Desktop tunneling uses the **sing-box CLI** (same Dart path as macOS), not the
+Windows/Linux tunneling uses the **sing-box CLI**, not the
 C++ `singbox_plugin` stubs in `windows/runner/` and `linux/runner/`.
 
 ```bash
@@ -103,7 +104,7 @@ flutter run -d windows                   # or -d linux
 probe, live stats (Clash API), web wallet login, gateway node list + provision.
 
 **System proxy:** On connect, `DesktopSystemProxy` routes HTTP/HTTPS/SOCKS through
-`127.0.0.1:10808` (macOS: `networksetup`, Windows: registry, Linux: `gsettings`).
+`127.0.0.1:10808` (Windows: registry, Linux: `gsettings`).
 The in-app browser and system browsers use the tunnel while connected. Close the
 window to **minimize to tray**; use tray → Quit to exit fully.
 
@@ -173,14 +174,17 @@ The App Store IPA is written under `build/ios/ipa/`. Verify that both
 ### macOS
 
 ```bash
-./scripts/build-desktop.sh macos
+./scripts/build-libbox-macos.sh
+ruby ./scripts/setup-macos-tunnel.rb
+flutter build macos --release
+open macos/Runner.xcworkspace
 ```
 
-This embeds the sing-box CLI and writes a versioned ZIP under `dist/`.
-Development signing is suitable only for local testing. Public distribution
-outside the Mac App Store requires a **Developer ID Application** certificate,
-Hardened Runtime-compatible entitlements, and Apple notarization; an Apple
-Development-signed ZIP will be rejected by Gatekeeper on other Macs.
+For Mac App Store delivery, choose **Runner** and **Any Mac**, then Product →
+Archive → Distribute App → App Store Connect. Both `Runner` and
+`ErebrusTunnel` need App Store provisioning profiles with App Groups and
+Network Extensions enabled. `./scripts/build-desktop.sh macos` remains a
+convenient local ZIP builder; the Organizer archive is the store artifact.
 
 ## Troubleshooting
 
@@ -192,4 +196,5 @@ Development-signed ZIP will be rejected by Gatekeeper on other Macs.
 | `reality server is not included` | The `libbox.aar` was built without the REALITY tags — rebuild with the script (tags are set there). |
 | App connects then drops on strict Wi-Fi | That's the fallback working — it should re-establish on a stealth carrier; check the mode is **Auto** or **Stealth**. |
 | iOS connects then immediate error | Build libbox + run on a **physical device**; enable App Group + NE in Apple Developer portal. |
+| macOS cannot create the VPN profile | Enable App Groups + Network Extensions for both macOS identifiers and refresh their provisioning profiles. |
 | Stealth shows connected but no egress | Wait for stealth readiness probe; on node check `wg show` endpoint is `127.0.0.1:…` not the client IP. |

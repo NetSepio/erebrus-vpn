@@ -21,14 +21,23 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		20AD42DEC9D65B7921251782 /* ErebrusTunnel.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B3DF54F1FDC73F06ED59ABE9 /* ErebrusTunnel.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		27A12BCBA531E9BF1B623DAE /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133D86710BE8CF982DB34B6A /* PacketTunnelProvider.swift */; };
+		31C312F44913BAEC07B05830 /* Libbox.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FC0F397070E837A56DB5BA3 /* Libbox.xcframework */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		3EC2C43792B0C472DFF5F930 /* FilePath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 968CC2A705C9B1A5FBB5C074 /* FilePath.swift */; };
 		5E78B18F8934745628AC0DE4 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0079FD62A400AB4BACDC319A /* Pods_RunnerTests.framework */; };
 		67909911BD04B02A9F727E95 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C23DFC38DE29C9E41047439E /* Pods_Runner.framework */; };
+		83758F87786256C112F1A551 /* TunnelConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERE1B0032F3A4B5C6D7E8F03 /* TunnelConstants.swift */; };
+		840933D989FE43166CC0181B /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8BD32E55127367D3BBC4BDD7 /* Cocoa.framework */; };
+		8C295501110B1B2F0ADB982C /* TunnelStatsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80967E88FA090F3FC85286F /* TunnelStatsMonitor.swift */; };
+		A98A69694EE3CC7DDA4C9937 /* RunBlocking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911DE0F5D1B47C04252EFF75 /* RunBlocking.swift */; };
+		EC99E39EDF9C2EC9506CD72F /* ExtensionPlatformInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79CFF1A0286D545112D4CD98 /* ExtensionPlatformInterface.swift */; };
 		ERE1B0112F3A4B5C6D7E8F01 /* SingboxPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERE1B0012F3A4B5C6D7E8F01 /* SingboxPlugin.swift */; };
 		ERE1B0122F3A4B5C6D7E8F02 /* TunnelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERE1B0022F3A4B5C6D7E8F02 /* TunnelManager.swift */; };
 		ERE1B0132F3A4B5C6D7E8F03 /* TunnelConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERE1B0032F3A4B5C6D7E8F03 /* TunnelConstants.swift */; };
@@ -49,6 +58,13 @@
 			remoteGlobalIDString = 33CC111A2044C6BA0003C045;
 			remoteInfo = FLX;
 		};
+		3ECEB967B2B984D927E15D38 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33CC10E52044A3C60003C045 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 07C05873D13BDBDBBC054628;
+			remoteInfo = ErebrusTunnel;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -62,15 +78,28 @@
 			name = "Bundle Framework";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DEECA7ECBE336FAFAA0B487A /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				20AD42DEC9D65B7921251782 /* ErebrusTunnel.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0079FD62A400AB4BACDC319A /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		133D86710BE8CF982DB34B6A /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
+		2416B7D5E39BCFCC61385725 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		333000ED22D3DE5D00554162 /* Warnings.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Warnings.xcconfig; sourceTree = "<group>"; };
 		335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeneratedPluginRegistrant.swift; sourceTree = "<group>"; };
-		33CC10ED2044A3C60003C045 /* erebrus_vpn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = erebrus_vpn.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		33CC10ED2044A3C60003C045 /* Erebrus VPN.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Erebrus VPN.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		33CC10F02044A3C60003C045 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		33CC10F22044A3C60003C045 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Runner/Assets.xcassets; sourceTree = "<group>"; };
 		33CC10F52044A3C60003C045 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
@@ -82,12 +111,20 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
+		4B2D8CB66EECB43D055B8056 /* ErebrusTunnel.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = ErebrusTunnel.entitlements; sourceTree = "<group>"; };
+		6FC0F397070E837A56DB5BA3 /* Libbox.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; name = Libbox.xcframework; path = Frameworks/Libbox.xcframework; sourceTree = SOURCE_ROOT; };
 		716982F5C2D1DF125ED67D42 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		79CFF1A0286D545112D4CD98 /* ExtensionPlatformInterface.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExtensionPlatformInterface.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		8BD32E55127367D3BBC4BDD7 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		911DE0F5D1B47C04252EFF75 /* RunBlocking.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RunBlocking.swift; sourceTree = "<group>"; };
+		968CC2A705C9B1A5FBB5C074 /* FilePath.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilePath.swift; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		9A0A6E98831CA27E4F2ACBA8 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
+		B3DF54F1FDC73F06ED59ABE9 /* ErebrusTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ErebrusTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B709CC62BB72A2145DB1A8E4 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		C23DFC38DE29C9E41047439E /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C80967E88FA090F3FC85286F /* TunnelStatsMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TunnelStatsMonitor.swift; sourceTree = "<group>"; };
 		E8A1325F407F29AEB2419709 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		EE2B26CA164B3F6714428431 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 		ERE1B0012F3A4B5C6D7E8F01 /* SingboxPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SingboxPlugin.swift; sourceTree = "<group>"; };
@@ -113,6 +150,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7526ED35E95F2F737CD333D3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				840933D989FE43166CC0181B /* Cocoa.framework in Frameworks */,
+				31C312F44913BAEC07B05830 /* Libbox.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -126,7 +172,6 @@
 				E8A1325F407F29AEB2419709 /* Pods-RunnerTests.release.xcconfig */,
 				B709CC62BB72A2145DB1A8E4 /* Pods-RunnerTests.profile.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -159,14 +204,17 @@
 				33CC10EE2044A3C60003C045 /* Products */,
 				D73912EC22F37F3D000D13A0 /* Frameworks */,
 				1A1E75153D2850DABEF71D0E /* Pods */,
+				AC31C35F8746D5B14D741A2A /* ErebrusTunnel */,
+				D13D1EB087C7453134B6A01C /* NativeFrameworks */,
 			);
 			sourceTree = "<group>";
 		};
 		33CC10EE2044A3C60003C045 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				33CC10ED2044A3C60003C045 /* erebrus_vpn.app */,
+				33CC10ED2044A3C60003C045 /* Erebrus VPN.app */,
 				331C80D5294CF71000263BE5 /* RunnerTests.xctest */,
+				B3DF54F1FDC73F06ED59ABE9 /* ErebrusTunnel.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -208,11 +256,41 @@
 			path = Runner;
 			sourceTree = "<group>";
 		};
+		AC31C35F8746D5B14D741A2A /* ErebrusTunnel */ = {
+			isa = PBXGroup;
+			children = (
+				2416B7D5E39BCFCC61385725 /* Info.plist */,
+				4B2D8CB66EECB43D055B8056 /* ErebrusTunnel.entitlements */,
+				133D86710BE8CF982DB34B6A /* PacketTunnelProvider.swift */,
+				79CFF1A0286D545112D4CD98 /* ExtensionPlatformInterface.swift */,
+				C80967E88FA090F3FC85286F /* TunnelStatsMonitor.swift */,
+			);
+			name = ErebrusTunnel;
+			path = ErebrusTunnel;
+			sourceTree = "<group>";
+		};
+		AE11B87D27304FB2E84174FE /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				8BD32E55127367D3BBC4BDD7 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+		D13D1EB087C7453134B6A01C /* NativeFrameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6FC0F397070E837A56DB5BA3 /* Libbox.xcframework */,
+			);
+			name = NativeFrameworks;
+			sourceTree = "<group>";
+		};
 		D73912EC22F37F3D000D13A0 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				C23DFC38DE29C9E41047439E /* Pods_Runner.framework */,
 				0079FD62A400AB4BACDC319A /* Pods_RunnerTests.framework */,
+				AE11B87D27304FB2E84174FE /* OS X */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -221,6 +299,8 @@
 			isa = PBXGroup;
 			children = (
 				ERE1B0032F3A4B5C6D7E8F03 /* TunnelConstants.swift */,
+				968CC2A705C9B1A5FBB5C074 /* FilePath.swift */,
+				911DE0F5D1B47C04252EFF75 /* RunBlocking.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -228,6 +308,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		07C05873D13BDBDBBC054628 /* ErebrusTunnel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A85B43CB903A2C078130B33A /* Build configuration list for PBXNativeTarget "ErebrusTunnel" */;
+			buildPhases = (
+				907F6C2440289F6EBC90C7BB /* Sources */,
+				7526ED35E95F2F737CD333D3 /* Frameworks */,
+				36B50121B2486310F62569BD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ErebrusTunnel;
+			productName = ErebrusTunnel;
+			productReference = B3DF54F1FDC73F06ED59ABE9 /* ErebrusTunnel.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		331C80D4294CF70F00263BE5 /* RunnerTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 331C80DE294CF71000263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
@@ -259,15 +356,17 @@
 				3399D490228B24CF009A79C7 /* ShellScript */,
 				C6F74CDFCF66F3E00D9BF77D /* [CP] Embed Pods Frameworks */,
 				305F786B99604B2EB8FFBD5A /* [CP] Copy Pods Resources */,
+				DEECA7ECBE336FAFAA0B487A /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				33CC11202044C79F0003C045 /* PBXTargetDependency */,
+				F7539D546D76C77771691D9E /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
-			productReference = 33CC10ED2044A3C60003C045 /* erebrus_vpn.app */;
+			productReference = 33CC10ED2044A3C60003C045 /* Erebrus VPN.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -281,6 +380,18 @@
 				LastUpgradeCheck = 1510;
 				ORGANIZATIONNAME = "";
 				TargetAttributes = {
+					07C05873D13BDBDBBC054628 = {
+						CreatedOnToolsVersion = 77;
+						ProvisioningStyle = Automatic;
+						SystemCapabilities = {
+							com.apple.NetworkExtensions = {
+								enabled = 1;
+							};
+							com.apple.Sandbox = {
+								enabled = 1;
+							};
+						};
+					};
 					331C80D4294CF70F00263BE5 = {
 						CreatedOnToolsVersion = 14.0;
 						TestTargetID = 33CC10EC2044A3C60003C045;
@@ -290,13 +401,19 @@
 						LastSwiftMigration = 1100;
 						ProvisioningStyle = Automatic;
 						SystemCapabilities = {
+							com.apple.ApplicationGroups.Mac = {
+								enabled = 1;
+							};
+							com.apple.Keychain = {
+								enabled = 1;
+							};
+							com.apple.NetworkExtensions = {
+								enabled = 1;
+							};
 							com.apple.Sandbox = {
 								enabled = 1;
 							};
 							com.apple.SignInWithApple = {
-								enabled = 1;
-							};
-							com.apple.Keychain = {
 								enabled = 1;
 							};
 						};
@@ -323,6 +440,7 @@
 				33CC10EC2044A3C60003C045 /* Runner */,
 				331C80D4294CF70F00263BE5 /* RunnerTests */,
 				33CC111A2044C6BA0003C045 /* Flutter Assemble */,
+				07C05873D13BDBDBBC054628 /* ErebrusTunnel */,
 			);
 		};
 /* End PBXProject section */
@@ -341,6 +459,13 @@
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		36B50121B2486310F62569BD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -487,6 +612,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		907F6C2440289F6EBC90C7BB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				27A12BCBA531E9BF1B623DAE /* PacketTunnelProvider.swift in Sources */,
+				EC99E39EDF9C2EC9506CD72F /* ExtensionPlatformInterface.swift in Sources */,
+				8C295501110B1B2F0ADB982C /* TunnelStatsMonitor.swift in Sources */,
+				83758F87786256C112F1A551 /* TunnelConstants.swift in Sources */,
+				3EC2C43792B0C472DFF5F930 /* FilePath.swift in Sources */,
+				A98A69694EE3CC7DDA4C9937 /* RunBlocking.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -499,6 +637,12 @@
 			isa = PBXTargetDependency;
 			target = 33CC111A2044C6BA0003C045 /* Flutter Assemble */;
 			targetProxy = 33CC111F2044C79F0003C045 /* PBXContainerItemProxy */;
+		};
+		F7539D546D76C77771691D9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ErebrusTunnel;
+			target = 07C05873D13BDBDBBC054628 /* ErebrusTunnel */;
+			targetProxy = 3ECEB967B2B984D927E15D38 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -618,11 +762,16 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Erebrus VPN";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 1.0.3;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -750,11 +899,16 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Erebrus VPN";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 1.0.3;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -770,11 +924,16 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Runner/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Erebrus VPN";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 1.0.3;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -795,6 +954,96 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
+		};
+		3CC662C8DDE6F35C7266A4D7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ErebrusTunnel/ErebrusTunnel.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
+				INFOPLIST_FILE = ErebrusTunnel/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				OTHER_LDFLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.vpn.ErebrusTunnel;
+				PRODUCT_NAME = ErebrusTunnel;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		92337282690411E1FEA852E7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ErebrusTunnel/ErebrusTunnel.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
+				INFOPLIST_FILE = ErebrusTunnel/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				OTHER_LDFLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.vpn.ErebrusTunnel;
+				PRODUCT_NAME = ErebrusTunnel;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		CA8B45AD1F6961889FB205C6 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ErebrusTunnel/ErebrusTunnel.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = 76KW3AMAW5;
+				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = "$(PROJECT_DIR)/Frameworks";
+				INFOPLIST_FILE = ErebrusTunnel/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				OTHER_LDFLAGS = "";
+				PRODUCT_BUNDLE_IDENTIFIER = com.erebrus.vpn.ErebrusTunnel;
+				PRODUCT_NAME = ErebrusTunnel;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Profile;
 		};
 /* End XCBuildConfiguration section */
 
@@ -835,6 +1084,16 @@
 				33CC111C2044C6BA0003C045 /* Debug */,
 				33CC111D2044C6BA0003C045 /* Release */,
 				338D0CEB231458BD00FA5F75 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A85B43CB903A2C078130B33A /* Build configuration list for PBXNativeTarget "ErebrusTunnel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				92337282690411E1FEA852E7 /* Release */,
+				3CC662C8DDE6F35C7266A4D7 /* Debug */,
+				CA8B45AD1F6961889FB205C6 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

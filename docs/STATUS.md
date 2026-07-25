@@ -8,28 +8,33 @@ What works today vs what still needs work. Updated 2026-07-25.
 |---|---|---|---|
 | **Android** | Yes | `ErebrusVpnService` + `libbox.aar` | arm64 devices only |
 | **iOS** | Yes | `ErebrusTunnel` Network Extension + `Libbox.xcframework` | Physical device; Apple App Group + NE entitlements; `./scripts/build-libbox-ios.sh` |
-| **macOS** | Partial | **sing-box CLI** proxy mode via `SingboxDesktopRunner` (Dart — not the native plugin). Signed TUN: NE scaffold only | System-wide VPN needs signed NE + libbox in `macos/ErebrusTunnel/` |
-| **Windows** | Partial | Same **sing-box CLI** path as macOS (`SingboxEngine` → `SingboxDesktopRunner`). System proxy via registry on connect | Bundle CLI (`./scripts/build-desktop.sh windows`); tray minimize; libbox TUN optional later |
-| **Linux** | Partial | Same **sing-box CLI** path as macOS. System proxy via `gsettings` on connect (GNOME/GTK) | Bundle CLI (`./scripts/build-desktop.sh linux`); tray minimize; KDE/non-GNOME may need extra proxy backend |
+| **macOS** | Yes | `ErebrusTunnel` Network Extension + universal `Libbox.xcframework` | Apple App Group + NE entitlements; `./scripts/build-libbox-macos.sh` |
+| **Windows** | Partial | **sing-box CLI** via `SingboxDesktopRunner`. System proxy via registry on connect | Bundle CLI (`./scripts/build-desktop.sh windows`); tray minimize; libbox TUN optional later |
+| **Linux** | Partial | **sing-box CLI** via `SingboxDesktopRunner`. System proxy via `gsettings` on connect (GNOME/GTK) | Bundle CLI (`./scripts/build-desktop.sh linux`); tray minimize; KDE/non-GNOME may need extra proxy backend |
 
 Dart config (`SingboxConfigBuilder`), connect fallback (Auto / Stealth / WireGuard), and
-stealth readiness probe are shared across **all** platforms. Mobile uses native libbox
-via `dev.erebrus/singbox` method channels. **All desktop** (macOS / Windows / Linux) uses
-`SingboxDesktopRunner` — a sing-box CLI subprocess — and ignores the C++ plugin stubs.
+stealth readiness probe are shared across **all** platforms. Android, iOS, and
+macOS use native libbox via `dev.erebrus/singbox`; Windows and Linux use
+`SingboxDesktopRunner`.
 
 ## Features
 
 | Feature | Android | iOS | macOS | Win/Linux |
 |---|---|---|---|---|
 | Per-app split tunnel | Yes | No (system-wide NE) | No | No |
-| In-app browser via tunnel | WebView → `setAppProxy` | System NE routes all traffic | System proxy on connect | System proxy on connect (Win registry / Linux gsettings) |
-| Live RX/TX stats | Yes | Yes (app group) | Yes (Clash API `:9090`) | Yes (Clash API `:9090`) |
+| In-app browser via tunnel | WebView → `setAppProxy` | System NE routes all traffic | System NE routes all traffic | System proxy on connect (Win registry / Linux gsettings) |
+| Live RX/TX stats | Yes | Yes (app group) | Yes (app group) | Yes (Clash API `:9090`) |
 | Account auth | Google / Reown / Solana MWA | Apple / Google / Reown | Apple + browser/token | Browser/token |
 | Gateway provisioner | Yes | Yes | Yes (`GatewayController`) | Yes (`GatewayController`) |
 | Public + org nodes | Yes | Yes | Yes | Yes |
 | Org switcher | Yes | Yes | Yes | Yes |
 | Active transport diagnostics | Yes | Yes | Yes | Yes |
 | Brave Search + network tools | Yes | Yes | Yes | Yes |
+| Config import | File + QR camera | File + QR camera | File only | File only |
+
+Desktop builds intentionally omit the QR-camera scanner and camera permissions.
+Users can import `.conf`, `.json`, or `.txt` configurations with the file
+picker instead.
 
 ## Recently fixed (no longer open)
 
@@ -60,11 +65,9 @@ via `dev.erebrus/singbox` method channels. **All desktop** (macOS / Windows / Li
 
 1. **Windows / Linux QA** — run `./scripts/build-desktop.sh windows|linux`, verify connect, egress probe, and browser egress via system proxy.
 2. **Linux KDE / non-GNOME** — optional `kwriteconfig` or `xdg-settings` proxy backend if `gsettings` is unavailable.
-3. **macOS distribution** — install a Developer ID Application certificate and
-   notarize public-download ZIPs. Development-signed builds are local-only.
-4. **macOS Network Extension (optional)** — port `ios/ErebrusTunnel/` libbox
-   into `macos/ErebrusTunnel/` for signed system TUN (see
-   `macos/ErebrusTunnel/README.md`). Current builds use CLI proxy mode.
+3. **macOS App Store** — enable App Groups and Network Extensions on both
+   identifiers, refresh App Store provisioning, archive, and test WG,
+   VLESS/REALITY, and Hysteria2 through TestFlight.
 
 ### Future / optional
 

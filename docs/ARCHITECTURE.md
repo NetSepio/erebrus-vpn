@@ -114,6 +114,11 @@ Authentication is platform-aware:
 - Windows/Linux: browser callback and manual token fallback.
 - Guest mode is available without creating a gateway session.
 
+Guest configuration import is platform-aware: Android and iOS offer file import
+plus an in-app QR camera scanner; macOS, Windows, and Linux offer file import
+only. The QR plugin has no desktop native registration, so desktop packages do
+not link camera APIs or request camera permission.
+
 ## The native tunnel
 
 Mobile uses **libbox** inside an OS VPN slot; desktop uses the sing-box CLI until
@@ -134,9 +139,9 @@ native plugins are wired. Platform matrix: [STATUS.md](STATUS.md).
 
 ### macOS / Windows / Linux
 
-- **macOS:** `singbox_desktop_runner.dart` spawns the sing-box CLI (proxy mode).
-  Network Extension scaffold exists but libbox is not started in the extension yet.
-- **Windows / Linux:** Dart also spawns the sing-box CLI and applies the system
+- **macOS:** `NETunnelProviderManager` controls the sandboxed
+  `ErebrusTunnel` extension, which runs libbox for WG, VLESS/REALITY, and Hy2.
+- **Windows / Linux:** Dart spawns the sing-box CLI and applies the system
   proxy. The native channel stubs do not start a TUN and are not used by the
   current desktop runner.
 

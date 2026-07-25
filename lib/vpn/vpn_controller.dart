@@ -307,8 +307,8 @@ class VpnController extends GetxController {
           if (!await _engine.prepare()) {
             error.value =
                 _engine.desktopPrepareError ??
-                (PlatformCapabilities.isDesktop
-                    ? 'sing-box missing — run ./scripts/fetch-singbox-cli.sh macos from the repo root'
+                (PlatformCapabilities.usesDesktopVpnRunner
+                    ? 'sing-box is missing — install the bundled desktop VPN engine'
                     : 'VPN permission denied');
             stage.value = VpnStage.error;
             return;
@@ -374,7 +374,7 @@ class VpnController extends GetxController {
             '${candidates.map((t) => t.label).join(' → ')}',
           );
 
-          final resolvedHosts = PlatformCapabilities.isDesktop
+          final resolvedHosts = PlatformCapabilities.usesDesktopVpnRunner
               ? const <String, String>{}
               : await SingboxConfigBuilder.resolveDialHosts(bundle);
 
@@ -389,10 +389,9 @@ class VpnController extends GetxController {
                 bundle: bundle,
                 transport: t,
                 clientPrivateKey: privateToUse,
-                // Desktop CLI: local mixed proxy + system HTTP/SOCKS (no TUN). TUN on
-                // unsigned macOS breaks DNS for Safari/Chrome even when the in-app
-                // egress probe (explicit 127.0.0.1:10808) works.
-                useSystemTunnel: !PlatformCapabilities.isDesktop,
+                // Windows/Linux use a local mixed proxy. Apple and Android
+                // builds use their OS-managed full-device tunnel.
+                useSystemTunnel: !PlatformCapabilities.usesDesktopVpnRunner,
                 resolvedHosts: resolvedHosts,
               );
               activeTransport.value = t;
@@ -454,7 +453,8 @@ class VpnController extends GetxController {
                   mode: mode.value,
                   profileName: 'Erebrus · ${target.name}',
                 );
-                if (PlatformCapabilities.isIOS &&
+                if ((PlatformCapabilities.isIOS ||
+                        PlatformCapabilities.isMacOS) &&
                     Get.isRegistered<AppSettingsController>() &&
                     Get.find<AppSettingsController>()
                         .autoConnectOnLaunch
@@ -583,7 +583,7 @@ class VpnController extends GetxController {
     egressIpLoading.value = true;
     try {
       final ip = await EgressIpProbe.fetch(
-        useTunnelProxy: PlatformCapabilities.isDesktop,
+        useTunnelProxy: PlatformCapabilities.usesDesktopVpnRunner,
       );
       if (isConnected) _recordEgressResult(ip);
       debugPrint('[VPN] egress IP probe → ${ip ?? "failed"}');
@@ -618,7 +618,7 @@ class VpnController extends GetxController {
       if (!isConnected || killSwitchBlocking.value) return;
       final ip = await EgressIpProbe.fetch(
         timeout: const Duration(seconds: 6),
-        useTunnelProxy: PlatformCapabilities.isDesktop,
+        useTunnelProxy: PlatformCapabilities.usesDesktopVpnRunner,
       );
       if (!isConnected) return;
       _recordEgressResult(ip);
@@ -723,7 +723,7 @@ class VpnController extends GetxController {
       if (_cancelRequested) return false;
       final ip = await EgressIpProbe.fetch(
         timeout: const Duration(seconds: 3),
-        useTunnelProxy: PlatformCapabilities.isDesktop,
+        useTunnelProxy: PlatformCapabilities.usesDesktopVpnRunner,
       );
       if (ip != null) {
         debugPrint('[VPN] $label egress ready → $ip');
@@ -787,8 +787,8 @@ class VpnController extends GetxController {
     if (desktop != null && desktop.isNotEmpty) {
       return 'Could not connect — $desktop';
     }
-    if (PlatformCapabilities.isDesktop) {
-      return 'Could not connect — run ./scripts/setup-macos-dev.sh, then try Stealth or another server';
+    if (PlatformCapabilities.usesDesktopVpnRunner) {
+      return 'Could not connect — verify the desktop VPN engine, then try Stealth or another server';
     }
     return 'Could not connect — try WireGuard or Stealth mode, or pick another server';
   }

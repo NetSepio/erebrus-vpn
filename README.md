@@ -21,6 +21,7 @@ without you having to fiddle with settings.
 - **Organization nodes** — switch organizations and connect to their public or private nodes
 - **Private browser built in** — Brave Search plus speed, IP, DNS, WebRTC, and IPv6 tools
 - **Clear diagnostics** — see whether WireGuard, VLESS + REALITY, or Hysteria2 is active
+- **Easy config import** — file import everywhere, plus QR scanning on Android and iOS
 - **Works on phone and desktop** — Android, iOS, macOS, Windows, and Linux
 
 ---
@@ -63,7 +64,8 @@ flutter run
 **First-time native tunnel setup**
 
 - **Android / iOS:** `./scripts/build-libbox.sh` (or `build-libbox-ios.sh`)
-- **Desktop:** `./scripts/fetch-singbox-cli.sh` then `./scripts/build-desktop.sh`
+- **macOS:** `./scripts/build-libbox-macos.sh`, then `ruby ./scripts/setup-macos-tunnel.rb`
+- **Windows / Linux:** `./scripts/fetch-singbox-cli.sh`, then `./scripts/build-desktop.sh`
 
 Full setup, signing, and troubleshooting → **[docs/BUILD.md](docs/BUILD.md)**
 
