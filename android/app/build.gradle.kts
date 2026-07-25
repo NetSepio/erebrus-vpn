@@ -86,6 +86,20 @@ android {
         missingDimensionStrategy("store", "playstore")
     }
 
+    packaging {
+        jniLibs {
+            // The sing-box VPN core is arm64-only. Some transitive plugins ship
+            // helper libraries for additional ABIs after Flutter applies its
+            // target-platform filter; exclude those incomplete variants so
+            // stores never install an app that cannot load the VPN engine.
+            excludes += setOf(
+                "**/armeabi-v7a/**",
+                "**/x86/**",
+                "**/x86_64/**",
+            )
+        }
+    }
+
     flavorDimensions += "store"
     productFlavors {
         create("playstore") {

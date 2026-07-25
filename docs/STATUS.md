@@ -1,6 +1,6 @@
 # Platform status
 
-What works today vs what still needs work. Updated 2026-06-26.
+What works today vs what still needs work. Updated 2026-07-25.
 
 ## Tunnel & protocols
 
@@ -24,8 +24,12 @@ via `dev.erebrus/singbox` method channels. **All desktop** (macOS / Windows / Li
 | Per-app split tunnel | Yes | No (system-wide NE) | No | No |
 | In-app browser via tunnel | WebView → `setAppProxy` | System NE routes all traffic | System proxy on connect | System proxy on connect (Win registry / Linux gsettings) |
 | Live RX/TX stats | Yes | Yes (app group) | Yes (Clash API `:9090`) | Yes (Clash API `:9090`) |
-| Wallet auth (Reown) | Yes | Yes | Web login | Web login |
+| Account auth | Google / Reown / Solana MWA | Apple / Google / Reown | Apple + browser/token | Browser/token |
 | Gateway provisioner | Yes | Yes | Yes (`GatewayController`) | Yes (`GatewayController`) |
+| Public + org nodes | Yes | Yes | Yes | Yes |
+| Org switcher | Yes | Yes | Yes | Yes |
+| Active transport diagnostics | Yes | Yes | Yes | Yes |
+| Brave Search + network tools | Yes | Yes | Yes | Yes |
 
 ## Recently fixed (no longer open)
 
@@ -34,19 +38,33 @@ via `dev.erebrus/singbox` method channels. **All desktop** (macOS / Windows / Li
 - Android disconnect `file already closed` — libbox closed before TUN; benign close handling.
 - Stealth reported connected before carrier ready — `_waitStealthReady()` egress probe in `vpn_controller.dart`.
 - iOS tunnel was a stub — full `ErebrusTunnel` + `TunnelManager` + libbox v1.11 stack shipped.
+- iOS status events dispatched off Flutter's platform thread — native events now
+  return on the main thread.
+- Repeated egress probes and gateway refreshes could overlap and exhaust memory
+  — work is deduplicated and bounded.
+- Android release bundles advertised incomplete non-ARM64 variants — final
+  packaging now ships only `arm64-v8a`, matching the VPN core.
+- Browser quick actions were placeholders — Brave Search and six network tools
+  now navigate in the active private-browser tab.
 
 ## Open work (prod blockers)
 
 ### Ship mobile (Android / iOS)
 
-1. **iOS** — App Group + NE entitlements on physical device; `./scripts/build-libbox-ios.sh`.
-2. **Android** — arm64 only; Play / dApp Store signing per `scripts/build-android-release.sh`.
+1. **iOS** — keep App Group + NE entitlements and distribution profiles valid;
+   test each archive on TestFlight.
+2. **Android** — ARM64-only Play / dApp Store signing per
+   `scripts/build-android-release.sh`.
 
 ### Ship desktop
 
 1. **Windows / Linux QA** — run `./scripts/build-desktop.sh windows|linux`, verify connect, egress probe, and browser egress via system proxy.
 2. **Linux KDE / non-GNOME** — optional `kwriteconfig` or `xdg-settings` proxy backend if `gsettings` is unavailable.
-3. **macOS Network Extension (optional)** — port `ios/ErebrusTunnel/` libbox into `macos/ErebrusTunnel/` for signed system TUN (see `macos/ErebrusTunnel/README.md`). Unsigned builds already ship via CLI proxy mode.
+3. **macOS distribution** — install a Developer ID Application certificate and
+   notarize public-download ZIPs. Development-signed builds are local-only.
+4. **macOS Network Extension (optional)** — port `ios/ErebrusTunnel/` libbox
+   into `macos/ErebrusTunnel/` for signed system TUN (see
+   `macos/ErebrusTunnel/README.md`). Current builds use CLI proxy mode.
 
 ### Future / optional
 

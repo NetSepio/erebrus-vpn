@@ -128,9 +128,9 @@ internal object AndroidNetworkPlatform {
                 cm.registerBestMatchingNetworkCallback(request, cb, handler)
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ->
                 cm.requestNetwork(request, cb, handler)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N ->
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ->
                 cm.registerDefaultNetworkCallback(cb, handler)
-            else -> cm.requestNetwork(request, cb)
+            else -> cm.registerDefaultNetworkCallback(cb)
         }
     }
 

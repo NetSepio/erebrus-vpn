@@ -30,6 +30,8 @@
 	<string>Erebrus uses the local network to establish secure VPN tunnels.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Erebrus uses the camera to scan VPN configuration QR codes.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Erebrus VPN accesses your photo library only when you choose an image containing a VPN configuration QR code to import.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

@@ -33,13 +33,15 @@ FLAVOR="${1:-all}"
 
 build_playstore() {
   echo "==> Google Play (playstoreRelease AAB)"
-  flutter build appbundle --flavor playstore --release
+  flutter build appbundle --flavor playstore --release \
+    --target-platform android-arm64
   echo "    build/app/outputs/bundle/playstoreRelease/app-playstore-release.aab"
 }
 
 build_dappstore() {
   echo "==> Solana dApp Store (dappstoreRelease APK)"
-  flutter build apk --flavor dappstore --release
+  flutter build apk --flavor dappstore --release \
+    --target-platform android-arm64
   echo "    build/app/outputs/flutter-apk/app-dappstore-release.apk"
 }
 

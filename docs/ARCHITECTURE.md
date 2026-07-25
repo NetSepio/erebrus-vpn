@@ -96,8 +96,23 @@ and reusable glass-card / gradient-button widgets. Screens never hard-code
 colors; they pull from here.
 
 `lib/view/` holds the screens — `connect_view` (the big status orb + protocol
-picker), `server_view`, `profile_view`, `settings_view` — tied together by
+picker), the public/private server sheet with organization switching, the
+multi-tab private browser, profile, and settings — tied together by
 `bottombar/main_shell.dart`, which `main.dart` launches.
+
+The private browser uses Brave Search for non-URL omnibox input. Its start page
+links to speed, public-IP, DNS leak, WebRTC leak, IPv6, and Cloudflare
+connection diagnostics. `BrowserController` owns tabs and URL normalization;
+mobile WebViews follow the native tunnel or app proxy, while desktop browsers
+follow the system proxy installed by `DesktopSystemProxy`.
+
+Authentication is platform-aware:
+
+- iOS: Apple, Google, and Reown where available.
+- Android: Google, Reown, or Solana Mobile Wallet Adapter depending on device.
+- macOS: native Apple plus browser callback and manual token fallback.
+- Windows/Linux: browser callback and manual token fallback.
+- Guest mode is available without creating a gateway session.
 
 ## The native tunnel
 
@@ -121,7 +136,9 @@ native plugins are wired. Platform matrix: [STATUS.md](STATUS.md).
 
 - **macOS:** `singbox_desktop_runner.dart` spawns the sing-box CLI (proxy mode).
   Network Extension scaffold exists but libbox is not started in the extension yet.
-- **Windows / Linux:** channel stubs only — `start` does not run a tunnel yet.
+- **Windows / Linux:** Dart also spawns the sing-box CLI and applies the system
+  proxy. The native channel stubs do not start a TUN and are not used by the
+  current desktop runner.
 
 `libbox` binaries are not committed — build per platform ([BUILD.md](BUILD.md)).
 Channel contract: [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
@@ -134,3 +151,8 @@ Two ways:
   path, with accounts and entitlements).
 - **Manual import** — paste a node's `singbox_profile` / share URI to connect to a
   single node directly (handy for testing before the gateway is wired).
+
+`GatewayController` keeps public discovery separate from organization-scoped
+operator nodes. The server sheet exposes Public and Private tabs, filters
+private nodes to the selected organization, and lets members switch
+organizations before provisioning a connection.

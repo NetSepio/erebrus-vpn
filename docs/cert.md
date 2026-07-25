@@ -110,4 +110,9 @@ Instead of `Signing.xcconfig`:
 
 ## Production / Release
 
-`Release.entitlements` already includes Keychain access groups. Use a Distribution certificate and notarization for shipping outside the Mac App Store.
+`Release.entitlements` already includes Keychain access groups. For public
+distribution outside the Mac App Store, install a **Developer ID Application**
+certificate, sign with Hardened Runtime-compatible entitlements, and submit the
+archive to Apple's notarization service. An **Apple Distribution** certificate
+is for App Store workflows; it does not replace Developer ID signing for a ZIP
+downloaded from the web.

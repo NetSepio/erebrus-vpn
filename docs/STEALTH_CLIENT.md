@@ -108,8 +108,9 @@ register `dev.erebrus/singbox` but are **never called** from Dart on desktop.
 1. Fetch CLI: `./scripts/fetch-singbox-cli.sh windows` (or `linux`).
 2. Build: `./scripts/build-desktop.sh windows` (or `linux`) — embeds `sing-box` next to the app.
 3. Config: `useSystemTunnel: false` → mixed inbound on `127.0.0.1:10808` only (no TUN).
-4. **TODO (prod):** Windows/Linux system proxy (macOS has `MacosSystemProxy` via `networksetup`).
-   Without it, `setAppProxy` is a desktop no-op and the in-app WebView does not use the tunnel.
+4. `DesktopSystemProxy` applies the local mixed proxy to macOS
+   (`networksetup`), Windows (registry), and Linux (`gsettings`). The in-app
+   WebView and system browsers follow that proxy while connected.
 5. **Optional later:** wire libbox TUN in the native plugins for system-wide VPN without CLI.
 
 ## Gateway provisioner

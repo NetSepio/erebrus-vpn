@@ -2,7 +2,10 @@
 
 **Your internet, kept private — even when networks try to block you.**
 
-Erebrus is a privacy-first VPN built for the Erebrus network. Sign in with your email or wallet, pick a server, and browse with a built-in private browser — all in one app.
+Erebrus is a privacy-first VPN built for the Erebrus network. Sign in with
+email, a wallet, Google, Apple, or the browser flow available on your platform;
+choose a public or organization node; and browse with a built-in private
+browser — all in one app.
 
 Most VPNs stop working the moment a network decides to block them. Erebrus doesn't.
 When the normal connection is blocked, it quietly **disguises your traffic as
@@ -14,8 +17,10 @@ without you having to fiddle with settings.
 ## Why people use it
 
 - **Actually stays connected** — auto-fallback to stealth mode on strict networks
-- **Wallet sign-in** — your wallet is your account; no passwords to remember
-- **Private browser built in** — browse through the tunnel without switching apps
+- **Flexible sign-in** — wallet, Google, Apple, browser, and token flows where supported
+- **Organization nodes** — switch organizations and connect to their public or private nodes
+- **Private browser built in** — Brave Search plus speed, IP, DNS, WebRTC, and IPv6 tools
+- **Clear diagnostics** — see whether WireGuard, VLESS + REALITY, or Hysteria2 is active
 - **Works on phone and desktop** — Android, iOS, macOS, Windows, and Linux
 
 ---
@@ -36,11 +41,13 @@ without you having to fiddle with settings.
 
 | Platform | Where |
 |----------|--------|
-| **Android (Solana Mobile)** | **v1.0.0** live on [Solana dApp Store](https://dappstore.solanamobile.com) — Seeker / Saga |
-| **Android (Google Play)** | **Coming next** |
+| **Android (Solana Mobile)** | [Solana dApp Store](https://dappstore.solanamobile.com) — Seeker / Saga |
+| **Android (Google Play)** | Google Play release channel |
 | **Android (sideload)** | [GitHub Releases](https://github.com/NetSepio/erebrus-vpn/releases) (APKs from CI) |
 | **iOS** | TestFlight / App Store (see [docs/BUILD.md](docs/BUILD.md)) |
 | **Desktop** | Build from source — [docs/BUILD.md](docs/BUILD.md) |
+
+Current source version: **1.0.3+4**. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 
@@ -62,6 +69,7 @@ Full setup, signing, and troubleshooting → **[docs/BUILD.md](docs/BUILD.md)**
 
 | Topic | Doc |
 |-------|-----|
+| Release notes | [CHANGELOG.md](CHANGELOG.md) |
 | Platform status | [docs/STATUS.md](docs/STATUS.md) |
 | How the app works | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Native tunnel contract | [docs/STEALTH_CLIENT.md](docs/STEALTH_CLIENT.md) |

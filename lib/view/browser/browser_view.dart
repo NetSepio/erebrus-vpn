@@ -23,8 +23,9 @@ class BrowserView extends StatefulWidget {
 }
 
 class _BrowserViewState extends State<BrowserView> {
-  BrowserController get _c =>
-      Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
+  BrowserController get _c => Get.isRegistered<BrowserController>()
+      ? Get.find<BrowserController>()
+      : Get.put(BrowserController());
 
   @override
   void initState() {
@@ -76,13 +77,23 @@ class _BrowserViewState extends State<BrowserView> {
                 if (tab.isStart) return const _StartPage();
                 if (!c.shellTabVisible.value) {
                   // Shell is on VPN/Settings — keep Flutter-only UI in the tree.
-                  return _PendingWebPage(url: tab.url, loading: c.isLoading.value);
+                  return _PendingWebPage(
+                    url: tab.url,
+                    loading: c.isLoading.value,
+                  );
                 }
                 return Stack(
                   children: [
-                    WebViewWidget(key: ValueKey(tab.id), controller: tab.controller),
+                    WebViewWidget(
+                      key: ValueKey(tab.id),
+                      controller: tab.controller,
+                    ),
                     if (c.isLoading.value)
-                      const LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent, color: AppColors.accent),
+                      const LinearProgressIndicator(
+                        minHeight: 2,
+                        backgroundColor: Colors.transparent,
+                        color: AppColors.accent,
+                      ),
                   ],
                 );
               }),
@@ -109,11 +120,22 @@ class _PendingWebPage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (loading) const CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+            if (loading)
+              const CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.accent,
+              ),
             if (loading) const SizedBox(height: 16),
-            Text('Ready to load', style: grotesk(size: 16, weight: FontWeight.w600)),
+            Text(
+              'Ready to load',
+              style: grotesk(size: 16, weight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
-            Text(url, textAlign: TextAlign.center, style: mono(size: 12, color: AppColors.textTertiary)),
+            Text(
+              url,
+              textAlign: TextAlign.center,
+              style: mono(size: 12, color: AppColors.textTertiary),
+            ),
           ],
         ),
       ),
@@ -144,9 +166,15 @@ class _TabStrip extends StatelessWidget {
                   constraints: const BoxConstraints(maxWidth: 150),
                   padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
                   decoration: BoxDecoration(
-                    color: active ? AppColors.surface3 : const Color(0xFF101014),
+                    color: active
+                        ? AppColors.surface3
+                        : const Color(0xFF101014),
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: active ? AppColors.accent.withValues(alpha: 0.35) : AppColors.stroke),
+                    border: Border.all(
+                      color: active
+                          ? AppColors.accent.withValues(alpha: 0.35)
+                          : AppColors.stroke,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -155,7 +183,9 @@ class _TabStrip extends StatelessWidget {
                         width: 7,
                         height: 7,
                         decoration: BoxDecoration(
-                          color: active ? AppColors.accent : const Color(0xFF4A4A52),
+                          color: active
+                              ? AppColors.accent
+                              : const Color(0xFF4A4A52),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -166,15 +196,22 @@ class _TabStrip extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: grotesk(
-                              size: 12.5,
-                              weight: FontWeight.w500,
-                              color: active ? AppColors.textPrimary : AppColors.textTertiary),
+                            size: 12.5,
+                            weight: FontWeight.w500,
+                            color: active
+                                ? AppColors.textPrimary
+                                : AppColors.textTertiary,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
                         onTap: () => controller.closeTab(i),
-                        child: const Icon(Icons.close, size: 13, color: AppColors.textMuted),
+                        child: const Icon(
+                          Icons.close,
+                          size: 13,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -193,7 +230,11 @@ class _TabStrip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: AppColors.strokeHi),
               ),
-              child: const Icon(Icons.add, size: 17, color: AppColors.textSecondary),
+              child: const Icon(
+                Icons.add,
+                size: 17,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -246,7 +287,11 @@ class _OmniboxState extends State<_Omnibox> {
               child: TextField(
                 controller: _text,
                 focusNode: _focus,
-                style: mono(size: 13, weight: FontWeight.w400, color: const Color(0xFFC8C7C2)),
+                style: mono(
+                  size: 13,
+                  weight: FontWeight.w400,
+                  color: const Color(0xFFC8C7C2),
+                ),
                 cursorColor: AppColors.accent,
                 textInputAction: TextInputAction.go,
                 decoration: const InputDecoration(
@@ -259,7 +304,11 @@ class _OmniboxState extends State<_Omnibox> {
             ),
             GestureDetector(
               onTap: widget.controller.reload,
-              child: const Icon(Icons.refresh, size: 17, color: AppColors.textMuted),
+              child: const Icon(
+                Icons.refresh,
+                size: 17,
+                color: AppColors.textMuted,
+              ),
             ),
           ],
         ),
@@ -279,8 +328,9 @@ class _StartPageState extends State<_StartPage> {
   final _search = TextEditingController();
   final _focus = FocusNode();
 
-  BrowserController get _browser =>
-      Get.isRegistered<BrowserController>() ? Get.find<BrowserController>() : Get.put(BrowserController());
+  BrowserController get _browser => Get.isRegistered<BrowserController>()
+      ? Get.find<BrowserController>()
+      : Get.put(BrowserController());
 
   @override
   void dispose() {
@@ -302,12 +352,54 @@ class _StartPageState extends State<_StartPage> {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final compact = MediaQuery.sizeOf(context).width < 380;
     final services = <_Service>[
-      _Service('Sovereign AI', 'Private models', Icons.auto_awesome, AppColors.accent, AppColors.accent.withValues(alpha: 0.14)),
-      _Service('Private Files', 'Encrypted store', Icons.folder_outlined, const Color(0xFF7E96F0), AppColors.ethereum.withValues(alpha: 0.16)),
-      _Service('Team Drive', '11 members', Icons.group_outlined, AppColors.shared, AppColors.shared.withValues(alpha: 0.16)),
-      _Service('Node Console', 'home-lab-01', Icons.terminal, AppColors.success, AppColors.success.withValues(alpha: 0.16)),
-      _Service('Apps Hub', '6 installed', Icons.grid_view, const Color(0xFFB07CFF), AppColors.solana.withValues(alpha: 0.18)),
-      _Service('Bookmarks', 'Saved links', Icons.bookmark_outline, AppColors.warn, AppColors.warn.withValues(alpha: 0.16)),
+      _Service(
+        'Speed Test',
+        'Download, upload & latency',
+        'https://fast.com/',
+        Icons.speed,
+        AppColors.accent,
+        AppColors.accent.withValues(alpha: 0.14),
+      ),
+      _Service(
+        'Public IP',
+        'Verify VPN exit location',
+        'https://ipinfo.io/what-is-my-ip',
+        Icons.public,
+        const Color(0xFF7E96F0),
+        AppColors.ethereum.withValues(alpha: 0.16),
+      ),
+      _Service(
+        'DNS Leak',
+        'Check exposed resolvers',
+        'https://www.dnsleaktest.com/',
+        Icons.dns_outlined,
+        AppColors.shared,
+        AppColors.shared.withValues(alpha: 0.16),
+      ),
+      _Service(
+        'WebRTC Leak',
+        'Check browser IP exposure',
+        'https://browserleaks.com/webrtc',
+        Icons.visibility_outlined,
+        AppColors.success,
+        AppColors.success.withValues(alpha: 0.16),
+      ),
+      _Service(
+        'IPv6 Test',
+        'Check IPv6 routing',
+        'https://test-ipv6.com/',
+        Icons.route_outlined,
+        const Color(0xFFB07CFF),
+        AppColors.solana.withValues(alpha: 0.18),
+      ),
+      _Service(
+        'Connection Info',
+        'DNS & data-center details',
+        'https://1.1.1.1/help',
+        Icons.hub_outlined,
+        AppColors.warn,
+        AppColors.warn.withValues(alpha: 0.16),
+      ),
     ];
 
     return ListView(
@@ -316,7 +408,11 @@ class _StartPageState extends State<_StartPage> {
       children: [
         Text(
           'Sovereign web.',
-          style: grotesk(size: compact ? 28 : 32, weight: FontWeight.w600, letterSpacing: -0.8),
+          style: grotesk(
+            size: compact ? 28 : 32,
+            weight: FontWeight.w600,
+            letterSpacing: -0.8,
+          ),
         ),
         const SizedBox(height: 18),
         Container(
@@ -334,14 +430,22 @@ class _StartPageState extends State<_StartPage> {
                 child: TextField(
                   controller: _search,
                   focusNode: _focus,
-                  style: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textPrimary),
+                  style: grotesk(
+                    size: 14,
+                    weight: FontWeight.w400,
+                    color: AppColors.textPrimary,
+                  ),
                   cursorColor: AppColors.accent,
                   textInputAction: TextInputAction.search,
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
                     hintText: 'Search the private web…',
-                    hintStyle: grotesk(size: 14, weight: FontWeight.w400, color: AppColors.textMuted),
+                    hintStyle: grotesk(
+                      size: 14,
+                      weight: FontWeight.w400,
+                      color: AppColors.textMuted,
+                    ),
                   ),
                   onSubmitted: (_) => _submitSearch(),
                 ),
@@ -355,7 +459,15 @@ class _StartPageState extends State<_StartPage> {
           ),
         ),
         const SizedBox(height: 22),
-        Text('YOUR NETWORK', style: mono(size: 11, weight: FontWeight.w500, color: AppColors.textMuted, letterSpacing: 11 * 0.12)),
+        Text(
+          'NETWORK TOOLS',
+          style: mono(
+            size: 11,
+            weight: FontWeight.w500,
+            color: AppColors.textMuted,
+            letterSpacing: 11 * 0.12,
+          ),
+        ),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
@@ -364,7 +476,15 @@ class _StartPageState extends State<_StartPage> {
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: compact ? 1.85 : 2.1,
-          children: [for (final s in services) _ServiceCard(service: s)],
+          children: [
+            for (final s in services)
+              _ServiceCard(
+                service: s,
+                onTap: () {
+                  _browser.navigate(s.url);
+                },
+              ),
+          ],
         ),
       ],
     );
@@ -372,7 +492,11 @@ class _StartPageState extends State<_StartPage> {
 }
 
 class _SearchActionButton extends StatelessWidget {
-  const _SearchActionButton({required this.icon, required this.tooltip, required this.onTap});
+  const _SearchActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String tooltip;
@@ -400,36 +524,31 @@ class _SearchActionButton extends StatelessWidget {
 }
 
 class _Service {
-  const _Service(this.title, this.sub, this.icon, this.color, this.chip);
+  const _Service(
+    this.title,
+    this.sub,
+    this.url,
+    this.icon,
+    this.color,
+    this.chip,
+  );
   final String title;
   final String sub;
+  final String url;
   final IconData icon;
   final Color color;
   final Color chip;
 }
 
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard({required this.service});
+  const _ServiceCard({required this.service, required this.onTap});
   final _Service service;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Connect to a private node to see your data.',
-            style: grotesk(size: 14, weight: FontWeight.w500, color: AppColors.textPrimary),
-          ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.surface,
-          elevation: 6,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.strokeHi),
-          ),
-        ),
-      ),
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
@@ -442,7 +561,10 @@ class _ServiceCard extends StatelessWidget {
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(color: service.chip, borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: service.chip,
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Icon(service.icon, size: 16, color: service.color),
             ),
             const SizedBox(width: 10),
@@ -462,7 +584,11 @@ class _ServiceCard extends StatelessWidget {
                     service.sub,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: grotesk(size: 11, weight: FontWeight.w400, color: AppColors.textTertiary),
+                    style: grotesk(
+                      size: 11,
+                      weight: FontWeight.w400,
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ],
               ),
@@ -483,15 +609,23 @@ class _ControlBar extends StatelessWidget {
       context: context,
       backgroundColor: AppColors.raised,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
       ),
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.refresh, color: AppColors.textSecondary),
-              title: Text('Reload page', style: grotesk(size: 15, weight: FontWeight.w600)),
+              leading: const Icon(
+                Icons.refresh,
+                color: AppColors.textSecondary,
+              ),
+              title: Text(
+                'Reload page',
+                style: grotesk(size: 15, weight: FontWeight.w600),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 controller.reload();
@@ -499,15 +633,24 @@ class _ControlBar extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.add, color: AppColors.textSecondary),
-              title: Text('New tab', style: grotesk(size: 15, weight: FontWeight.w600)),
+              title: Text(
+                'New tab',
+                style: grotesk(size: 15, weight: FontWeight.w600),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 controller.addTab();
               },
             ),
             ListTile(
-              leading: const Icon(Icons.open_in_new, color: AppColors.textSecondary),
-              title: Text('Open in new tab', style: grotesk(size: 15, weight: FontWeight.w600)),
+              leading: const Icon(
+                Icons.open_in_new,
+                color: AppColors.textSecondary,
+              ),
+              title: Text(
+                'Open in new tab',
+                style: grotesk(size: 15, weight: FontWeight.w600),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 final tab = controller.activeTab;
@@ -520,7 +663,10 @@ class _ControlBar extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.tab, color: AppColors.textSecondary),
-              title: Text('All tabs', style: grotesk(size: 15, weight: FontWeight.w600)),
+              title: Text(
+                'All tabs',
+                style: grotesk(size: 15, weight: FontWeight.w600),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 showBrowserTabsSheet(context, controller);
@@ -538,7 +684,9 @@ class _ControlBar extends StatelessWidget {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.strokeSoft))),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.strokeSoft)),
+        ),
         child: Obx(() {
           controller.activeIndex.value;
           controller.tabs.length;
@@ -561,7 +709,10 @@ class _ControlBar extends StatelessWidget {
               GestureDetector(
                 onTap: () => showBrowserTabsSheet(context, controller),
                 child: Container(
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(
+                    minWidth: 28,
+                    minHeight: 28,
+                  ),
                   alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
@@ -571,7 +722,11 @@ class _ControlBar extends StatelessWidget {
                   ),
                   child: Text(
                     '${controller.tabs.length}',
-                    style: mono(size: 11, weight: FontWeight.w600, color: AppColors.textSecondary),
+                    style: mono(
+                      size: 11,
+                      weight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -590,7 +745,9 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
     backgroundColor: AppColors.raised,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(AppRadius.sheet),
+      ),
     ),
     builder: (ctx) => DraggableScrollableSheet(
       expand: false,
@@ -608,7 +765,10 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
               child: Row(
                 children: [
-                  Text('Tabs', style: grotesk(size: 18, weight: FontWeight.w600)),
+                  Text(
+                    'Tabs',
+                    style: grotesk(size: 18, weight: FontWeight.w600),
+                  ),
                   const SizedBox(width: 8),
                   MonoChip(
                     label: '${tabs.length}',
@@ -650,7 +810,9 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isActive ? AppColors.accent.withValues(alpha: 0.35) : AppColors.stroke,
+                              color: isActive
+                                  ? AppColors.accent.withValues(alpha: 0.35)
+                                  : AppColors.stroke,
                             ),
                           ),
                           child: Row(
@@ -659,7 +821,9 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
                                 width: 8,
                                 height: 8,
                                 decoration: BoxDecoration(
-                                  color: isActive ? AppColors.accent : AppColors.textMuted,
+                                  color: isActive
+                                      ? AppColors.accent
+                                      : AppColors.textMuted,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -675,7 +839,9 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
                                       style: grotesk(
                                         size: 14.5,
                                         weight: FontWeight.w600,
-                                        color: isActive ? AppColors.textPrimary : AppColors.textSecondary,
+                                        color: isActive
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
@@ -683,13 +849,20 @@ void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
                                       subtitle,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: mono(size: 11, color: AppColors.textMuted),
+                                      style: mono(
+                                        size: 11,
+                                        color: AppColors.textMuted,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                                icon: const Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: AppColors.textMuted,
+                                ),
                                 onPressed: () => controller.closeTab(i),
                               ),
                             ],
@@ -724,5 +897,3 @@ class _CtlIcon extends StatelessWidget {
     );
   }
 }
-
-

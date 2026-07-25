@@ -84,7 +84,7 @@ class BrowserController extends GetxController {
   }
 
   void addTab({String? url, bool activate = true}) {
-    final u = url == null ? kStartPage : _normalizeUrl(url);
+    final u = url == null ? kStartPage : normalizeInput(url);
     final tab = BrowserTab(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       url: u,
@@ -172,7 +172,7 @@ class BrowserController extends GetxController {
   void openInNewTab(String input) {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return;
-    addTab(url: _normalizeUrl(trimmed));
+    addTab(url: normalizeInput(trimmed));
   }
 
   /// Opens a link in the active tab.
@@ -186,11 +186,11 @@ class BrowserController extends GetxController {
   void openInBackgroundTab(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return;
-    addTab(url: _normalizeUrl(trimmed), activate: false);
+    addTab(url: normalizeInput(trimmed), activate: false);
   }
 
   Future<void> navigate(String input) async {
-    final url = _normalizeUrl(input);
+    final url = normalizeInput(input);
     final tab = activeTab;
     tab.url = url;
     addressBar.value = url;
@@ -300,15 +300,38 @@ class BrowserController extends GetxController {
     }
   }
 
-  static String _normalizeUrl(String input) {
+  /// Resolves browser input to a direct web URL or a Brave Search query.
+  ///
+  /// Bare domains, IP addresses and localhost navigate directly. Everything
+  /// else, including a single word, is treated as a search query.
+  static String normalizeInput(String input) {
     final trimmed = input.trim();
     if (trimmed.isEmpty || trimmed == kStartPage) return kStartPage;
-    if (trimmed.contains(' ') && !trimmed.contains('.')) {
-      return '$kBraveSearch${Uri.encodeComponent(trimmed)}';
-    }
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+
+    final explicitUri = Uri.tryParse(trimmed);
+    if (explicitUri != null &&
+        (explicitUri.scheme == 'http' || explicitUri.scheme == 'https') &&
+        explicitUri.host.isNotEmpty) {
       return trimmed;
     }
-    return 'https://$trimmed';
+
+    if (!trimmed.contains(RegExp(r'\s'))) {
+      final candidate = Uri.tryParse('https://$trimmed');
+      if (candidate != null &&
+          candidate.host.isNotEmpty &&
+          candidate.userInfo.isEmpty &&
+          _looksLikeWebHost(candidate.host)) {
+        return candidate.toString();
+      }
+    }
+
+    return braveSearchUrl(trimmed);
+  }
+
+  static bool _looksLikeWebHost(String host) {
+    final normalized = host.toLowerCase();
+    return normalized == 'localhost' ||
+        normalized.contains('.') ||
+        normalized.contains(':');
   }
 }

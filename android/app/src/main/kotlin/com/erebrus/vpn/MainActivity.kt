@@ -1,5 +1,6 @@
 package com.erebrus.vpn
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -167,6 +168,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    @SuppressLint("RequiresFeature")
     private fun setAppProxy(host: String, port: Int, result: MethodChannel.Result) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             result.success(false)
@@ -181,6 +183,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    @SuppressLint("RequiresFeature")
     private fun clearAppProxy(result: MethodChannel.Result) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             result.success(false)

@@ -20,7 +20,11 @@ flutter run          # launches on a connected device / emulator
 
 At this point the UI runs on every platform. **Tunnel traffic** needs the native
 engine below (Android/iOS: libbox; desktop: sing-box CLI via `SingboxDesktopRunner`).
-See [STATUS.md](STATUS.md) for Win/Linux browser-routing gaps.
+See [STATUS.md](STATUS.md) for platform-specific tunnel and proxy differences.
+
+The canonical application version is the `version:` field in `pubspec.yaml`.
+Flutter maps `1.0.3+4` to Apple version `1.0.3` build `4`, and Android
+`versionName=1.0.3` / `versionCode=4`.
 
 ## 3. Build the native tunnel (`libbox`)
 
@@ -125,6 +129,58 @@ flutter run -d <iphone-device-id>
 
 WireGuard and stealth (VLESS/Hysteria2) use the same Dart `SingboxConfigBuilder` as
 Android. Details in [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
+
+## Release builds
+
+Run analysis and tests before producing store artifacts:
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+```
+
+### Android stores
+
+Configure the two signing blocks in `android/key.properties`, then run:
+
+```bash
+./scripts/build-android-release.sh all
+```
+
+Outputs:
+
+- Google Play:
+  `build/app/outputs/bundle/playstoreRelease/app-playstore-release.aab`
+- Solana dApp Store:
+  `build/app/outputs/flutter-apk/app-dappstore-release.apk`
+
+Android releases are intentionally `arm64-v8a` only because the bundled
+sing-box VPN core is ARM64-only. Do not publish ARMv7 or x86 variants without a
+matching `libgojni.so`.
+
+### iOS / TestFlight
+
+```bash
+./scripts/build-libbox-ios.sh
+flutter build ipa --release
+```
+
+The App Store IPA is written under `build/ios/ipa/`. Verify that both
+`Runner.app` and `ErebrusTunnel.appex` report the version and build from
+`pubspec.yaml` before uploading with Transporter.
+
+### macOS
+
+```bash
+./scripts/build-desktop.sh macos
+```
+
+This embeds the sing-box CLI and writes a versioned ZIP under `dist/`.
+Development signing is suitable only for local testing. Public distribution
+outside the Mac App Store requires a **Developer ID Application** certificate,
+Hardened Runtime-compatible entitlements, and Apple notarization; an Apple
+Development-signed ZIP will be rejected by Gatekeeper on other Macs.
 
 ## Troubleshooting
 
