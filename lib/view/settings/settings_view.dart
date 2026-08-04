@@ -854,7 +854,7 @@ class _SubscriptionCard extends StatelessWidget {
       'admin' => 'ADMIN',
       _ => entitled ? 'ACTIVE' : 'FREE',
     };
-    final title = entitled ? 'Erebrus Pro' : 'Erebrus Free';
+    final title = entitled ? ent.planLabel : 'Erebrus Free';
     final sub = busy
         ? 'Checking subscription…'
         : entitled

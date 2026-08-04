@@ -26,11 +26,28 @@ void main() {
       'wallet_address': '9SXo8wiAdsDBQPUKk4LFN73T4DcueYhPDRN3p6wTsgaR',
       'chain': 'SOLANA',
       'version': '2.0.0-abc1234',
-      'last_heartbeat': DateTime.now().toUtc().subtract(const Duration(seconds: 13)).toIso8601String(),
-      'org': {'name': 'clawbrick', 'kind': 'team', 'verified': false, 'slug': 'clawbrick'},
+      'last_heartbeat': DateTime.now()
+          .toUtc()
+          .subtract(const Duration(seconds: 13))
+          .toIso8601String(),
+      'org': {
+        'name': 'clawbrick',
+        'kind': 'team',
+        'verified': false,
+        'slug': 'clawbrick',
+      },
       'endpoints': {
-        'wireguard': {'host': '203.0.113.10', 'port': 51820, 'public_key': 'abc'},
-        'vless_reality': {'port': 443, 'public_key': 'def', 'short_ids': ['01'], 'sni': 'example.com'},
+        'wireguard': {
+          'host': '203.0.113.10',
+          'port': 51820,
+          'public_key': 'abc',
+        },
+        'vless_reality': {
+          'port': 443,
+          'public_key': 'def',
+          'short_ids': ['01'],
+          'sni': 'example.com',
+        },
       },
     });
     expect(node.id, '59d52ecd-dfc3-41c2-90a4-0d2495a239e2');
@@ -67,9 +84,15 @@ void main() {
 
   test('NodeDisplay activity uses latest heartbeat or peer handshake', () {
     final now = DateTime.now().toUtc();
-    final recentBeat = now.subtract(const Duration(seconds: 20)).toIso8601String();
-    final olderPeer = now.subtract(const Duration(minutes: 5)).toIso8601String();
-    final recentPeer = now.subtract(const Duration(seconds: 40)).toIso8601String();
+    final recentBeat = now
+        .subtract(const Duration(seconds: 20))
+        .toIso8601String();
+    final olderPeer = now
+        .subtract(const Duration(minutes: 5))
+        .toIso8601String();
+    final recentPeer = now
+        .subtract(const Duration(seconds: 40))
+        .toIso8601String();
 
     final fromHeartbeat = NodeDisplay.of(
       VpnNode.fromJson({
@@ -164,7 +187,7 @@ void main() {
       'id': '5de0115a-0000-0000-0000-000000000000',
       'name': 'clawbrick',
       'slug': 'clawbrick',
-      'plan': 'team',
+      'plan': 'business.scale',
       'verification_status': 'verified',
       'display_name': 'Clawbrick Labs',
       'website_url': 'https://clawbrick.io',
@@ -174,6 +197,7 @@ void main() {
     expect(org.label, 'Clawbrick Labs');
     expect(org.website, 'https://clawbrick.io');
     expect(org.id, isNotNull);
+    expect(org.plan, 'business.scale');
   });
 
   test('VpnNodeOrg still parses the legacy verified/kind shape', () {
@@ -193,12 +217,13 @@ void main() {
       'name': 'Clawbrick',
       'slug': 'clawbrick',
       'role': 'member',
-      'plan': 'team',
+      'plan': 'business.launch',
       'verification_status': 'verified',
     });
     expect(org.slug, 'clawbrick');
     expect(org.role, 'member');
     expect(org.verified, isTrue);
+    expect(org.plan, 'business.launch');
     expect(org.id, isNull); // omitted for non-privileged members
   });
 

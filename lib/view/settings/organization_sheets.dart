@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../auth/gateway_auth_client.dart';
 import '../../auth/wallet_auth_controller.dart';
+import '../../plan_label.dart';
 import '../../theme/app_theme.dart';
 import '../../vpn/gateway_controller.dart';
 import '../../vpn/vpn_models.dart';
@@ -12,8 +13,11 @@ Future<void> showOrganizationsSheet(
   WalletAuthController auth,
 ) async {
   if (!auth.isAuthenticated) {
-    Get.snackbar('Sign in required', 'Connect your account first',
-        snackPosition: SnackPosition.BOTTOM);
+    Get.snackbar(
+      'Sign in required',
+      'Connect your account first',
+      snackPosition: SnackPosition.BOTTOM,
+    );
     return;
   }
 
@@ -22,7 +26,8 @@ Future<void> showOrganizationsSheet(
     isScrollControlled: true,
     backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+    ),
     builder: (ctx) => _OrganizationsSheet(auth: auth),
   );
 }
@@ -49,7 +54,8 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
       builder: (ctx) => _CreateOrgSheet(auth: widget.auth),
     );
   }
@@ -57,7 +63,11 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
   Future<void> _accept(String orgId) async {
     try {
       await widget.auth.acceptAccountOrgInvite(orgId);
-      Get.snackbar('Joined', 'Organization joined', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Joined',
+        'Organization joined',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } on AuthException catch (e) {
       Get.snackbar('Invite', e.message, snackPosition: SnackPosition.BOTTOM);
     }
@@ -66,7 +76,11 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
   Future<void> _decline(String orgId) async {
     try {
       await widget.auth.declineAccountOrgInvite(orgId);
-      Get.snackbar('Invite', 'Invitation declined', snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Invite',
+        'Invitation declined',
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } on AuthException catch (e) {
       Get.snackbar('Invite', e.message, snackPosition: SnackPosition.BOTTOM);
     }
@@ -80,7 +94,11 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          22, 18, 22, 22 + MediaQuery.of(context).viewInsets.bottom),
+        22,
+        18,
+        22,
+        22 + MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -89,13 +107,18 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
             Row(
               children: [
                 Expanded(
-                    child: Text('Organizations',
-                        style: grotesk(
-                            size: 18, weight: FontWeight.w600))),
+                  child: Text(
+                    'Organizations',
+                    style: grotesk(size: 18, weight: FontWeight.w600),
+                  ),
+                ),
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(),
-                  child: Icon(Icons.close,
-                      size: 20, color: AppColors.textSecondary),
+                  child: Icon(
+                    Icons.close,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -103,7 +126,10 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
             Text(
               'Workspaces you belong to and pending invitations.',
               style: grotesk(
-                  size: 13, color: AppColors.textTertiary, height: 1.4),
+                size: 13,
+                color: AppColors.textTertiary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 16),
             Obx(() {
@@ -126,11 +152,13 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
                   if (widget.auth.accountOrgInvites.isNotEmpty) ...[
                     if (orgs.isNotEmpty) const SizedBox(height: 18),
                     _SectionTitle('Pending invites'),
-                    ...widget.auth.accountOrgInvites.map((i) => _InviteRow(
-                          invite: i,
-                          onAccept: () => _accept(i.orgId),
-                          onDecline: () => _decline(i.orgId),
-                        )),
+                    ...widget.auth.accountOrgInvites.map(
+                      (i) => _InviteRow(
+                        invite: i,
+                        onAccept: () => _accept(i.orgId),
+                        onDecline: () => _decline(i.orgId),
+                      ),
+                    ),
                   ],
                 ],
               );
@@ -139,11 +167,15 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
             Obx(() {
               if (widget.auth.isLoadingAccountOrgInvites.value) {
                 return const Center(
-                    child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.accent)));
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                );
               }
               return GestureDetector(
                 onTap: _create,
@@ -157,9 +189,10 @@ class _OrganizationsSheetState extends State<_OrganizationsSheet> {
                   child: Text(
                     'CREATE ORGANIZATION',
                     style: mono(
-                        size: 13,
-                        weight: FontWeight.w600,
-                        color: AppColors.onAccent),
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: AppColors.onAccent,
+                    ),
                   ),
                 ),
               );
@@ -182,10 +215,11 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: mono(
-            size: 11,
-            weight: FontWeight.w600,
-            color: AppColors.textMuted,
-            letterSpacing: 1.2),
+          size: 11,
+          weight: FontWeight.w600,
+          color: AppColors.textMuted,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -219,11 +253,12 @@ class _OrgRow extends StatelessWidget {
                 if (org.role != null && org.role!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    '${org.role!.toUpperCase()}${org.plan != null && org.plan!.isNotEmpty ? ' · ${org.plan!.toUpperCase()}' : ''}',
+                    '${org.role!.toUpperCase()} · ${erebrusPlanLabel(org.plan)}',
                     style: mono(
-                        size: 11,
-                        weight: FontWeight.w500,
-                        color: AppColors.textTertiary),
+                      size: 11,
+                      weight: FontWeight.w500,
+                      color: AppColors.textTertiary,
+                    ),
                   ),
                 ],
               ],
@@ -266,9 +301,10 @@ class _InviteRow extends StatelessWidget {
           Text(
             'Invited as ${invite.role ?? 'member'}',
             style: mono(
-                size: 11,
-                weight: FontWeight.w500,
-                color: AppColors.textTertiary),
+              size: 11,
+              weight: FontWeight.w500,
+              color: AppColors.textTertiary,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -286,9 +322,10 @@ class _InviteRow extends StatelessWidget {
                     child: Text(
                       'ACCEPT',
                       style: mono(
-                          size: 12,
-                          weight: FontWeight.w600,
-                          color: AppColors.onAccent),
+                        size: 12,
+                        weight: FontWeight.w600,
+                        color: AppColors.onAccent,
+                      ),
                     ),
                   ),
                 ),
@@ -308,9 +345,10 @@ class _InviteRow extends StatelessWidget {
                     child: Text(
                       'DECLINE',
                       style: mono(
-                          size: 12,
-                          weight: FontWeight.w600,
-                          color: AppColors.textSecondary),
+                        size: 12,
+                        weight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ),
                 ),
@@ -336,7 +374,10 @@ class _Empty extends StatelessWidget {
         message,
         textAlign: TextAlign.center,
         style: grotesk(
-            size: 13, weight: FontWeight.w400, color: AppColors.textMuted),
+          size: 13,
+          weight: FontWeight.w400,
+          color: AppColors.textMuted,
+        ),
       ),
     );
   }
@@ -381,13 +422,19 @@ class _CreateOrgSheetState extends State<_CreateOrgSheet> {
     final name = _nameCtrl.text.trim();
     final slug = _slugCtrl.text.trim().toLowerCase();
     if (name.isEmpty) {
-      Get.snackbar('Create organization', 'Enter an organization name',
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Create organization',
+        'Enter an organization name',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return;
     }
     if (slug.isEmpty) {
-      Get.snackbar('Create organization', 'Enter an organization slug',
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Create organization',
+        'Enter an organization slug',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return;
     }
 
@@ -395,11 +442,17 @@ class _CreateOrgSheetState extends State<_CreateOrgSheet> {
     try {
       await widget.auth.createOrg(name: name, slug: slug);
       if (mounted) Navigator.of(context).pop();
-      Get.snackbar('Organization created', name,
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Organization created',
+        name,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } on AuthException catch (e) {
-      Get.snackbar('Create organization', e.message,
-          snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar(
+        'Create organization',
+        e.message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } finally {
       setState(() => _creating = false);
     }
@@ -409,19 +462,28 @@ class _CreateOrgSheetState extends State<_CreateOrgSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          22, 18, 22, 22 + MediaQuery.of(context).viewInsets.bottom),
+        22,
+        18,
+        22,
+        22 + MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Create organization',
-                style: grotesk(size: 18, weight: FontWeight.w600)),
+            Text(
+              'Create organization',
+              style: grotesk(size: 18, weight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Text(
               'Create a workspace to manage private nodes and team access.',
               style: grotesk(
-                  size: 13, color: AppColors.textTertiary, height: 1.4),
+                size: 13,
+                color: AppColors.textTertiary,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -456,9 +518,10 @@ class _CreateOrgSheetState extends State<_CreateOrgSheet> {
                 child: Text(
                   _creating ? 'CREATING…' : 'CREATE ORGANIZATION',
                   style: mono(
-                      size: 13,
-                      weight: FontWeight.w600,
-                      color: AppColors.onAccent),
+                    size: 13,
+                    weight: FontWeight.w600,
+                    color: AppColors.onAccent,
+                  ),
                 ),
               ),
             ),

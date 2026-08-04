@@ -32,14 +32,16 @@ void main() {
     final ent = EntitlementState.fromJson({
       'status': 'active',
       'entitled': true,
-      'plan_id': 'pro',
+      'plan_id': 'personal.pro',
+      'capability_tier': 'pro',
       'source': 'trial',
       'current_period_end': end.toIso8601String(),
     });
     expect(ent.entitled, isTrue);
-    expect(ent.planId, 'pro');
+    expect(ent.planId, 'personal.pro');
     expect(ent.source, 'trial');
-    expect(ent.planLabel, 'Pro');
+    expect(ent.planLabel, 'Personal · Pro');
+    expect(ent.capabilityTier, 'pro');
     expect(ent.periodEnd, end);
   });
 
@@ -48,7 +50,7 @@ void main() {
       'status': 'active',
       'entitled': true,
       'source': 'rank',
-      'plan_id': 'pro',
+      'plan_id': 'business.launch',
     });
     expect(ent.source, 'rank');
     expect(ent.entitled, isTrue);
@@ -57,9 +59,11 @@ void main() {
   test('daysRemaining counts down to zero', () {
     final ent = EntitlementState(
       entitled: true,
-      planId: 'pro',
+      planId: 'business.launch',
       source: 'trial',
-      periodEnd: DateTime.now().toUtc().add(const Duration(days: 10, hours: 12)),
+      periodEnd: DateTime.now().toUtc().add(
+        const Duration(days: 10, hours: 12),
+      ),
     );
     expect(ent.daysRemaining, 10);
   });
