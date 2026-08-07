@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import 'browser_controller.dart';
@@ -98,7 +99,7 @@ class _BrowserViewState extends State<BrowserView> {
                 );
               }),
             ),
-            _ControlBar(controller: c),
+            if (!PlatformCapabilities.isDesktop) _ControlBar(controller: c),
           ],
         ),
       ),
@@ -271,46 +272,107 @@ class _OmniboxState extends State<_Omnibox> {
   Widget build(BuildContext context) {
     final url = widget.controller.addressBar.value;
     if (!_focus.hasFocus && _text.text != url) _text.text = url;
+    final desktop = PlatformCapabilities.isDesktop;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: AppColors.stroke),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _text,
-                focusNode: _focus,
-                style: mono(
-                  size: 13,
-                  weight: FontWeight.w400,
-                  color: const Color(0xFFC8C7C2),
-                ),
-                cursorColor: AppColors.accent,
-                textInputAction: TextInputAction.go,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: 'Search or enter address',
-                ),
-                onSubmitted: (v) => widget.controller.navigate(v),
-              ),
+      child: Row(
+        children: [
+          if (desktop) ...[
+            _DesktopBrowserButton(
+              icon: Icons.arrow_back,
+              tooltip: 'Back',
+              onTap: widget.controller.goBack,
             ),
-            GestureDetector(
-              onTap: widget.controller.reload,
-              child: const Icon(
-                Icons.refresh,
-                size: 17,
-                color: AppColors.textMuted,
-              ),
+            const SizedBox(width: 6),
+            _DesktopBrowserButton(
+              icon: Icons.arrow_forward,
+              tooltip: 'Forward',
+              onTap: widget.controller.goForward,
             ),
+            const SizedBox(width: 6),
+            _DesktopBrowserButton(
+              icon: Icons.home_outlined,
+              tooltip: 'Home',
+              onTap: widget.controller.goHome,
+            ),
+            const SizedBox(width: 10),
           ],
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.surface2,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _text,
+                      focusNode: _focus,
+                      style: mono(
+                        size: 13,
+                        weight: FontWeight.w400,
+                        color: const Color(0xFFC8C7C2),
+                      ),
+                      cursorColor: AppColors.accent,
+                      textInputAction: TextInputAction.go,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        hintText: 'Search or enter address',
+                      ),
+                      onSubmitted: (v) => widget.controller.navigate(v),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: widget.controller.reload,
+                    child: const Icon(
+                      Icons.refresh,
+                      size: 17,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopBrowserButton extends StatelessWidget {
+  const _DesktopBrowserButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.stroke),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.textSecondary),
         ),
       ),
     );
@@ -350,7 +412,10 @@ class _StartPageState extends State<_StartPage> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final compact = MediaQuery.sizeOf(context).width < 380;
+    final screenSize = MediaQuery.sizeOf(context);
+    final compact = screenSize.width < 380;
+    final tightHeight = screenSize.height < 700;
+    final toolColumns = PlatformCapabilities.isDesktop ? 3 : 2;
     final services = <_Service>[
       _Service(
         'Speed Test',
@@ -404,17 +469,22 @@ class _StartPageState extends State<_StartPage> {
 
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: EdgeInsets.fromLTRB(22, 8, 22, 22 + bottomInset),
+      padding: EdgeInsets.fromLTRB(
+        22,
+        tightHeight ? 4 : 8,
+        22,
+        16 + bottomInset,
+      ),
       children: [
         Text(
           'Sovereign web.',
           style: grotesk(
-            size: compact ? 28 : 32,
+            size: compact || tightHeight ? 28 : 32,
             weight: FontWeight.w600,
             letterSpacing: -0.8,
           ),
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: tightHeight ? 12 : 18),
         Container(
           padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
           decoration: BoxDecoration(
@@ -458,7 +528,7 @@ class _StartPageState extends State<_StartPage> {
             ],
           ),
         ),
-        const SizedBox(height: 22),
+        SizedBox(height: tightHeight ? 14 : 22),
         Text(
           'NETWORK TOOLS',
           style: mono(
@@ -468,14 +538,14 @@ class _StartPageState extends State<_StartPage> {
             letterSpacing: 11 * 0.12,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: tightHeight ? 8 : 12),
         GridView.count(
-          crossAxisCount: 2,
+          crossAxisCount: toolColumns,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: compact ? 1.85 : 2.1,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          mainAxisExtent: tightHeight ? 70 : 80,
           children: [
             for (final s in services)
               _ServiceCard(

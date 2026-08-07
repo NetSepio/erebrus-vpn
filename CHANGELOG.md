@@ -11,6 +11,8 @@
 
 ### Improved
 
+- Desktop navigation now uses a persistent branded sidebar with live VPN
+  status, a wider default window, and a full-width private-browser workspace.
 - Onboarding and sign-in layouts stay centered at a readable width in desktop
   windows while retaining their existing mobile behavior.
 - Desktop navigation labels now use the same casing as mobile navigation.

@@ -38,8 +38,8 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
   Future<void> _initDesktop() async {
     await windowManager.ensureInitialized();
     const options = WindowOptions(
-      size: Size(880, 820),
-      minimumSize: Size(720, 640),
+      size: Size(1080, 780),
+      minimumSize: Size(760, 620),
       center: true,
       title: 'Erebrus VPN',
     );

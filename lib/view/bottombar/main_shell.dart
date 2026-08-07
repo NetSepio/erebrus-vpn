@@ -8,7 +8,10 @@ import '../../auth/wallet_auth_controller.dart';
 import '../../guest/guest_config_store.dart';
 import '../../settings/app_settings_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/premium_widgets.dart';
+import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
+import '../../vpn/vpn_models.dart';
 import '../browser/browser_controller.dart';
 import '../browser/browser_view.dart';
 import '../guest/guest_connect_view.dart';
@@ -48,7 +51,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _tabs = [
       const DesktopScreen(child: _HomeTab()),
-      const DesktopScreen(child: BrowserView()),
+      const DesktopScreen(
+        layout: DesktopContentLayout.browser,
+        child: BrowserView(),
+      ),
       const DesktopScreen(child: SettingsView()),
     ];
     _autoConnectWorker = everAll(
@@ -129,8 +135,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       body: Row(
         children: [
           if (useSideRail) ...[
-            _DesktopNavRail(index: _index, onTap: _go),
-            const VerticalDivider(width: 1, color: AppColors.stroke),
+            _DesktopSidebar(index: _index, onTap: _go),
           ],
           Expanded(
             child: IndexedStack(index: _index, children: _tabs),
@@ -167,8 +172,8 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-class _DesktopNavRail extends StatelessWidget {
-  const _DesktopNavRail({required this.index, required this.onTap});
+class _DesktopSidebar extends StatelessWidget {
+  const _DesktopSidebar({required this.index, required this.onTap});
 
   final int index;
   final ValueChanged<int> onTap;
@@ -181,31 +186,218 @@ class _DesktopNavRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationRail(
-      selectedIndex: index,
-      onDestinationSelected: onTap,
-      labelType: NavigationRailLabelType.all,
-      backgroundColor: AppColors.bg,
-      indicatorColor: AppColors.accent.withValues(alpha: 0.18),
-      selectedIconTheme: const IconThemeData(color: AppColors.accent),
-      selectedLabelTextStyle: mono(
-        size: 11,
-        weight: FontWeight.w700,
-        color: AppColors.accent,
+    return Container(
+      width: DesktopLayout.sidebarWidth,
+      padding: const EdgeInsets.fromLTRB(14, 22, 14, 18),
+      decoration: const BoxDecoration(
+        color: AppColors.bgElevated,
+        border: Border(right: BorderSide(color: AppColors.stroke)),
       ),
-      unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary),
-      unselectedLabelTextStyle: mono(
-        size: 11,
-        weight: FontWeight.w500,
-        color: AppColors.textSecondary,
-      ),
-      destinations: [
-        for (final item in _items)
-          NavigationRailDestination(
-            icon: Icon(item.icon),
-            label: Text(item.label),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                const BrandLogo(size: 28, radius: 8),
+                const SizedBox(width: 9),
+                Text(
+                  'EREBRUS VPN',
+                  style: mono(
+                    size: 12,
+                    weight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+              ],
+            ),
           ),
-      ],
+          const SizedBox(height: 34),
+          Padding(
+            padding: const EdgeInsets.only(left: 10, bottom: 9),
+            child: Text(
+              'WORKSPACE',
+              style: mono(
+                size: 10,
+                weight: FontWeight.w600,
+                color: AppColors.textDim,
+                letterSpacing: 1.4,
+              ),
+            ),
+          ),
+          for (var i = 0; i < _items.length; i++) ...[
+            _DesktopNavItem(
+              icon: _items[i].icon,
+              label: _items[i].label,
+              selected: i == index,
+              onTap: () => onTap(i),
+            ),
+            if (i != _items.length - 1) const SizedBox(height: 6),
+          ],
+          const Spacer(),
+          Obx(() {
+            final vpn = Get.find<VpnController>();
+            return _DesktopConnectionCard(
+              stage: vpn.stage.value,
+              transport: vpn.activeTransport.value?.label,
+              onTap: () => onTap(0),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopNavItem extends StatelessWidget {
+  const _DesktopNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.accent : AppColors.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.accent.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? AppColors.accent.withValues(alpha: 0.24)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 12),
+              Text(
+                label,
+                style: mono(
+                  size: 11,
+                  weight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopConnectionCard extends StatelessWidget {
+  const _DesktopConnectionCard({
+    required this.stage,
+    required this.transport,
+    required this.onTap,
+  });
+
+  final VpnStage stage;
+  final String? transport;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, detail, color) = switch (stage) {
+      VpnStage.connected => (
+          'PROTECTED',
+          transport ?? 'VPN connected',
+          AppColors.success,
+        ),
+      VpnStage.connecting => (
+          'CONNECTING',
+          'Securing tunnel…',
+          AppColors.warn,
+        ),
+      VpnStage.disconnecting => (
+          'DISCONNECTING',
+          'Closing tunnel…',
+          AppColors.warn,
+        ),
+      VpnStage.error => ('CONNECTION ERROR', 'Open VPN to retry', AppColors.danger),
+      _ => ('NOT PROTECTED', 'Ready to connect', AppColors.textMuted),
+    };
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(top: 3),
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: stage == VpnStage.connected
+                    ? [BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 8)]
+                    : null,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: mono(
+                      size: 10,
+                      weight: FontWeight.w700,
+                      color: color,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: grotesk(
+                      size: 11.5,
+                      weight: FontWeight.w400,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

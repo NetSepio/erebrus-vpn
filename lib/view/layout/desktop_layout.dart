@@ -13,9 +13,10 @@ enum DesktopContentLayout {
 class DesktopLayout {
   DesktopLayout._();
 
-  static const double railBreakpoint = 980;
+  static const double railBreakpoint = 720;
+  static const double sidebarWidth = 208;
 
-  static const double standardMaxWidth = 520;
+  static const double standardMaxWidth = 620;
   static const double browserMaxWidth = 1180;
   static const double horizontalPadding = 40;
 
