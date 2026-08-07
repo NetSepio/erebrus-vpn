@@ -125,8 +125,13 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
               ),
             ),
             child: SafeArea(
-              child: Column(
-                children: [
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      children: [
                   // top bar
                   Padding(
                     padding: const EdgeInsets.fromLTRB(28, 18, 28, 18),
@@ -269,7 +274,10 @@ class _OnboardingViewState extends State<OnboardingView> with TickerProviderStat
                       ],
                     ),
                   ),
-                ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

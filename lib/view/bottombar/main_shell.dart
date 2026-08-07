@@ -175,8 +175,8 @@ class _DesktopNavRail extends StatelessWidget {
 
   static const _items = [
     (icon: Icons.shield, label: 'VPN'),
-    (icon: Icons.explore, label: 'Browser'),
-    (icon: Icons.tune, label: 'Settings'),
+    (icon: Icons.explore, label: 'BROWSER'),
+    (icon: Icons.tune, label: 'SETTINGS'),
   ];
 
   @override

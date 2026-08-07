@@ -111,6 +111,7 @@ abstract final class BrandAssets {
   static const glyphWhite = 'assets/icons/erebrus-vpn-glyph-white-1024.png';
   static const trayIcon = 'assets/icons/erebrus-tray-64.png';
   static const trayIconTemplate = 'assets/icons/erebrus-tray-template-64.png';
+  static const trayIconInactive = 'assets/icons/erebrus-tray-inactive-64.png';
 }
 
 /// The real Erebrus app icon / glyph from bundled assets.

@@ -24,6 +24,8 @@ class DesktopShell extends StatefulWidget {
 }
 
 class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowListener {
+  bool? _trayShowsConnected;
+
   @override
   void initState() {
     super.initState();
@@ -47,15 +49,6 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
     });
     await windowManager.setPreventClose(true);
 
-    if (Platform.isMacOS) {
-      await trayManager.setIcon(
-        BrandAssets.trayIconTemplate,
-        isTemplate: true,
-        iconSize: 18,
-      );
-    } else {
-      await trayManager.setIcon(BrandAssets.trayIcon);
-    }
     await _syncTrayMenu();
   }
 
@@ -138,6 +131,7 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
     final vpn = Get.find<VpnController>();
     final stage = vpn.stage.value;
     final transport = vpn.activeTransport.value?.label;
+    await _syncTrayIcon(stage);
     final statusLabel = switch (stage) {
       VpnStage.connected => 'Connected${transport != null ? ' · $transport' : ''}',
       VpnStage.connecting => 'Connecting…',
@@ -163,6 +157,34 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
         MenuItem(key: 'quit', label: 'Quit Erebrus'),
       ],
     ));
+  }
+
+  Future<void> _syncTrayIcon(VpnStage stage) async {
+    final connected = stage == VpnStage.connected;
+    if (_trayShowsConnected == connected) return;
+
+    if (Platform.isMacOS && connected) {
+      // Template icons automatically render black or white to match the
+      // current macOS menu-bar appearance.
+      await trayManager.setIcon(
+        BrandAssets.trayIconTemplate,
+        isTemplate: true,
+        iconSize: 18,
+      );
+    } else {
+      // The regular glyph is intentionally subdued, making every non-live
+      // state visually distinct from an active VPN connection.
+      if (Platform.isMacOS) {
+        await trayManager.setIcon(
+          BrandAssets.trayIconInactive,
+          isTemplate: false,
+          iconSize: 18,
+        );
+      } else {
+        await trayManager.setIcon(BrandAssets.trayIcon, isTemplate: false);
+      }
+    }
+    _trayShowsConnected = connected;
   }
 
   @override

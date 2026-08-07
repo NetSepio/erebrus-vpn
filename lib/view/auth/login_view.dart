@@ -67,9 +67,13 @@ class _LoginViewState extends State<LoginView> {
         child: SafeArea(
           child: Stack(
             children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(30, 14, 30, 36),
-                child: Column(
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(30, 14, 30, 36),
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Align(
@@ -324,7 +328,9 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       );
                     }),
-                  ],
+                    ],
+                  ),
+                ),
                 ),
               ),
 

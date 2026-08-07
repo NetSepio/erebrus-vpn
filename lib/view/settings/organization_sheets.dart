@@ -231,6 +231,13 @@ class _OrgRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final role = org.role?.trim() ?? '';
+    final plan = org.plan?.trim() ?? '';
+    final metadata = [
+      if (role.isNotEmpty) role.toUpperCase(),
+      if (plan.isNotEmpty) erebrusPlanLabel(plan),
+    ].join(' · ');
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       margin: const EdgeInsets.only(bottom: 8),
@@ -250,10 +257,12 @@ class _OrgRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: grotesk(size: 14.5, weight: FontWeight.w600),
                 ),
-                if (org.role != null && org.role!.isNotEmpty) ...[
+                if (metadata.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    '${org.role!.toUpperCase()} · ${erebrusPlanLabel(org.plan)}',
+                    metadata,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: mono(
                       size: 11,
                       weight: FontWeight.w500,

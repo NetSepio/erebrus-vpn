@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.0.4+5 — 2026-08-07
+
+### Added
+
+- Human-readable personal and business plan labels across subscriptions and
+  organization membership details.
+- Connection-aware macOS menu-bar icon states: adaptive black/white while the
+  VPN is live and a subdued icon while disconnected or transitioning.
+
+### Improved
+
+- Onboarding and sign-in layouts stay centered at a readable width in desktop
+  windows while retaining their existing mobile behavior.
+- Desktop navigation labels now use the same casing as mobile navigation.
+- Organization role and plan metadata handles missing legacy plan values and
+  long labels without misleading text or overflow.
+
+### Fixed
+
+- Live gateway coverage no longer assumes an obsolete node region while still
+  validating production node display data.
+
 ## 1.0.3+4 — 2026-07-25
 
 ### Added

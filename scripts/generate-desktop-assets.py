@@ -26,9 +26,11 @@ def generate_tray_icons() -> None:
     src = Image.open(GLYPH).convert('RGBA')
     color = Image.new('RGBA', src.size, (0, 0, 0, 0))
     template = Image.new('RGBA', src.size, (0, 0, 0, 0))
+    inactive = Image.new('RGBA', src.size, (0, 0, 0, 0))
     src_px = src.load()
     color_px = color.load()
     template_px = template.load()
+    inactive_px = inactive.load()
     for y in range(src.height):
         for x in range(src.width):
             r, g, b, a = src_px[x, y]
@@ -36,14 +38,19 @@ def generate_tray_icons() -> None:
                 continue
             color_px[x, y] = (r, g, b, 255)
             template_px[x, y] = (0, 0, 0, 255)
+            inactive_px[x, y] = (128, 128, 128, 255)
 
     color.save(ASSET_DIR / 'erebrus-tray.png')
     template.save(ASSET_DIR / 'erebrus-tray-template.png')
+    inactive.save(ASSET_DIR / 'erebrus-tray-inactive.png')
     color.resize((64, 64), Image.Resampling.LANCZOS).save(
         ASSET_DIR / 'erebrus-tray-64.png'
     )
     template.resize((64, 64), Image.Resampling.LANCZOS).save(
         ASSET_DIR / 'erebrus-tray-template-64.png'
+    )
+    inactive.resize((64, 64), Image.Resampling.LANCZOS).save(
+        ASSET_DIR / 'erebrus-tray-inactive-64.png'
     )
 
 
@@ -94,6 +101,9 @@ def main() -> None:
         print('Missing brand source images in assets/icons/', file=sys.stderr)
         sys.exit(1)
     generate_tray_icons()
+    if '--tray-only' in sys.argv:
+        print('Desktop tray assets generated.')
+        return
     generate_about_and_linux_icons()
     generate_launcher_icons()
     print('Desktop brand assets generated.')

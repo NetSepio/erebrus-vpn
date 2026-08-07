@@ -24,8 +24,8 @@ void main() {
     expect(n.chain, isNotEmpty);
 
     final d = NodeDisplay.of(n, showActivity: true);
-    expect(d.regionCompact.toLowerCase(), contains('east'));
+    expect(d.regionCompact, isNotEmpty);
     expect(d.org?.name, isNotEmpty);
-    expect(d.showSolanaBadge, isTrue);
+    expect(d.showSolanaBadge, n.chain?.toLowerCase() == 'solana');
   }, skip: false);
 }
