@@ -67,6 +67,9 @@ flutter run
 - **macOS:** `./scripts/build-libbox-macos.sh`, then `ruby ./scripts/setup-macos-tunnel.rb`
 - **Windows / Linux:** `./scripts/fetch-singbox-cli.sh`, then `./scripts/build-desktop.sh`
 
+**Release artifacts (this machine):** `./scripts/build-all-release.sh` →
+`dist/ErebrusVPN-<platform>-vX.X.X.*` (Play AAB, dApp APK, iOS IPA, macOS, desktop).
+
 Full setup, signing, and troubleshooting → **[docs/BUILD.md](docs/BUILD.md)**
 
 | Topic | Doc |

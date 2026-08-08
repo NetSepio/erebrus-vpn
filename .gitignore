@@ -36,6 +36,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Release artifacts (./scripts/build-all-release.sh, build-desktop.sh, …)
+/dist/
+
 # Symbolication related
 app.*.symbols
 

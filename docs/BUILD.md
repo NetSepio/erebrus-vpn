@@ -133,23 +133,46 @@ Android. Details in [STEALTH_CLIENT.md](STEALTH_CLIENT.md).
 
 ## Release builds
 
-Run analysis and tests before producing store artifacts:
+### One-shot release (recommended)
 
 ```bash
-flutter pub get
-flutter analyze
-flutter test
+./scripts/build-all-release.sh
 ```
 
-### Android stores
+Builds every platform this host can produce, runs analyze + tests first, and
+copies store artifacts into `dist/` named:
+
+```text
+ErebrusVPN-<platform>-vX.X.X.<ext>
+```
+
+| Artifact | Platform |
+|----------|----------|
+| `ErebrusVPN-android-playstore-v*.aab` | Google Play (keystore) |
+| `ErebrusVPN-android-dappstore-v*.apk` | Solana dApp Store (keystore) |
+| `ErebrusVPN-ios-v*.ipa` | TestFlight / App Store |
+| `ErebrusVPN-macos-v*.zip` | macOS `.app` (sideload) |
+| `ErebrusVPN-ubuntu-v*.tar.gz` | Linux (native or Docker) |
+| `ErebrusVPN-windows-v*.zip` | Windows (Windows host / CI) |
+
+On macOS, Ubuntu is built via Docker when the daemon is running; Windows is
+skipped with a note (use a Windows machine or the GitHub `Release` workflow).
+The script prints TestFlight / App Store upload steps after Apple builds.
+
+Useful flags: `--skip-tests`, `--skip-verify`, single targets
+(`android`, `ios`, `macos`, `ubuntu`, …). See `./scripts/build-all-release.sh --list`.
+
+### Android stores (standalone)
 
 Configure the two signing blocks in `android/key.properties`, then run:
 
 ```bash
 ./scripts/build-android-release.sh all
+# or
+./scripts/build-all-release.sh android
 ```
 
-Outputs:
+Outputs (Flutter paths; the all-release script also copies into `dist/`):
 
 - Google Play:
   `build/app/outputs/bundle/playstoreRelease/app-playstore-release.aab`
@@ -163,28 +186,35 @@ matching `libgojni.so`.
 ### iOS / TestFlight
 
 ```bash
-./scripts/build-libbox-ios.sh
-flutter build ipa --release
+./scripts/build-all-release.sh ios
+# equivalent:
+./scripts/build-libbox-ios.sh && flutter build ipa --release
 ```
 
-The App Store IPA is written under `build/ios/ipa/`. Verify that both
-`Runner.app` and `ErebrusTunnel.appex` report the version and build from
-`pubspec.yaml` before uploading with Transporter.
+The App Store IPA is written under `build/ios/ipa/` and copied to
+`dist/ErebrusVPN-ios-v*.ipa`. Verify that both `Runner.app` and
+`ErebrusTunnel.appex` report the version and build from `pubspec.yaml`
+before uploading with Transporter (or App Store Connect API).
+
+**Upload:** Transporter → deliver IPA, or Xcode Organizer → Archive →
+Distribute App → App Store Connect. Bundle IDs: `com.erebrus.vpn` +
+`com.erebrus.vpn.ErebrusTunnel` (App Groups + Network Extensions).
 
 ### macOS
 
 ```bash
+./scripts/build-all-release.sh macos
+# equivalent local ZIP:
 ./scripts/build-libbox-macos.sh
 ruby ./scripts/setup-macos-tunnel.rb
 flutter build macos --release
-open macos/Runner.xcworkspace
 ```
 
-For Mac App Store delivery, choose **Runner** and **Any Mac**, then Product →
-Archive → Distribute App → App Store Connect. Both `Runner` and
-`ErebrusTunnel` need App Store provisioning profiles with App Groups and
-Network Extensions enabled. `./scripts/build-desktop.sh macos` remains a
-convenient local ZIP builder; the Organizer archive is the store artifact.
+`dist/ErebrusVPN-macos-v*.zip` is for sideload / GitHub. For **Mac App Store**
+delivery, open `macos/Runner.xcworkspace`, choose **Runner** and **Any Mac**,
+then Product → Archive → Distribute App → App Store Connect. Both `Runner`
+and `ErebrusTunnel` need App Store provisioning profiles with App Groups and
+Network Extensions enabled.
 
 ## Troubleshooting
 
