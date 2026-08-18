@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.5+6 — 2026-08-18
+
+### Improved
+
+- Expired gateway sessions now automatically sign out instead of leaving the
+  account and subscription UI in a stale authenticated state.
+- Stored sessions are revalidated when the app starts and resumes, with a clear
+  prompt to sign in again when authentication has expired.
+- Settings now reflects organization-derived plans and no longer advertises the
+  retired personal free-trial flow.
+
+### Fixed
+
+- Gateway HTTP errors retain their status and machine-readable code so expired
+  sessions can be distinguished from permission and network failures.
+- Private cached VPN credentials are not reused after a session-expiry response.
+
 ## 1.0.4+5 — 2026-08-07
 
 ### Added

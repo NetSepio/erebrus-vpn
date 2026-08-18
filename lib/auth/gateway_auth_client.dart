@@ -22,6 +22,10 @@ class GatewayAuthClient {
 
   final Uri _base;
 
+  /// Called when an authenticated request proves that the user session is no
+  /// longer valid. The controller uses this to clear stale persisted state.
+  Future<void> Function()? onSessionExpired;
+
   String get baseUrl {
     final port = _base.hasPort ? ':${_base.port}' : '';
     return '${_base.scheme}://${_base.host}$port';
@@ -375,7 +379,11 @@ class GatewayAuthClient {
       final res = await req.close().timeout(_requestTimeout);
       final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
+        await _throwResponseError(
+          res.statusCode,
+          text,
+          authenticated: bearerToken != null && bearerToken.isNotEmpty,
+        );
       }
       return jsonDecode(text);
     } on SocketException catch (e) {
@@ -409,7 +417,11 @@ class GatewayAuthClient {
       final res = await req.close().timeout(_requestTimeout);
       final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
+        await _throwResponseError(
+          res.statusCode,
+          text,
+          authenticated: bearerToken != null && bearerToken.isNotEmpty,
+        );
       }
       if (text.isEmpty) return const {};
       final decoded = jsonDecode(text);
@@ -441,7 +453,11 @@ class GatewayAuthClient {
       final res = await req.close().timeout(_requestTimeout);
       final text = await utf8.decodeStream(res).timeout(_requestTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw AuthException(GatewayHttp.errorMessage(res.statusCode, text));
+        await _throwResponseError(
+          res.statusCode,
+          text,
+          authenticated: bearerToken != null && bearerToken.isNotEmpty,
+        );
       }
       if (text.isEmpty) return const {};
       final decoded = jsonDecode(text);
@@ -456,6 +472,22 @@ class GatewayAuthClient {
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<Never> _throwResponseError(
+    int statusCode,
+    String body, {
+    required bool authenticated,
+  }) async {
+    final error = AuthException(
+      GatewayHttp.errorMessage(statusCode, body),
+      statusCode: statusCode,
+      code: GatewayHttp.errorCode(body),
+    );
+    if (authenticated && error.isSessionExpired) {
+      await onSessionExpired?.call();
+    }
+    throw error;
   }
 }
 
@@ -497,8 +529,13 @@ class AuthMethods {
 }
 
 class AuthException implements Exception {
-  AuthException(this.message);
+  AuthException(this.message, {this.statusCode, this.code});
   final String message;
+  final int? statusCode;
+  final String? code;
+
+  bool get isSessionExpired => statusCode == HttpStatus.unauthorized;
+
   @override
   String toString() => message;
 }

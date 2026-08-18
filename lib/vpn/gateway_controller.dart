@@ -48,7 +48,9 @@ class GatewayController extends GetxController {
     super.onInit();
     gatewayUrl = _client.baseUrl.obs;
     if (Get.isRegistered<WalletAuthController>()) {
-      _client.setBearerToken(Get.find<WalletAuthController>().bearerToken);
+      final auth = Get.find<WalletAuthController>();
+      _client.setBearerToken(auth.bearerToken);
+      _client.onSessionExpired = auth.expireSession;
     }
     _wireProvisioner();
     _refreshTimer = Timer.periodic(_registryPollInterval, (_) {
@@ -101,7 +103,10 @@ class GatewayController extends GetxController {
               bundle: bundle,
             );
             return bundle;
-          } on GatewayException {
+          } on GatewayException catch (e) {
+            // An expired user credential is authoritative. Never tunnel around
+            // it using cached private credentials while logout is in progress.
+            if (e.isSessionExpired) rethrow;
             final cached = await _bundleCache.read(
               nodeId: node.id,
               wgPublicKey: wgPublicKey,

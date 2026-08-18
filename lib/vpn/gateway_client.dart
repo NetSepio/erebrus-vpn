@@ -11,10 +11,14 @@ export 'gateway_config.dart' show kDefaultGatewayUrl, kGatewayUrl, kTrialPeriodD
 /// Thin HTTP client for the Erebrus gateway discovery + provisioning APIs.
 class GatewayClient {
   GatewayClient({String? baseUrl, this._bearerToken})
-      : _base = GatewayHttp.normalizeBase(baseUrl ?? resolveGatewayUrl());
+    : _base = GatewayHttp.normalizeBase(baseUrl ?? resolveGatewayUrl());
 
   final Uri _base;
   String? _bearerToken;
+
+  /// Notifies the auth owner when a bearer-authenticated gateway call returns
+  /// 401. Public failures and permission-denied responses do not trigger it.
+  Future<void> Function()? onSessionExpired;
 
   void setBearerToken(String? token) => _bearerToken = token;
 
@@ -115,7 +119,7 @@ class GatewayClient {
       for (final c in clients) {
         if (c.nodeId != nodeId || c.wgPublicKey != wgPublicKey) continue;
         if (c.status == 'deleting') continue;
-        return fetchClientConfig(c.id);
+        return await fetchClientConfig(c.id);
       }
     } catch (_) {}
     return null;
@@ -141,7 +145,9 @@ class GatewayClient {
       throw GatewayException('Unexpected provision response shape');
     }
     final map = Map<String, dynamic>.from(decoded);
-    if (map.containsKey('wireguard') || map.containsKey('singbox_profile')) return map;
+    if (map.containsKey('wireguard') || map.containsKey('singbox_profile')) {
+      return map;
+    }
     for (final key in const ['client', 'data', 'bundle', 'credentials']) {
       final nested = map[key];
       if (nested is Map) return Map<String, dynamic>.from(nested);
@@ -188,7 +194,20 @@ class GatewayClient {
         final res = await req.close();
         final text = await utf8.decodeStream(res);
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          throw GatewayException(GatewayHttp.errorMessage(res.statusCode, text));
+          final hadBearer = _bearerToken != null && _bearerToken!.isNotEmpty;
+          final error = GatewayException(
+            GatewayHttp.errorMessage(res.statusCode, text),
+            statusCode: res.statusCode,
+            code: GatewayHttp.errorCode(text),
+          );
+          if (hadBearer && error.isSessionExpired) {
+            // Do not await here: a 401 may originate inside GatewayController's
+            // own refresh operation, while logout also resets that controller.
+            // Waiting would create a refresh -> logout -> refresh cycle.
+            final callback = onSessionExpired;
+            if (callback != null) unawaited(callback());
+          }
+          throw error;
         }
         if (text.isEmpty) return const {};
         return jsonDecode(text);
@@ -218,8 +237,13 @@ class GatewayClient {
 }
 
 class GatewayException implements Exception {
-  GatewayException(this.message);
+  GatewayException(this.message, {this.statusCode, this.code});
   final String message;
+  final int? statusCode;
+  final String? code;
+
+  bool get isSessionExpired => statusCode == HttpStatus.unauthorized;
+
   @override
   String toString() => message;
 }
@@ -239,9 +263,9 @@ class VpnClientRow {
   final String status;
 
   factory VpnClientRow.fromJson(Map<String, dynamic> j) => VpnClientRow(
-        id: (j['id'] ?? '').toString(),
-        nodeId: (j['node_id'] ?? '').toString(),
-        wgPublicKey: (j['wg_public_key'] ?? '').toString(),
-        status: (j['status'] ?? '').toString(),
-      );
+    id: (j['id'] ?? '').toString(),
+    nodeId: (j['node_id'] ?? '').toString(),
+    wgPublicKey: (j['wg_public_key'] ?? '').toString(),
+    status: (j['status'] ?? '').toString(),
+  );
 }

@@ -28,7 +28,9 @@ import '../vpn/vpn_controller.dart';
 class WalletAuthController extends GetxController {
   WalletAuthController({GatewayAuthClient? authClient, AuthSessionStore? store})
     : _authClient = authClient ?? GatewayAuthClient(),
-      _store = store ?? AuthSessionStore();
+      _store = store ?? AuthSessionStore() {
+    _authClient.onSessionExpired = expireSession;
+  }
 
   final GatewayAuthClient _authClient;
   final AuthSessionStore _store;
@@ -45,7 +47,6 @@ class WalletAuthController extends GetxController {
   final authError = RxnString();
   final entitlement = EntitlementState.none.obs;
   final isLoadingEntitlement = false.obs;
-  final isStartingTrial = false.obs;
   final isRefreshingNft = false.obs;
   final profileEmail = ''.obs;
   final profileEmailVerified = false.obs;
@@ -75,6 +76,7 @@ class WalletAuthController extends GetxController {
 
   String? _token;
   String? _mwaAuthToken;
+  Future<void>? _sessionExpiryInFlight;
 
   /// Mirrors [_token] for GetX — [RootView] must observe this, not the raw token.
   final sessionActive = false.obs;
@@ -257,7 +259,9 @@ class WalletAuthController extends GetxController {
         _syncGatewayToken();
         await refreshEntitlement();
         await refreshProfile();
-        debugPrint('[Auth] restored session for ${stored.walletAddress}');
+        if (isAuthenticated) {
+          debugPrint('[Auth] restored session for ${stored.walletAddress}');
+        }
       } else {
         _applyToken(null);
         entitlement.value = EntitlementState.none;
@@ -566,8 +570,28 @@ class WalletAuthController extends GetxController {
     }
   }
 
-  Future<void> signOut() async {
-    authError.value = null;
+  Future<void> signOut() => _clearSession(sessionExpired: false);
+
+  /// Invalidates a stale session exactly once when concurrent authenticated
+  /// requests all observe the same 401 response.
+  Future<void> expireSession() {
+    final existing = _sessionExpiryInFlight;
+    if (existing != null) return existing;
+
+    late final Future<void> operation;
+    operation = _clearSession(sessionExpired: true).whenComplete(() {
+      if (identical(_sessionExpiryInFlight, operation)) {
+        _sessionExpiryInFlight = null;
+      }
+    });
+    _sessionExpiryInFlight = operation;
+    return operation;
+  }
+
+  Future<void> _clearSession({required bool sessionExpired}) async {
+    authError.value = sessionExpired
+        ? 'Your session expired. Please sign in again.'
+        : null;
     entitlementError.value = null;
     profileError.value = null;
     entitlement.value = EntitlementState.none;
@@ -579,6 +603,7 @@ class WalletAuthController extends GetxController {
     referral.value = null;
     final mwaToken = _mwaAuthToken;
     _applyToken(null);
+    _syncGatewayToken();
     _mwaAuthToken = null;
     unawaited(
       googleSignOut(),
@@ -605,7 +630,6 @@ class WalletAuthController extends GetxController {
     await disconnectSolanaMobile(mwaToken);
     awaitingWebCallback.value = false;
     DesktopWebAuth.clearPendingState();
-    _syncGatewayToken();
   }
 
   Future<void> refreshAccountOrgInvites() async {
@@ -868,32 +892,6 @@ class WalletAuthController extends GetxController {
       entitlementError.value = e.toString();
     } finally {
       isRefreshingNft.value = false;
-    }
-  }
-
-  Future<void> startFreeTrial() async {
-    if (!isAuthenticated) {
-      entitlementError.value = 'Sign in first to start a trial';
-      return;
-    }
-    if (isEntitled) return;
-    if (entitlement.value.trialConsumed) {
-      entitlementError.value =
-          'Your 7-day trial has ended. Contact support to upgrade your plan, or hold the access NFT to extend to 30 days.';
-      return;
-    }
-
-    isStartingTrial.value = true;
-    entitlementError.value = null;
-    try {
-      await _authClient.startTrial(_token!);
-      await refreshEntitlement();
-    } on AuthException catch (e) {
-      entitlementError.value = e.message;
-    } catch (e) {
-      entitlementError.value = e.toString();
-    } finally {
-      isStartingTrial.value = false;
     }
   }
 

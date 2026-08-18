@@ -48,7 +48,7 @@ without you having to fiddle with settings.
 | **iOS** | TestFlight / App Store (see [docs/BUILD.md](docs/BUILD.md)) |
 | **Desktop** | Build from source — [docs/BUILD.md](docs/BUILD.md) |
 
-Current source version: **1.0.4+5**. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current source version: **1.0.5+6**. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 

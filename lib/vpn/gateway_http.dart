@@ -50,7 +50,10 @@ abstract final class GatewayHttp {
     }
 
     final resolver = await _selectedResolver();
-    if (resolver == null) throw lastError ?? const SocketException('System DNS failed and DoH is disabled');
+    if (resolver == null) {
+      throw lastError ??
+          const SocketException('System DNS failed and DoH is disabled');
+    }
 
     try {
       final viaDoh = await _resolveViaDoh(host, resolver);
@@ -93,23 +96,23 @@ abstract final class GatewayHttp {
   static DNSServer _createDnsServer(String resolver) {
     return switch (resolver) {
       'cloudflare' => DNSServer(
-          host: 'cloudflare-dns.com',
-          port: _defaultDohPort,
-          protocol: DNSProtocol.doh,
-          path: _defaultDohPath,
-        ),
+        host: 'cloudflare-dns.com',
+        port: _defaultDohPort,
+        protocol: DNSProtocol.doh,
+        path: _defaultDohPath,
+      ),
       'quad9' => DNSServer(
-          host: 'dns.quad9.net',
-          port: _defaultDohPort,
-          protocol: DNSProtocol.doh,
-          path: _defaultDohPath,
-        ),
+        host: 'dns.quad9.net',
+        port: _defaultDohPort,
+        protocol: DNSProtocol.doh,
+        path: _defaultDohPath,
+      ),
       'adguard' => DNSServer(
-          host: 'dns.adguard-dns.com',
-          port: _defaultDohPort,
-          protocol: DNSProtocol.doh,
-          path: _defaultDohPath,
-        ),
+        host: 'dns.adguard-dns.com',
+        port: _defaultDohPort,
+        protocol: DNSProtocol.doh,
+        path: _defaultDohPath,
+      ),
       _ => _parseCustomDnsServer(resolver),
     };
   }
@@ -163,6 +166,19 @@ abstract final class GatewayHttp {
       403 => 'Gateway access denied (403)',
       _ => 'Gateway error ($status)',
     };
+  }
+
+  /// Stable machine-readable code from the gateway error envelope, when one
+  /// was supplied. HTTP status remains authoritative for session handling.
+  static String? errorCode(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final code = decoded['code']?.toString().trim();
+        if (code != null && code.isNotEmpty) return code;
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Uri normalizeBase(String url) {

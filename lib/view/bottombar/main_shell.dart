@@ -85,6 +85,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       final vpn = Get.find<VpnController>();
       final settings = Get.find<AppSettingsController>();
+      final auth = Get.find<WalletAuthController>();
+      if (auth.isAuthenticated) {
+        unawaited(auth.refreshEntitlement());
+      }
       unawaited(vpn.syncWithNative().then((_) {
         settings.pingDiagnosticsIfEnabled(vpn: vpn);
       }));
@@ -105,7 +109,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (vpn.isConnected || vpn.isBusy || vpn.killSwitchBlocking.value) return;
 
     if (auth.isAuthenticated) {
-      if (!auth.sessionReady.value || !auth.canConnectVpn(vpn.selectedNode.value)) return;
+      if (!auth.sessionReady.value ||
+          !auth.canConnectVpn(vpn.selectedNode.value)) {
+        return;
+      }
       if (vpn.selectedNode.value == null) return;
       _autoConnectAttempted = true;
       vpn.connect();
@@ -324,20 +331,20 @@ class _DesktopConnectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, detail, color) = switch (stage) {
       VpnStage.connected => (
-          'PROTECTED',
-          transport ?? 'VPN connected',
-          AppColors.success,
-        ),
+        'PROTECTED',
+        transport ?? 'VPN connected',
+        AppColors.success,
+      ),
       VpnStage.connecting => (
           'CONNECTING',
           'Securing tunnel…',
           AppColors.warn,
         ),
       VpnStage.disconnecting => (
-          'DISCONNECTING',
-          'Closing tunnel…',
-          AppColors.warn,
-        ),
+        'DISCONNECTING',
+        'Closing tunnel…',
+        AppColors.warn,
+      ),
       VpnStage.error => ('CONNECTION ERROR', 'Open VPN to retry', AppColors.danger),
       _ => ('NOT PROTECTED', 'Ready to connect', AppColors.textMuted),
     };

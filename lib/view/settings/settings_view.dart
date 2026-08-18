@@ -242,7 +242,7 @@ class _SettingsViewState extends State<SettingsView> {
                         const SizedBox(height: 18),
                       ],
                     )
-                  : const _GuestSignInCard(),
+                  : _GuestSignInCard(auth: auth),
             ),
             const SizedBox(height: 18),
 
@@ -616,7 +616,9 @@ class _SettingsFooter extends StatelessWidget {
 }
 
 class _GuestSignInCard extends StatelessWidget {
-  const _GuestSignInCard();
+  const _GuestSignInCard({required this.auth});
+
+  final WalletAuthController auth;
 
   @override
   Widget build(BuildContext context) {
@@ -651,6 +653,23 @@ class _GuestSignInCard extends StatelessWidget {
               height: 1.4,
             ),
           ),
+          Obx(() {
+            final message = auth.authError.value;
+            if (message == null || message.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                message,
+                style: grotesk(
+                  size: 12.5,
+                  weight: FontWeight.w500,
+                  color: AppColors.danger,
+                ),
+              ),
+            );
+          }),
           const SizedBox(height: 14),
           GestureDetector(
             onTap: () => Get.to(() => const LoginView()),
@@ -842,10 +861,7 @@ class _SubscriptionCard extends StatelessWidget {
     final entitled = ent.entitled;
     final source = ent.source;
     final days = ent.daysRemaining;
-    final busy =
-        auth.isLoadingEntitlement.value ||
-        auth.isStartingTrial.value ||
-        auth.isRefreshingNft.value;
+    final busy = auth.isLoadingEntitlement.value || auth.isRefreshingNft.value;
 
     final badge = switch (source) {
       'trial' => 'TRIAL',
@@ -861,9 +877,7 @@ class _SubscriptionCard extends StatelessWidget {
         ? (days != null
               ? '$days of $kTrialPeriodDays days remaining'
               : 'Active')
-        : ent.trialConsumed
-        ? 'Trial ended — verify your gating NFT or renew on erebrus.io'
-        : 'Start a free $kTrialPeriodDays-day trial to connect';
+        : 'Free plan · Upgrade an organization for VPN access';
     final progress = entitled && days != null
         ? (days / kTrialPeriodDays).clamp(0.0, 1.0)
         : 0.0;
@@ -918,55 +932,9 @@ class _SubscriptionCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _DisabledButton(label: 'UPGRADE · COMING SOON'),
-          ] else if (!ent.trialConsumed) ...[
+          ] else ...[
             const SizedBox(height: 14),
-            GestureDetector(
-              onTap: busy ? null : auth.startFreeTrial,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Text(
-                  busy ? 'STARTING…' : 'START FREE TRIAL',
-                  style: mono(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.onAccent,
-                    letterSpacing: 13 * 0.05,
-                  ),
-                ),
-              ),
-            ),
-          ] else if (ent.nftGatingEnabled) ...[
-            const SizedBox(height: 14),
-            GestureDetector(
-              onTap: busy ? null : auth.refreshNftEntitlement,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  busy ? 'CHECKING…' : 'VERIFY GATING NFT',
-                  style: mono(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: AppColors.accent,
-                    letterSpacing: 13 * 0.05,
-                  ),
-                ),
-              ),
-            ),
+            _DisabledButton(label: 'UPGRADE · COMING SOON'),
           ],
           if (auth.entitlementError.value != null &&
               auth.entitlementError.value!.isNotEmpty) ...[
