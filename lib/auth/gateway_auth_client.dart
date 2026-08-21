@@ -93,17 +93,12 @@ class GatewayAuthClient {
     required String challengeId,
     required String signature,
     required String publicKey,
-    String? referralCode,
   }) async {
     final body = <String, dynamic>{
       'flow_id': challengeId,
       'signature': signature,
       'public_key': publicKey,
     };
-    final ref = referralCode?.trim();
-    if (ref != null && ref.isNotEmpty) {
-      body['ref'] = ref;
-    }
     final map = await _postJson(
       GatewayHttp.apiUri(_base, path: '/api/v2/auth'),
       body,

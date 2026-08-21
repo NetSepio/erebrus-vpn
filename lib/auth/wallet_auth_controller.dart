@@ -259,6 +259,8 @@ class WalletAuthController extends GetxController {
         _syncGatewayToken();
         await refreshEntitlement();
         await refreshProfile();
+        unawaited(refreshReferrals());
+        unawaited(refreshAccountOrgInvites());
         if (isAuthenticated) {
           debugPrint('[Auth] restored session for ${stored.walletAddress}');
         }
@@ -601,6 +603,10 @@ class WalletAuthController extends GetxController {
     profileChain.value = '';
     profileCreatedAt.value = null;
     referral.value = null;
+    accountOrgInvites.value = const [];
+    accountOrgInvitesError.value = null;
+    hasPendingDeletionRequest.value = false;
+    deleteAccountError.value = null;
     final mwaToken = _mwaAuthToken;
     _applyToken(null);
     _syncGatewayToken();
@@ -927,6 +933,8 @@ class WalletAuthController extends GetxController {
     }
     _syncGatewayToken();
     unawaited(refreshProfile());
+    unawaited(refreshReferrals());
+    unawaited(refreshAccountOrgInvites());
   }
 
   void _syncGatewayToken() {

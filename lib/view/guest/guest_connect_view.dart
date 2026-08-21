@@ -36,7 +36,6 @@ class _GuestConnectViewState extends State<GuestConnectView> {
   final _settings = Get.find<AppSettingsController>();
 
   Timer? _ticker;
-  DateTime? _connectedAt;
   Duration _elapsed = Duration.zero;
   Worker? _stageWorker;
 
@@ -57,17 +56,24 @@ class _GuestConnectViewState extends State<GuestConnectView> {
 
   void _onStageChanged(VpnStage stage) {
     if (stage == VpnStage.connected) {
-      _connectedAt ??= DateTime.now();
-      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted) return;
-        setState(() => _elapsed = DateTime.now().difference(_connectedAt!));
-      });
+      _tick();
+      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     } else {
       _ticker?.cancel();
       _ticker = null;
-      _connectedAt = null;
       if (mounted) setState(() => _elapsed = Duration.zero);
     }
+  }
+
+  void _tick() {
+    if (!mounted) return;
+    // Elapsed time is anchored to the controller's connect timestamp so it
+    // survives view rebuilds instead of restarting from zero.
+    final since = _vpn.connectedSince.value;
+    setState(() {
+      _elapsed =
+          since == null ? Duration.zero : DateTime.now().difference(since);
+    });
   }
 
   void _maybeResetMode() {

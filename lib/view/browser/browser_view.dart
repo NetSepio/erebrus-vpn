@@ -270,7 +270,10 @@ class _OmniboxState extends State<_Omnibox> {
 
   @override
   Widget build(BuildContext context) {
-    final url = widget.controller.addressBar.value;
+    final rawUrl = widget.controller.addressBar.value;
+    // Don't surface the internal start-page scheme (erebrus://home) in the
+    // address bar — keep it blank so the "Search or enter address" hint shows.
+    final url = rawUrl == kStartPage ? '' : rawUrl;
     if (!_focus.hasFocus && _text.text != url) _text.text = url;
     final desktop = PlatformCapabilities.isDesktop;
 

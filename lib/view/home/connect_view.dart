@@ -41,7 +41,6 @@ class _ConnectViewState extends State<ConnectView> {
       Get.isRegistered<WalletAuthController>() ? Get.find<WalletAuthController>() : null;
 
   Timer? _ticker;
-  DateTime? _connectedAt;
   final _elapsed = Duration.zero.obs;
   Worker? _stageWorker;
 
@@ -61,17 +60,22 @@ class _ConnectViewState extends State<ConnectView> {
   }
 
   void _startTimer() {
-    _connectedAt ??= DateTime.now();
-    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      _elapsed.value = DateTime.now().difference(_connectedAt!);
-    });
+    _tick();
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  void _tick() {
+    if (!mounted) return;
+    // Base the elapsed time on the controller's connect timestamp so it stays
+    // accurate even if this view is rebuilt mid-session.
+    final since = _c.connectedSince.value;
+    _elapsed.value =
+        since == null ? Duration.zero : DateTime.now().difference(since);
   }
 
   void _stopTimer() {
     _ticker?.cancel();
     _ticker = null;
-    _connectedAt = null;
     _elapsed.value = Duration.zero;
   }
 

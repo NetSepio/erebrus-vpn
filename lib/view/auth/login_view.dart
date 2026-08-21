@@ -112,7 +112,7 @@ class _LoginViewState extends State<LoginView> {
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            'Welcome to Erebrus',
+                            'Welcome to Erebrus VPN',
                             textAlign: TextAlign.center,
                             style: grotesk(
                               size: 26,

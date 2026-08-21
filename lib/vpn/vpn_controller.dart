@@ -54,6 +54,11 @@ class VpnController extends GetxController {
   /// traffic while the inner WireGuard/carrier is dead — "connected, no internet").
   final tunnelHealthy = true.obs;
 
+  /// When the tunnel entered the connected state (null while not connected).
+  /// Tracked here so the connect screen's elapsed timer stays accurate across
+  /// view rebuilds instead of restarting from zero each time the view mounts.
+  final connectedSince = Rxn<DateTime>();
+
   StreamSubscription<VpnStage>? _stageSub;
   StreamSubscription<VpnStats>? _statsSub;
   Worker? _healthWorker;
@@ -84,8 +89,12 @@ class VpnController extends GetxController {
     // (engine event, connect() success, or syncWithNative()).
     _healthWorker = ever<VpnStage>(stage, (s) {
       if (s == VpnStage.connected) {
+        // `??=` so re-entrant connected events (e.g. iOS delivering a delayed
+        // disconnected/connected pair) don't reset the elapsed timer.
+        connectedSince.value ??= DateTime.now();
         _startHealthMonitor();
       } else {
+        connectedSince.value = null;
         _stopHealthMonitor();
       }
     });
@@ -163,6 +172,12 @@ class VpnController extends GetxController {
         _wasConnected = true;
         _userDisconnecting = false;
         killSwitchBlocking.value = false;
+        // Anchor the elapsed timer to the real connect time persisted in the
+        // snapshot so a cold start / resume shows the true session duration
+        // rather than counting from app launch. Set before flipping the stage
+        // so the stage worker's `??=` keeps this value; falls back to now when
+        // the snapshot predates this field.
+        connectedSince.value = session?.savedAt;
         stage.value = VpnStage.connected;
         error.value = null;
         if (session?.killSwitchActive == true) {

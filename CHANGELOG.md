@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.0.6+7 — 2026-08-21
+
+### TL;DR (store release notes)
+
+- Invite friends and earn XP — your referral card, invite code, and redeem
+  option now appear as soon as you sign in.
+- Pending organization invites show up right on the Settings screen, so you
+  never miss a workspace invitation.
+- The connection timer now shows your true session length, even after
+  reopening the app or switching tabs mid-session.
+- Cleaner in-app browser: the new-tab address bar is empty and ready to type.
+- Polished sign-in screen and more accurate referral wording.
+
+### Improved
+
+- The referrals card (invite code, invited/qualified counts, and the redeem-a-
+  code field) now loads on sign-in and on session restore instead of staying
+  hidden until a code was already redeemed, making the invite/XP flow reachable.
+- Pending organization invites are fetched on login/restore, so the Settings
+  "Pending invites" badge and row appear without first opening the
+  Organizations sheet.
+- The VPN connection timer is anchored to the tunnel's real connect time,
+  persisted across app restarts, so elapsed duration stays accurate through view
+  rebuilds, tab switches, and cold starts.
+- Login screen now reads "Welcome to Erebrus VPN", and the referrals copy
+  reflects how XP is actually earned (no more unbacked "claim XP" wording).
+
+### Fixed
+
+- Signing out now clears pending organization invites and account-deletion
+  request state, preventing one account's data from lingering when another
+  account signs in during the same session.
+- The in-app browser address bar no longer surfaces the internal
+  `erebrus://home` scheme on the private start page — it stays empty so the
+  "Search or enter address" hint is shown.
+
 ## 1.0.5+6 — 2026-08-18
 
 ### Improved
