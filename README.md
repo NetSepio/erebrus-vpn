@@ -23,6 +23,8 @@ without you having to fiddle with settings.
 - **Clear diagnostics** — see whether WireGuard, VLESS + REALITY, or Hysteria2 is active
 - **Easy config import** — file import everywhere, plus QR scanning on Android and iOS
 - **Works on phone and desktop** — Android, iOS, macOS, Windows, and Linux
+- **Native macOS tray behavior** — close or minimize to remove the Dock icon;
+  reopen Erebrus from its menu-bar icon without stopping the VPN
 
 ---
 

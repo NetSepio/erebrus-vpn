@@ -26,6 +26,8 @@
   rebuilds, tab switches, and cold starts.
 - Login screen now reads "Welcome to Erebrus VPN", and the referrals copy
   reflects how XP is actually earned (no more unbacked "claim XP" wording).
+- On macOS, closing or minimizing the window now hides Erebrus to the menu bar
+  and removes its Dock icon; opening it from the tray restores the window.
 
 ### Fixed
 

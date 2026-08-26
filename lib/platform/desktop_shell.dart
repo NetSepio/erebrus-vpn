@@ -60,9 +60,8 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
   }
 
   @override
-  void onTrayIconMouseDown() {
-    windowManager.show();
-    windowManager.focus();
+  void onTrayIconMouseDown() async {
+    await _showWindow();
   }
 
   @override
@@ -76,10 +75,9 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
       case 'connect':
         _toggleConnection();
       case 'open':
-        windowManager.show();
-        windowManager.focus();
+        _showWindow();
       case 'minimize':
-        windowManager.hide();
+        _hideToTray();
       case 'quit':
         _quit();
     }
@@ -87,12 +85,27 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
 
   @override
   void onWindowClose() async {
-    await windowManager.hide();
+    await _hideToTray();
   }
 
   @override
-  void onWindowMinimize() {
-    windowManager.hide();
+  void onWindowMinimize() async {
+    await _hideToTray();
+  }
+
+  Future<void> _showWindow() async {
+    if (Platform.isMacOS) {
+      await windowManager.setSkipTaskbar(false);
+    }
+    await windowManager.show();
+    await windowManager.focus();
+  }
+
+  Future<void> _hideToTray() async {
+    await windowManager.hide();
+    if (Platform.isMacOS) {
+      await windowManager.setSkipTaskbar(true);
+    }
   }
 
   Future<void> _toggleConnection() async {
@@ -108,7 +121,7 @@ class _DesktopShellState extends State<DesktopShell> with TrayListener, WindowLi
         ? Get.find<WalletAuthController>()
         : null;
     if (auth != null && !auth.isAuthenticated) {
-      await windowManager.show();
+      await _showWindow();
       await auth.openSignIn();
       return;
     }

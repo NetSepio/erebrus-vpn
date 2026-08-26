@@ -29,12 +29,21 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
     if !flag {
-      for window in sender.windows where window.canBecomeMain {
-        window.makeKeyAndOrderFront(self)
-        return false
-      }
+      showMainWindow(sender)
     }
     return true
+  }
+
+  private func showMainWindow(_ application: NSApplication) {
+    guard let window = application.windows.first(where: { $0 is MainFlutterWindow }) else {
+      return
+    }
+
+    // The Flutter window is hidden (not destroyed) when its close button is
+    // pressed. A Dock-icon click must activate the app and order that same
+    // window back to the front.
+    application.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(self)
   }
 
   func wireChannels(messenger: FlutterBinaryMessenger) {
