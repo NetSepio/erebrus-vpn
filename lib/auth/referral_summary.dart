@@ -4,6 +4,7 @@ class ReferralSummary {
   const ReferralSummary({
     required this.code,
     this.referredCount = 0,
+    this.referralBound = false,
     this.referredBy = '',
     this.recent = const [],
   });
@@ -11,6 +12,11 @@ class ReferralSummary {
   /// The caller's shareable invite code (allocated lazily server-side).
   final String code;
   final int referredCount;
+
+  /// True once this account has bound a referrer (one referrer, ever). The
+  /// gateway sets this even when [referredBy] is unavailable, so it is the
+  /// authoritative "already redeemed" signal.
+  final bool referralBound;
 
   /// Truncated wallet of whoever invited this account; empty when unbound.
   final String referredBy;
@@ -22,6 +28,7 @@ class ReferralSummary {
   factory ReferralSummary.fromJson(Map<String, dynamic> j) => ReferralSummary(
         code: (j['code'] ?? '').toString(),
         referredCount: (j['referred_count'] as num?)?.toInt() ?? 0,
+        referralBound: j['referral_bound'] == true,
         referredBy: (j['referred_by'] ?? '').toString(),
         recent: [
           for (final r in (j['recent'] as List? ?? const []))

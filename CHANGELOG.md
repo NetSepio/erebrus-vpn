@@ -4,8 +4,8 @@
 
 ### TL;DR (store release notes)
 
-- Invite friends and earn XP — your referral card, invite code, and redeem
-  option now appear as soon as you sign in.
+- Invite friends and earn XP — your referral card, invite code, redeem option,
+  and lifetime XP now appear as soon as you sign in.
 - Pending organization invites show up right on the Settings screen, so you
   never miss a workspace invitation.
 - The connection timer now shows your true session length, even after
@@ -18,6 +18,10 @@
 - The referrals card (invite code, invited/qualified counts, and the redeem-a-
   code field) now loads on sign-in and on session restore instead of staying
   hidden until a code was already redeemed, making the invite/XP flow reachable.
+- Lifetime XP is now shown on the referrals card, sourced from the rank endpoint
+  (the authoritative XP source) rather than assumed to arrive with the referral
+  or profile responses; the "already applied" state is read from the gateway's
+  authoritative binding flag.
 - Pending organization invites are fetched on login/restore, so the Settings
   "Pending invites" badge and row appear without first opening the
   Organizations sheet.

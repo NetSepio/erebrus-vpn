@@ -15,6 +15,7 @@ import 'deep_link_handler.dart';
 import 'desktop_web_auth.dart';
 import 'entitlement_state.dart';
 import 'gateway_auth_client.dart';
+import 'rank_summary.dart';
 import 'referral_summary.dart';
 import 'social_login.dart';
 import 'user_profile.dart';
@@ -57,6 +58,7 @@ class WalletAuthController extends GetxController {
   final profileError = RxnString();
   final isLinkingEmail = false.obs;
   final referral = Rxn<ReferralSummary>();
+  final rank = Rxn<RankSummary>();
   final isRedeemingReferral = false.obs;
   final entitlementError = RxnString();
   final awaitingWebCallback = false.obs;
@@ -260,6 +262,7 @@ class WalletAuthController extends GetxController {
         await refreshEntitlement();
         await refreshProfile();
         unawaited(refreshReferrals());
+        unawaited(refreshRank());
         unawaited(refreshAccountOrgInvites());
         if (isAuthenticated) {
           debugPrint('[Auth] restored session for ${stored.walletAddress}');
@@ -603,6 +606,7 @@ class WalletAuthController extends GetxController {
     profileChain.value = '';
     profileCreatedAt.value = null;
     referral.value = null;
+    rank.value = null;
     accountOrgInvites.value = const [];
     accountOrgInvitesError.value = null;
     hasPendingDeletionRequest.value = false;
@@ -822,6 +826,22 @@ class WalletAuthController extends GetxController {
     }
   }
 
+  /// Loads the caller's XP standing (best-effort — the referrals card simply
+  /// omits the XP stat on failure). Lifetime XP comes from `rank/me`, not the
+  /// referral or profile responses.
+  Future<void> refreshRank() async {
+    final token = _token;
+    if (token == null || token.isEmpty) {
+      rank.value = null;
+      return;
+    }
+    try {
+      rank.value = await _authClient.fetchRank(token);
+    } catch (e) {
+      debugPrint('[Auth] rank summary load failed: $e');
+    }
+  }
+
   /// Applies an invite code to this account (one referrer, ever). Throws
   /// [AuthException] with the gateway's message so the UI can surface it.
   Future<void> redeemReferralCode(String code) async {
@@ -834,6 +854,10 @@ class WalletAuthController extends GetxController {
       } else {
         await refreshReferrals();
       }
+      // XP is awarded only once the caller qualifies (active org membership), so
+      // it usually won't move at redeem time — refresh anyway so the displayed
+      // balance reflects any immediate award.
+      unawaited(refreshRank());
     } finally {
       isRedeemingReferral.value = false;
     }
@@ -934,6 +958,7 @@ class WalletAuthController extends GetxController {
     _syncGatewayToken();
     unawaited(refreshProfile());
     unawaited(refreshReferrals());
+    unawaited(refreshRank());
     unawaited(refreshAccountOrgInvites());
   }
 

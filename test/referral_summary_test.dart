@@ -9,6 +9,7 @@ void main() {
     {
       "code": "AB12CD34",
       "referred_count": 3,
+      "referral_bound": true,
       "referred_by": "0x1234…abcd",
       "recent": [
         {"wallet": "9xQe…3fKm", "qualified": true, "joined_at": "2026-07-01T10:00:00Z"},
@@ -19,6 +20,7 @@ void main() {
     final s = ReferralSummary.fromJson(j);
     expect(s.code, 'AB12CD34');
     expect(s.referredCount, 3);
+    expect(s.referralBound, isTrue);
     expect(s.referredBy, '0x1234…abcd');
     expect(s.recent.length, 2);
     expect(s.qualifiedCount, 1);
@@ -29,6 +31,7 @@ void main() {
     final s = ReferralSummary.fromJson(const {'code': 'ZZZZ9999'});
     expect(s.code, 'ZZZZ9999');
     expect(s.referredCount, 0);
+    expect(s.referralBound, isFalse);
     expect(s.referredBy, '');
     expect(s.recent, isEmpty);
     expect(s.qualifiedCount, 0);

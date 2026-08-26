@@ -1121,6 +1121,8 @@ class _ReferralSectionState extends State<_ReferralSection> {
     return Obx(() {
       final sum = widget.auth.referral.value;
       if (sum == null || sum.code.isEmpty) return const SizedBox.shrink();
+      // Lifetime XP comes from rank/me (best-effort) — hidden until it loads.
+      final xpEarned = widget.auth.rank.value?.xpEarned;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1222,6 +1224,10 @@ class _ReferralSectionState extends State<_ReferralSection> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
+                    if (xpEarned != null) ...[
+                      _ReferralStat(value: xpEarned, label: 'XP earned'),
+                      const SizedBox(width: 28),
+                    ],
                     _ReferralStat(value: sum.referredCount, label: 'invited'),
                     const SizedBox(width: 28),
                     _ReferralStat(
@@ -1238,6 +1244,15 @@ class _ReferralSectionState extends State<_ReferralSection> {
                     'Invited by ${sum.referredBy}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: mono(
+                      size: 11,
+                      weight: FontWeight.w400,
+                      color: AppColors.textTertiary,
+                    ),
+                  )
+                else if (sum.referralBound)
+                  Text(
+                    'Invite code applied',
                     style: mono(
                       size: 11,
                       weight: FontWeight.w400,

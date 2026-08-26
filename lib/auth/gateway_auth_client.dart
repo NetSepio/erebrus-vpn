@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'auth_config.dart';
 import 'entitlement_state.dart';
+import 'rank_summary.dart';
 import 'referral_summary.dart';
 import 'user_profile.dart';
 import 'user_org_invite.dart';
@@ -238,6 +239,17 @@ class GatewayAuthClient {
       bearerToken: bearerToken,
     );
     return UserProfile.fromJson(map);
+  }
+
+  /// `GET /api/v2/rank/me` — the caller's XP standing (lifetime `xp_earned`,
+  /// claimable balance, tier). Referral XP lands here after a referee qualifies;
+  /// it is not returned by the referral or profile endpoints.
+  Future<RankSummary> fetchRank(String bearerToken) async {
+    final map = await _getJson(
+      GatewayHttp.apiUri(_base, path: '/api/v2/rank/me'),
+      bearerToken: bearerToken,
+    );
+    return RankSummary.fromJson(map);
   }
 
   /// `GET /api/v2/referrals/me` — my invite code, referrer, recent referees.
