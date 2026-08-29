@@ -3,9 +3,11 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../platform/platform_capabilities.dart';
+import '../../auth/wallet_auth_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../layout/desktop_layout.dart';
+import 'account_sheets.dart';
 import 'privacy_view.dart';
 import 'terms_view.dart';
 
@@ -33,99 +35,148 @@ class AboutView extends StatelessWidget {
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: maxWidth),
               child: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.sm, AppSpace.xl, AppSpace.xxl),
-        children: [
-          const Center(
-            child: BrandLogo(size: 72, radius: 18, showShadow: true),
-          ),
-          const SizedBox(height: AppSpace.lg),
-          Center(
-            child: Text(
-              'Erebrus VPN',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: AppColors.textPrimary),
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Center(
-            child: Text('by NetSepio', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          const SizedBox(height: 8),
-          FutureBuilder<PackageInfo>(
-            future: PackageInfo.fromPlatform(),
-            builder: (context, snapshot) {
-              final version = snapshot.hasData
-                  ? 'v${snapshot.data!.version} (${snapshot.data!.buildNumber})'
-                  : '';
-              return Center(
-                child: Text(
-                  version,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.xl,
+                  AppSpace.sm,
+                  AppSpace.xl,
+                  AppSpace.xxl,
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: AppSpace.xl),
-          const SectionLabel('Our ethos'),
-          const SizedBox(height: AppSpace.md),
-          GlassCard(
-            child: Text(
-              'NetSepio builds privacy infrastructure for a decentralized web. '
-              'We believe connectivity should be sovereign: you choose where your '
-              'traffic exits, who provisions your keys, and what data leaves your device.\n\n'
-              'Erebrus is the client layer of that vision — a VPN that speaks to '
-              'NetSepio gateways and community-operated nodes, not a closed pool of '
-              'rented servers.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          const SizedBox(height: AppSpace.xl),
-          const SectionLabel('What Erebrus can do'),
-          const SizedBox(height: AppSpace.md),
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                _Bullet('Connect over WireGuard or Stealth (sing-box) through NetSepio gateways'),
-                _Bullet('Provision credentials per device and reuse them on reconnect'),
-                _Bullet('Browse community and premium nodes with live health signals'),
-                _Bullet('Authenticate with wallet, email, or Seeker (Solana Mobile)'),
-                _Bullet('Run on Android, iOS, macOS, Windows, and Linux from one codebase'),
-                _Bullet('In-app browser routes through the tunnel when connected'),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpace.xl),
-          const SectionLabel('Legal'),
-          const SizedBox(height: AppSpace.md),
-          GlassCard(
-            padding: const EdgeInsets.all(AppSpace.sm),
-            child: Column(
-              children: [
-                _LegalRow(
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
-                  subtitle: 'What we collect and what we never log',
-                  onTap: () => Get.to(() => const PrivacyView()),
-                ),
-                const _Divider(),
-                _LegalRow(
-                  icon: Icons.description_outlined,
-                  title: 'Terms of Use',
-                  subtitle: 'Acceptable use, disclaimers, and beta notice',
-                  onTap: () => Get.to(() => const TermsView()),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpace.xl),
-          const Center(
-            child: Text(
-              'Erebrus © 2026 NetSepio LLC. All rights reserved.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-            ),
-          ),
-        ],
+                children: [
+                  const Center(
+                    child: BrandLogo(size: 72, radius: 18, showShadow: true),
+                  ),
+                  const SizedBox(height: AppSpace.lg),
+                  Center(
+                    child: Text(
+                      'Erebrus VPN',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: AppColors.textPrimary),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Center(
+                    child: Text(
+                      'by NetSepio',
+                      style: TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      final version = snapshot.hasData
+                          ? 'v${snapshot.data!.version} (${snapshot.data!.buildNumber})'
+                          : '';
+                      return Center(
+                        child: Text(
+                          version,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AppColors.textMuted),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  const SectionLabel('Our ethos'),
+                  const SizedBox(height: AppSpace.md),
+                  GlassCard(
+                    child: Text(
+                      'NetSepio builds privacy infrastructure for a decentralized web. '
+                      'We believe connectivity should be sovereign: you choose where your '
+                      'traffic exits, who provisions your keys, and what data leaves your device.\n\n'
+                      'Erebrus is the client layer of that vision — a VPN that speaks to '
+                      'NetSepio gateways and community-operated nodes, not a closed pool of '
+                      'rented servers.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  const SectionLabel('What Erebrus can do'),
+                  const SizedBox(height: AppSpace.md),
+                  GlassCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        _Bullet(
+                          'Connect over WireGuard or Stealth (sing-box) through NetSepio gateways',
+                        ),
+                        _Bullet(
+                          'Provision credentials per device and reuse them on reconnect',
+                        ),
+                        _Bullet(
+                          'Browse community and premium nodes with live health signals',
+                        ),
+                        _Bullet(
+                          'Authenticate with wallet, email, or Seeker (Solana Mobile)',
+                        ),
+                        _Bullet(
+                          'Run on Android, iOS, macOS, Windows, and Linux from one codebase',
+                        ),
+                        _Bullet(
+                          'In-app browser routes through the tunnel when connected',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  const SectionLabel('Legal'),
+                  const SizedBox(height: AppSpace.md),
+                  GlassCard(
+                    padding: const EdgeInsets.all(AppSpace.sm),
+                    child: Column(
+                      children: [
+                        _LegalRow(
+                          icon: Icons.privacy_tip_outlined,
+                          title: 'Privacy Policy',
+                          subtitle: 'What we collect and what we never log',
+                          onTap: () => Get.to(() => const PrivacyView()),
+                        ),
+                        const _Divider(),
+                        _LegalRow(
+                          icon: Icons.description_outlined,
+                          title: 'Terms of Use',
+                          subtitle:
+                              'Acceptable use, disclaimers, and beta notice',
+                          onTap: () => Get.to(() => const TermsView()),
+                        ),
+                        const _Divider(),
+                        _LegalRow(
+                          icon: Icons.delete_outline,
+                          title: 'Request account deletion',
+                          subtitle:
+                              'Submit a request to permanently remove your account',
+                          titleColor: AppColors.danger,
+                          iconColor: AppColors.danger,
+                          onTap: () {
+                            if (!Get.isRegistered<WalletAuthController>()) {
+                              Get.snackbar(
+                                'Account unavailable',
+                                'Return to Settings and sign in to continue',
+                                snackPosition: SnackPosition.BOTTOM,
+                              );
+                              return;
+                            }
+                            showDeleteAccountSheet(
+                              context,
+                              Get.find<WalletAuthController>(),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.xl),
+                  const Center(
+                    child: Text(
+                      'Erebrus © 2026 NetSepio LLC. All rights reserved.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -141,21 +192,33 @@ class _LegalRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.iconColor,
+    this.titleColor,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final Color? iconColor;
+  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
-      leading: Icon(icon, color: AppColors.textSecondary, size: 22),
+      leading: Icon(
+        icon,
+        color: iconColor ?? AppColors.textSecondary,
+        size: 22,
+      ),
       title: Text(
         title,
-        style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+        style: TextStyle(
+          color: titleColor ?? AppColors.textPrimary,
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+        ),
       ),
       subtitle: Text(
         subtitle,
@@ -169,8 +232,13 @@ class _LegalRow extends StatelessWidget {
 class _Divider extends StatelessWidget {
   const _Divider();
   @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: AppColors.stroke, indent: AppSpace.lg, endIndent: AppSpace.lg);
+  Widget build(BuildContext context) => const Divider(
+    height: 1,
+    thickness: 1,
+    color: AppColors.stroke,
+    indent: AppSpace.lg,
+    endIndent: AppSpace.lg,
+  );
 }
 
 class _Bullet extends StatelessWidget {
@@ -184,8 +252,13 @@ class _Bullet extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('• ', style: TextStyle(color: AppColors.cyan, fontSize: 14)),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          const Text(
+            '• ',
+            style: TextStyle(color: AppColors.cyan, fontSize: 14),
+          ),
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+          ),
         ],
       ),
     );

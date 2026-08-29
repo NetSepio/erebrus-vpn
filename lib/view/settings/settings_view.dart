@@ -114,63 +114,11 @@ class _SettingsViewState extends State<SettingsView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // profile
-                        Obx(
-                          () => _ProfileCard(
-                            walletAddress: auth.walletAddress.value,
-                            authMethod: auth.authMethod.value,
-                            displayName: auth.profileName.value,
-                            chain: auth.profileChain.value,
-                            email: auth.profileEmail.value,
-                          ),
-                        ),
+                        _ProfileCard(auth: auth),
                         const SizedBox(height: 14),
 
                         // subscription
                         _SubscriptionCard(auth: auth),
-                        const SizedBox(height: 22),
-
-                        // account
-                        const SectionLabel('ACCOUNT'),
-                        const SizedBox(height: 9),
-                        _GroupCard(
-                          children: [
-                            _EmailRow(auth: auth),
-                            _RowDivider(),
-                            Obx(
-                              () => _GroupRow(
-                                icon: Icons.edit_outlined,
-                                title: 'Display name',
-                                subtitle: auth.profileName.value.isEmpty
-                                    ? 'Set a display name'
-                                    : auth.profileName.value,
-                                onTap: () =>
-                                    showEditProfileSheet(context, auth),
-                                trailing: const Icon(
-                                  Icons.chevron_right,
-                                  size: 18,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ),
-                            _RowDivider(),
-                            _GroupRow(
-                              icon: Icons.calendar_today_outlined,
-                              title: 'Member since',
-                              subtitle: _formatMemberSinceLabel(
-                                auth.profileCreatedAt.value,
-                              ),
-                            ),
-                            _RowDivider(),
-                            _GroupRow(
-                              icon: Icons.delete_outline,
-                              title: 'Request account deletion',
-                              titleColor: AppColors.danger,
-                              iconColor: AppColors.danger,
-                              onTap: () =>
-                                  showDeleteAccountSheet(context, auth),
-                            ),
-                          ],
-                        ),
                         const SizedBox(height: 18),
 
                         // referrals — mirrors the webapp profile "Invite friends" card
@@ -699,27 +647,20 @@ class _GuestSignInCard extends StatelessWidget {
 }
 
 class _ProfileCard extends StatefulWidget {
-  const _ProfileCard({
-    required this.walletAddress,
-    required this.authMethod,
-    required this.displayName,
-    required this.chain,
-    this.email = '',
-  });
-  final String walletAddress;
-  final String authMethod;
-  final String displayName;
-  final String chain;
-  final String email;
+  const _ProfileCard({required this.auth});
+
+  final WalletAuthController auth;
+
   @override
   State<_ProfileCard> createState() => _ProfileCardState();
 }
 
 class _ProfileCardState extends State<_ProfileCard> {
   bool _copied = false;
+  bool _expanded = false;
 
   String get _short {
-    final a = widget.walletAddress;
+    final a = widget.auth.walletAddress.value;
     if (a.isEmpty) return 'Not connected';
     return a.length < 10
         ? a
@@ -727,7 +668,7 @@ class _ProfileCardState extends State<_ProfileCard> {
   }
 
   String get _initials {
-    final name = widget.displayName.trim();
+    final name = widget.auth.profileName.value.trim();
     if (name.isNotEmpty) {
       final parts = name
           .split(RegExp(r'\s+'))
@@ -740,36 +681,37 @@ class _ProfileCardState extends State<_ProfileCard> {
           ? name.substring(0, 2).toUpperCase()
           : name.toUpperCase();
     }
-    final a = widget.walletAddress.isNotEmpty
-        ? widget.walletAddress
-        : widget.email.trim();
+    final a = widget.auth.walletAddress.value.isNotEmpty
+        ? widget.auth.walletAddress.value
+        : widget.auth.profileEmail.value.trim();
     if (a.length < 2) return 'ER';
     return a.substring(0, 2).toUpperCase();
   }
 
   // Name > wallet > email — identity-login users shouldn't read "Not connected".
   String get _title {
-    final name = widget.displayName.trim();
+    final name = widget.auth.profileName.value.trim();
     if (name.isNotEmpty) return name;
-    if (widget.walletAddress.isNotEmpty) return _short;
-    final email = widget.email.trim();
+    if (widget.auth.walletAddress.value.isNotEmpty) return _short;
+    final email = widget.auth.profileEmail.value.trim();
     if (email.isNotEmpty) return email;
     return 'Erebrus account';
   }
 
   String get _subtitle {
-    final name = widget.displayName.trim();
-    if (name.isNotEmpty && widget.walletAddress.isNotEmpty) {
-      return '${_formatChainLabel(widget.chain)} · $_short';
+    final email = widget.auth.profileEmail.value.trim();
+    if (email.isNotEmpty) return email;
+    if (widget.auth.walletAddress.value.isNotEmpty) {
+      return '${_formatChainLabel(widget.auth.profileChain.value)} · $_short';
     }
-    return widget.authMethod.isEmpty
-        ? 'Solana wallet'
-        : 'Signed in · ${widget.authMethod}';
+    final method = widget.auth.authMethod.value;
+    return method.isEmpty ? 'Erebrus account' : 'Signed in with $method';
   }
 
   void _copy() {
-    if (widget.walletAddress.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: widget.walletAddress));
+    final address = widget.auth.walletAddress.value;
+    if (address.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: address));
     setState(() => _copied = true);
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) setState(() => _copied = false);
@@ -778,71 +720,195 @@ class _ProfileCardState extends State<_ProfileCard> {
 
   @override
   Widget build(BuildContext context) {
-    return SurfaceCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: AppGradients.brand,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              _initials,
-              style: mono(
-                size: 16,
-                weight: FontWeight.w600,
-                color: AppColors.onAccent,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: grotesk(size: 16, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: mono(
-                    size: 12,
-                    weight: FontWeight.w400,
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (widget.walletAddress.isNotEmpty)
+    return Obx(
+      () => SurfaceCard(
+        padding: EdgeInsets.zero,
+        clip: true,
+        borderColor: _expanded ? AppColors.strokeHi : AppColors.stroke,
+        child: Column(
+          children: [
             GestureDetector(
-              onTap: _copy,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  _copied ? Icons.check : Icons.copy_outlined,
-                  size: 16,
-                  color: _copied ? AppColors.success : AppColors.textSecondary,
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.brand,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        _initials,
+                        style: mono(
+                          size: 16,
+                          weight: FontWeight.w600,
+                          color: AppColors.onAccent,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: grotesk(size: 16, weight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: mono(
+                              size: 12,
+                              weight: FontWeight.w400,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Text(
+                            'SIGNED IN',
+                            style: mono(
+                              size: 9.5,
+                              weight: FontWeight.w600,
+                              color: AppColors.success,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        AnimatedRotation(
+                          turns: _expanded ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 20,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: _expanded
+                  ? _ProfileDetails(
+                      auth: widget.auth,
+                      copied: _copied,
+                      onCopy: _copy,
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _ProfileDetails extends StatelessWidget {
+  const _ProfileDetails({
+    required this.auth,
+    required this.copied,
+    required this.onCopy,
+  });
+
+  final WalletAuthController auth;
+  final bool copied;
+  final VoidCallback onCopy;
+
+  String get _authMethod {
+    final method = auth.authMethod.value.trim();
+    return method.isEmpty ? 'Wallet' : method;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final wallet = auth.walletAddress.value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _RowDivider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SectionLabel('ACCOUNT DETAILS'),
+              Text(
+                _authMethod.toUpperCase(),
+                style: mono(
+                  size: 10.5,
+                  weight: FontWeight.w600,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _EmailRow(auth: auth),
+        const _RowDivider(),
+        _GroupRow(
+          icon: Icons.badge_outlined,
+          title: 'Profile name',
+          subtitle: auth.profileName.value.isEmpty
+              ? 'Add a name to personalize your account'
+              : auth.profileName.value,
+          onTap: () => showEditProfileSheet(context, auth),
+          trailing: const Icon(
+            Icons.edit_outlined,
+            size: 17,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        if (wallet.isNotEmpty) ...[
+          const _RowDivider(),
+          _GroupRow(
+            icon: Icons.account_balance_wallet_outlined,
+            title: '${_formatChainLabel(auth.profileChain.value)} wallet',
+            subtitle: wallet,
+            onTap: onCopy,
+            trailing: Icon(
+              copied ? Icons.check : Icons.copy_outlined,
+              size: 17,
+              color: copied ? AppColors.success : AppColors.textSecondary,
+            ),
+          ),
+        ],
+        const _RowDivider(),
+        _GroupRow(
+          icon: Icons.calendar_today_outlined,
+          title: 'Member since',
+          subtitle: _formatMemberSinceLabel(auth.profileCreatedAt.value),
+        ),
+      ],
     );
   }
 }
@@ -994,6 +1060,8 @@ class _GroupCard extends StatelessWidget {
 }
 
 class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
   @override
   Widget build(BuildContext context) =>
       Container(height: 1, color: AppColors.strokeSoft);
@@ -1006,16 +1074,12 @@ class _GroupRow extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
-    this.iconColor,
-    this.titleColor,
   });
   final IconData? icon;
   final String title;
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final Color? iconColor;
-  final Color? titleColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,7 +1091,7 @@ class _GroupRow extends StatelessWidget {
         child: Row(
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 20, color: iconColor ?? AppColors.textSecondary),
+              Icon(icon, size: 20, color: AppColors.textSecondary),
               const SizedBox(width: 13),
             ],
             Expanded(
@@ -1041,7 +1105,7 @@ class _GroupRow extends StatelessWidget {
                     style: grotesk(
                       size: 14.5,
                       weight: FontWeight.w500,
-                      color: titleColor ?? AppColors.textPrimary,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   if (subtitle != null) ...[
