@@ -1,0 +1,4 @@
+# Fake Idempotency-Key 'purchase-123' in test/auth_repository_test.dart, committed
+# before the inline gitleaks:allow comments. Exact findings only (commit:file:rule:line).
+0e8f72ca235237e71cfdf70619896e429fa91d6c:test/auth_repository_test.dart:generic-api-key:315
+0e8f72ca235237e71cfdf70619896e429fa91d6c:test/auth_repository_test.dart:generic-api-key:322

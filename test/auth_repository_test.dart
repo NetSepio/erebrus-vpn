@@ -312,14 +312,14 @@ void main() {
         if (uri.path.endsWith('/refresh')) return jsonResponse(payload(2));
         requests.add(body);
         tokens.add(bearerToken);
-        expect(headers, {'Idempotency-Key': 'purchase-123'});
+        expect(headers, {'Idempotency-Key': 'purchase-123'}); // gitleaks:allow
         return error(401, 'ACCESS_TOKEN_EXPIRED');
       };
       final response = await repo.request(
         'POST',
         protectedUri,
         body: '{"checkout":"unchanged"}',
-        headers: {'Idempotency-Key': 'purchase-123'},
+        headers: {'Idempotency-Key': 'purchase-123'}, // gitleaks:allow
       );
       expect(response.status, 401);
       expect(requests, [

@@ -1,5 +1,6 @@
 import 'package:erebrus_vpn/auth/deep_link_handler.dart';
 import 'package:erebrus_vpn/auth/wallet_auth_controller.dart';
+import 'package:erebrus_vpn/platform/app_channels.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reown_appkit/reown_appkit.dart';
@@ -28,7 +29,7 @@ class _TestReownModal extends Fake implements ReownAppKitModal {
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   final messenger = binding.defaultBinaryMessenger;
-  const methods = MethodChannel('com.erebrus.vpn/methods');
+  const methods = kAppMethodsChannel;
   const events = MethodChannel('com.erebrus.vpn/events');
   const codec = StandardMethodCodec();
   const firstLink = 'erebrusvpn://auth?token=test-first';

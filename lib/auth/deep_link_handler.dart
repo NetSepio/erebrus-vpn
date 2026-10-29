@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../platform/app_channels.dart';
 import 'desktop_web_auth.dart';
 import 'wallet_auth_controller.dart';
 
 /// Routes `erebrusvpn://` callbacks — desktop PASETO auth and mobile Reown envelopes.
 class DeepLinkHandler {
-  static const _methodChannel = MethodChannel('com.erebrus.vpn/methods');
   static const _eventChannel = EventChannel('com.erebrus.vpn/events');
 
   static WalletAuthController? _auth;
@@ -42,7 +42,7 @@ class DeepLinkHandler {
   static Future<void> checkInitialLink() async {
     if (kIsWeb) return;
     try {
-      final link = await _methodChannel.invokeMethod<String>('initialLink');
+      final link = await kAppMethodsChannel.invokeMethod<String>('initialLink');
       await _onLink(link);
     } on MissingPluginException {
       return;

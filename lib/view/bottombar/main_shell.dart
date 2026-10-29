@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -22,6 +23,7 @@ import '../home/server_sheet.dart';
 import '../layout/desktop_layout.dart';
 import '../layout/desktop_screen.dart';
 import '../settings/settings_view.dart';
+import 'shell_back_scope.dart';
 
 /// The authenticated app shell: VPN / BROWSER / SETTINGS, with the design's
 /// frosted bottom tab bar. The server picker and diagnostics open as sheets.
@@ -34,6 +36,9 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _index = 0;
+
+  /// Intercept back on the VPN tab until the Android version is known.
+  bool _backgroundOnBack = defaultTargetPlatform == TargetPlatform.android;
   bool _autoConnectAttempted = false;
   Worker? _autoConnectWorker;
   late final List<Widget> _tabs;
@@ -50,6 +55,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      needsBackgroundOnBack().then((needed) {
+        if (mounted && needed != _backgroundOnBack) {
+          setState(() => _backgroundOnBack = needed);
+        }
+      }),
+    );
     _tabs = [
       const DesktopScreen(child: _HomeTab()),
       const DesktopScreen(
@@ -132,21 +144,32 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       MediaQuery.sizeOf(context).width,
     );
 
-    return Scaffold(
-      extendBody: false,
-      backgroundColor: AppColors.bg,
-      body: Row(
-        children: [
-          if (useSideRail) ...[_DesktopSidebar(index: _index, onTap: _go)],
-          Expanded(
-            child: IndexedStack(index: _index, children: _tabs),
-          ),
-        ],
+    return ShellBackScope(
+      index: _index,
+      onSelectTab: _go,
+      browserBack: _browserBack,
+      moveToBackground: _backgroundOnBack ? moveAppToBackground : null,
+      child: Scaffold(
+        extendBody: false,
+        backgroundColor: AppColors.bg,
+        body: Row(
+          children: [
+            if (useSideRail) ...[_DesktopSidebar(index: _index, onTap: _go)],
+            Expanded(
+              child: IndexedStack(index: _index, children: _tabs),
+            ),
+          ],
+        ),
+        bottomNavigationBar: useSideRail
+            ? null
+            : _NavBar(index: _index, onTap: _go),
       ),
-      bottomNavigationBar: useSideRail
-          ? null
-          : _NavBar(index: _index, onTap: _go),
     );
+  }
+
+  Future<bool> _browserBack() async {
+    if (!Get.isRegistered<BrowserController>()) return false;
+    return Get.find<BrowserController>().goBackIfPossible();
   }
 }
 
