@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.0.7+8 — 2026-10-29
+
+### TL;DR (store release notes)
+
+- Stay signed in: your login now renews automatically in the background, so
+  you are no longer signed out every day. Open the app at least once every 30
+  days to keep your session.
+- Safer VPN protection: the app no longer reports you as protected before the
+  tunnel is verified, and the kill switch no longer locks your connection when
+  the very first connect fails.
+- Private browsing through the VPN on Windows and Linux desktops.
+- A redesigned account details screen with a clearer account-deletion flow.
+- Clearer messages when you reach your plan's device limit or a device is
+  paused.
+
+### Added
+
+- Persistent sign-in with rotating refresh tokens on Android, iOS, macOS,
+  Windows, and Linux. Access tokens renew shortly before they expire and once
+  more after an `ACCESS_TOKEN_EXPIRED` rejection; the 30-day refresh window
+  slides forward with each renewal. Existing logins are upgraded in place, so
+  updating does not require signing in again.
+- Credentials are stored as one item in the platform's secure storage, and
+  renewals are serialized across isolates, so
+  concurrent requests never spend the same single-use refresh token twice.
+- Proxy-routed in-app browsing on Windows and Linux desktops.
+
+### Improved
+
+- Account details and account deletion in Settings have been redesigned.
+- Device-limit, paused-device, and billing errors are shown in plain words; the
+  remaining retired free-trial text has been removed.
+- Wallet and Google sign-in failures show readable error messages.
+- Google sign-in on Android is shown only on builds whose signing key is
+  registered with Google, and never on the Solana dApp Store build.
+
+### Fixed
+
+- The VPN no longer claims protection before the tunnel is verified, and the
+  kill switch is enforced while connected.
+- A failed first connection no longer engages the kill switch; an unverified
+  blocking tunnel is torn down, and connect errors are logged.
+- Sign-in callbacks (deep links) are delivered reliably on every platform,
+  including when the app is launched by the callback.
+- Platform-specific calls are guarded on platforms that do not support them.
+- The in-app browser validates URLs before opening them in a new tab.
+- Linux packages install the bundled sing-box runtime and desktop entry in the
+  correct locations.
+
 ## 1.0.6+7 — 2026-08-21
 
 ### TL;DR (store release notes)
