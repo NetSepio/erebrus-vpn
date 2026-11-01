@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.0.9+10 — 2026-11-01
+
+### TL;DR (store release notes)
+
+- Full servers are marked in the server list, and picking one no longer
+  disconnects you.
+- Server ping is accurate while you are connected.
+- A server that connects but passes no traffic is reported after one attempt,
+  and the app reconnects you to your previous server.
 
 ### Fixed
 
@@ -17,6 +25,12 @@
   traffic — pick another node". When the user was switching away from a
   working node, the app reconnects to that node, with the kill switch
   blocking traffic in between.
+
+### Build
+
+- CI builds the macOS and iOS apps (unsigned) on every pull request and push
+  to `main`, with sing-box libbox cached between runs. Build failures are
+  repeated as workflow annotations, so they can be read without signing in.
 
 ## 1.0.8+9 — 2026-11-01
 

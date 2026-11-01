@@ -53,8 +53,15 @@ Android example:
 flutter run            # arm64 device — can establish a tunnel
 ```
 
-> Android is restricted to `arm64-v8a`. CI should run the libbox scripts and
-> cache artifacts per platform.
+> Android is restricted to `arm64-v8a`.
+
+CI (`.github/workflows/ci.yml`) builds the macOS and iOS apps unsigned on
+every pull request. It caches each `Libbox.xcframework` under a key made from
+`scripts/libbox-common.sh`, that platform's build script and the Go version,
+so changing a pin there rebuilds libbox. The job also fails if the
+`ErebrusTunnel.appex` extension is not embedded in the app. Signed Apple
+builds still need NetSepio's Apple Developer team (76KW3AMAW5), so they are
+made locally (see [Release builds](#release-builds)).
 
 ## 4. Connect to the network
 
