@@ -13,6 +13,22 @@ import 'node_ui_widgets.dart';
 import 'nodes_empty_panel.dart';
 import 'sheet_chrome.dart';
 
+/// Picker tab (0 = Public, 1 = Private) and org slug that hold [node]. A
+/// public node can carry its operator's org, so list membership decides.
+({int tab, String? orgSlug}) pickerTabFor(
+  VpnNode? node, {
+  required List<VpnNode> publicNodes,
+  required List<VpnNode> orgNodes,
+}) {
+  if (node == null || publicNodes.any((n) => n.id == node.id)) {
+    return (tab: 0, orgSlug: null);
+  }
+  if (orgNodes.any((n) => n.id == node.id) || node.isPrivateAccess) {
+    return (tab: 1, orgSlug: node.org?.slug);
+  }
+  return (tab: 0, orgSlug: null);
+}
+
 /// Presents the node-picker bottom sheet (slide-up, rounded top, dim backdrop).
 Future<void> showServerSheet(BuildContext context) {
   return showModalBottomSheet(
@@ -51,11 +67,14 @@ class _ServerSheetState extends State<_ServerSheet> {
   @override
   void initState() {
     super.initState();
-    final selected = Get.find<VpnController>().selectedNode.value;
-    if (selected?.org != null) {
-      _tab = 1;
-      _privWorkspace = selected?.org?.slug;
-    }
+    final gateway = Get.find<GatewayController>();
+    final start = pickerTabFor(
+      Get.find<VpnController>().selectedNode.value,
+      publicNodes: gateway.publicNodes,
+      orgNodes: gateway.orgNodes,
+    );
+    _tab = start.tab;
+    _privWorkspace = start.orgSlug;
     WidgetsBinding.instance.addPostFrameCallback((_) => _refreshAndProbe());
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       if (!mounted) return;
@@ -79,11 +98,15 @@ class _ServerSheetState extends State<_ServerSheet> {
 
   Future<void> _startClientProbes(List<VpnNode> nodes) async {
     final generation = ++_probeGeneration;
+    final tunnelActive = Get.find<VpnController>().tunnelCapturesTraffic;
     setState(() {
-      _probing = true;
-      _clientPingMs = const {};
+      _probing = !tunnelActive;
+      if (!tunnelActive) _clientPingMs = const {};
     });
-    final results = await NodeProbe.probeAll(nodes);
+    final results = await NodeProbe.probeAll(
+      nodes,
+      tunnelActive: tunnelActive,
+    );
     if (!mounted || generation != _probeGeneration) return;
     setState(() {
       _clientPingMs = results;
@@ -178,10 +201,15 @@ class _ServerSheetState extends State<_ServerSheet> {
       final total = isPublic
           ? gateway.publicNodes.length
           : privateWorkspaceNodes.length;
+      final pingNote = vpn.tunnelCapturesTraffic
+          ? (_clientPingMs.isEmpty
+                ? 'PING PAUSED WHILE CONNECTED'
+                : 'PING FROM BEFORE CONNECTING')
+          : (_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING');
       final subtitle = _probing
           ? 'MEASURING PING…'
           : '${nodeList.length}${nodeList.length != total ? ' OF $total' : ''} NODES · '
-                '${_clientPingMs.isEmpty ? 'SORTED BY LOAD' : 'SORTED BY PING'}';
+                '$pingNote';
       final err = gateway.error.value;
       final warn = gateway.warning.value;
 
@@ -287,7 +315,9 @@ class _ServerSheetState extends State<_ServerSheet> {
                           clientPingMs: _clientPingMs[node.id],
                           probing: _probing,
                           showType: !isPublic,
-                          onTap: () => _select(vpn, node),
+                          onTap: node.canAcceptClients
+                              ? () => _select(vpn, node)
+                              : null,
                         ),
                       );
                     },
@@ -702,7 +732,7 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({
     required this.node,
     required this.selected,
-    required this.onTap,
+    this.onTap,
     this.clientPingMs,
     this.probing = false,
     this.showType = false,
@@ -712,7 +742,9 @@ class _NodeRow extends StatelessWidget {
   final int? clientPingMs;
   final bool probing;
   final bool showType;
-  final VoidCallback onTap;
+
+  /// Null for a node that cannot take this client (full): shown, not pickable.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -722,7 +754,7 @@ class _NodeRow extends StatelessWidget {
       showActivity: true,
       showDeploymentType: showType,
     );
-    return GestureDetector(
+    final row = GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -743,5 +775,6 @@ class _NodeRow extends StatelessWidget {
         ),
       ),
     );
+    return onTap == null ? Opacity(opacity: 0.5, child: row) : row;
   }
 }

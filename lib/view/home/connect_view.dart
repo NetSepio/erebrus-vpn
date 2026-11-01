@@ -96,7 +96,7 @@ class _ConnectViewState extends State<ConnectView> {
     }
     final node = _c.selectedNode.value;
     if (node != null && !node.canAcceptClients) {
-      _c.error.value = 'Selected server is at capacity — pick another node';
+      _c.error.value = '${node.name} is full — pick another node';
       return;
     }
     final auth = _auth;

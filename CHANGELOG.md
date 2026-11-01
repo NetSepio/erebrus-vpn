@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Nodes that report `accepting_clients: false` are marked **Full** in the
+  picker and can't be picked. Picking a full node no longer disconnects a
+  working tunnel.
+- Ping is no longer measured through the VPN. Probes through the tunnel
+  answered locally and showed 5–16 ms for every node. While connected, the
+  picker shows the pings measured before connecting, or none if none exist.
+- The node picker opens on the tab that holds the current node. Before, a
+  public node run by an organization opened an empty Private tab.
+- A server whose tunnel comes up but forwards no traffic now gets one pass
+  over its transports, not two. The app then shows "<node> is not passing
+  traffic — pick another node". When the user was switching away from a
+  working node, the app reconnects to that node, with the kill switch
+  blocking traffic in between.
+
 ## 1.0.8+9 — 2026-11-01
 
 ### TL;DR (store release notes)

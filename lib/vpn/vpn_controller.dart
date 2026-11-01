@@ -52,6 +52,10 @@ class VpnController extends GetxController {
   int _terminalRevision = 0;
   int? _pendingDropGeneration;
 
+  /// Why the last [_connectTo] failed, kept before the kill switch replaces
+  /// [error] with its own message.
+  String? _connectFailure;
+
   Future<void> _drainUnexpectedDrop() async {
     if (_pendingDropGeneration != _generation ||
         _connectInProgress ||
@@ -169,6 +173,12 @@ class VpnController extends GetxController {
       killSwitchEngaging.value ||
       stage.value == VpnStage.connecting ||
       stage.value == VpnStage.disconnecting;
+
+  /// True while a device-wide tunnel may be carrying this app's own sockets
+  /// (desktop runs a local proxy that plain sockets bypass).
+  bool get tunnelCapturesTraffic =>
+      !PlatformCapabilities.usesDesktopVpnRunner &&
+      (stage.value != VpnStage.disconnected || killSwitchBlocking.value);
 
   /// Allows late injection of the gateway provisioner (e.g. after login).
   set provisioner(Provisioner p) => _provision = p;
@@ -493,8 +503,11 @@ class VpnController extends GetxController {
       return;
     }
     if (!target.canAcceptClients) {
-      error.value = 'Selected server is at capacity — pick another node';
-      stage.value = VpnStage.error;
+      error.value = '${target.name} is full — pick another node';
+      // Refusing a node must never tear down or mislabel a working tunnel.
+      if (!isConnected && !killSwitchBlocking.value) {
+        stage.value = VpnStage.error;
+      }
       return;
     }
     if (providedBundle == null && _provision == null) {
@@ -505,6 +518,42 @@ class VpnController extends GetxController {
     // kill switch) may be locked down when this attempt fails. A first
     // connect that never came up must not leave the device blocked.
     final wasProtected = isConnected || killSwitchBlocking.value;
+    // A healthy node the user is switching away from: reconnected to if the
+    // new node fails, so a bad pick never leaves the device without a tunnel.
+    final previous = selectedNode.value;
+    final fallback =
+        isProtected && providedBundle == null && previous?.id != target.id
+        ? previous
+        : null;
+    await _connectTo(
+      target,
+      providedBundle: providedBundle,
+      clientPrivateKey: clientPrivateKey,
+      wasProtected: wasProtected,
+    );
+    if (fallback == null ||
+        stage.value != VpnStage.error ||
+        _cancelRequested ||
+        _userDisconnecting ||
+        isClosed) {
+      return;
+    }
+    final reason = _connectFailure;
+    debugPrint(
+      '[VPN] switch to ${target.name} failed — restoring ${fallback.name}',
+    );
+    await connect(node: fallback);
+    if (isConnected && reason != null && reason.isNotEmpty) {
+      error.value = '$reason. Reconnected to ${fallback.name}.';
+    }
+  }
+
+  Future<void> _connectTo(
+    VpnNode target, {
+    required CredentialBundle? providedBundle,
+    required String? clientPrivateKey,
+    required bool wasProtected,
+  }) async {
     final generation = ++_generation;
     _preserveProxy = true;
     _userDisconnecting = false;
@@ -607,6 +656,9 @@ class VpnController extends GetxController {
               ? const <String, String>{}
               : await SingboxConfigBuilder.resolveDialHosts(bundle);
 
+          // Transports whose tunnel came up but carried no traffic. When every
+          // candidate ends this way the node itself is not forwarding.
+          var noEgress = 0;
           for (var i = 0; i < candidates.length; i++) {
             if (generation != _generation) return;
             if (_cancelRequested) break;
@@ -669,6 +721,7 @@ class VpnController extends GetxController {
                   debugPrint(
                     '[VPN] ${t.label} tunnel up but no egress — trying next transport',
                   );
+                  noEgress++;
                   await _ensureTunnelStopped();
                   continue;
                 }
@@ -746,10 +799,15 @@ class VpnController extends GetxController {
           if (generation != _generation) return;
           _confirmedTransport = null;
           activeTransport.value = null;
-          final failure = await _connectFailureMessage();
+          final failure = noEgress == candidates.length
+              ? '${target.name} is not passing traffic — pick another node'
+              : await _connectFailureMessage();
           if (generation != _generation) return;
           error.value = failure;
           stage.value = VpnStage.error;
+          // One full pass is the verdict: re-running every transport only
+          // keeps the device behind a tunnel that carries nothing.
+          break;
         } on GatewayException catch (e) {
           if (generation != _generation) return;
           debugPrint('[VPN] connect gateway error (attempt $attempt): $e');
@@ -794,6 +852,10 @@ class VpnController extends GetxController {
         error.value = 'Connection transition could not be verified';
       }
     } finally {
+      _connectFailure =
+          generation == _generation && stage.value == VpnStage.error
+          ? error.value
+          : null;
       if (generation == _generation || _cancelRequested) {
         _connectInProgress = false;
       }
