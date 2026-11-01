@@ -12,8 +12,22 @@ class NodeProbe {
   static const _probeTimeout = Duration(seconds: 3);
   static const _maxConcurrent = 4;
 
-  static Future<Map<String, int>> probeAll(Iterable<VpnNode> nodes) async {
+  /// Results of the last probe run made with no tunnel up.
+  static Map<String, int> _direct = const {};
+
+  @visibleForTesting
+  static void resetForTesting() => _direct = const {};
+
+  /// Probes every node, or — while [tunnelActive] — returns the last results
+  /// measured outside the tunnel. A device tunnel answers the TCP handshake
+  /// locally, so probing through it reports a few ms for every node.
+  static Future<Map<String, int>> probeAll(
+    Iterable<VpnNode> nodes, {
+    bool tunnelActive = false,
+    @visibleForTesting Future<int?> Function(VpnNode node)? probe,
+  }) async {
     if (kIsWeb) return const {};
+    if (tunnelActive) return _direct;
     final list = nodes.where((n) => n.canProbe).toList(growable: false);
     if (list.isEmpty) return const {};
 
@@ -22,7 +36,7 @@ class NodeProbe {
       final batch = list.skip(i).take(_maxConcurrent);
       final entries = await Future.wait(
         batch.map((node) async {
-          final ms = await probeNode(node);
+          final ms = await (probe ?? probeNode)(node);
           return MapEntry(node.id, ms);
         }),
       );
@@ -30,7 +44,7 @@ class NodeProbe {
         if (entry.value != null) results[entry.key] = entry.value!;
       }
     }
-    return results;
+    return _direct = results;
   }
 
   static Future<int?> probeNode(VpnNode node) async {

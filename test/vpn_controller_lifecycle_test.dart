@@ -22,6 +22,7 @@ class LifecycleEngine implements SingboxEngine {
   bool stopBeforeStart = false;
   int starts = 0;
   int blockingChecks = 0;
+  String? lastProfile;
   Completer<void>? stopping;
   Completer<void>? starting;
   Completer<bool>? verification;
@@ -70,6 +71,7 @@ class LifecycleEngine implements SingboxEngine {
   }) async {
     if (stopBeforeStart) await stop(preserveProxy: preserveProxy);
     starts++;
+    lastProfile = profileName;
     startPreserved.add(preserveProxy);
     splitConfigs.add(splitTunnel);
     await starting?.future;
@@ -79,6 +81,10 @@ class LifecycleEngine implements SingboxEngine {
     events.add(current);
   }
 
+  @override
+  Future<({String private, String public})> generateWireGuardKeyPair() async =>
+      (private: _testKey, public: _testKey);
+
   void drop([VpnStage terminal = VpnStage.error]) {
     current = terminal;
     events.add(current);
@@ -87,6 +93,26 @@ class LifecycleEngine implements SingboxEngine {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+const _testKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
+VpnNode _node(String id, {bool? accepting}) => VpnNode(
+  id: id,
+  name: id,
+  region: 'US',
+  did: '',
+  protocols: const ['wireguard'],
+  loadPct: 0,
+  acceptingClients: accepting,
+);
+
+CredentialBundle _wgBundle() => CredentialBundle.fromJson({
+  'wireguard': {
+    'server_public_key': _testKey,
+    'endpoint': '192.0.2.1:51820',
+    'address': '10.0.0.2/32',
+  },
+});
 
 class LifecycleSplitSettings extends AppSettingsController {
   @override
@@ -675,5 +701,100 @@ void main() {
     await flush();
     expect(controller.tunnelHealthy.value, isFalse);
     expect(controller.isProtected, isFalse);
+  });
+
+  group('node switching', () {
+    final provisioned = <String>[];
+
+    /// Connected and verified on [id]; egress fails on any node named `Dead*`.
+    Future<void> connectHealthy(String id) async {
+      controller.onClose();
+      controller = VpnController(
+        engine: engine,
+        provisioner:
+            ({required node, required wgPublicKey, required name}) async {
+              provisioned.add(node.id);
+              return _wgBundle();
+            },
+        egressProbe: () async =>
+            engine.lastProfile?.contains('Dead') == true ? null : '203.0.113.1',
+      );
+      controller.onInit();
+      engine.current = VpnStage.disconnected;
+      await controller.connect(node: _node(id));
+      await flush();
+      expect(controller.isProtected, isTrue);
+      provisioned.clear();
+    }
+
+    test(
+      'a full node is refused without touching the working tunnel',
+      () async {
+        await connectHealthy('Home');
+        final starts = engine.starts;
+        final stops = engine.stopPreserved.length;
+        await controller.connect(node: _node('Full', accepting: false));
+        expect(controller.stage.value, VpnStage.connected);
+        expect(controller.isProtected, isTrue);
+        expect(controller.selectedNode.value?.id, 'Home');
+        expect(controller.error.value, 'Full is full — pick another node');
+        expect(provisioned, isEmpty);
+        expect(engine.starts, starts);
+        expect(engine.stopPreserved.length, stops);
+      },
+    );
+
+    test('accepting_clients false marks a discovered node unpickable', () {
+      final full = VpnNode.fromJson({
+        'node_id': 'els',
+        'name': 'ELS-Sweden',
+        'accepting_clients': false,
+      });
+      expect(full.canAcceptClients, isFalse);
+      expect(VpnNode.fromJson({'node_id': 'x'}).canAcceptClients, isTrue);
+    });
+
+    test(
+      'a node with no egress gets one transport pass, then the previous node '
+      'is restored',
+      () async {
+        await connectHealthy('Home');
+        final starts = engine.starts;
+        await controller.connect(node: _node('Dead'));
+        await flush();
+        // One WireGuard attempt on Dead (no second pass), then Home again; the
+        // kill switch blocks traffic in between.
+        expect(provisioned, ['Dead', 'Home']);
+        final profiles = engine.starts - starts;
+        expect(profiles, 3);
+        expect(controller.isProtected, isTrue);
+        expect(controller.selectedNode.value?.id, 'Home');
+        expect(
+          controller.error.value,
+          'Dead is not passing traffic — pick another node. '
+          'Reconnected to Home.',
+        );
+      },
+    );
+
+    test(
+      'a first connect to a node with no egress stops after one pass',
+      () async {
+        await connectHealthy('Home');
+        await controller.disconnect();
+        final starts = engine.starts;
+        await controller.connect(node: _node('Dead'));
+        await flush();
+        expect(provisioned, ['Dead']);
+        expect(engine.starts - starts, 1);
+        expect(controller.isConnected, isFalse);
+        expect(
+          controller.error.value,
+          'Dead is not passing traffic — pick another node',
+        );
+        expect(controller.killSwitchBlocking.value, isFalse);
+        expect(engine.current, VpnStage.disconnected);
+      },
+    );
   });
 }

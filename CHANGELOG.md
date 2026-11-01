@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.0.9+10 — 2026-11-01
+
+### TL;DR (store release notes)
+
+- Full servers are marked in the server list, and picking one no longer
+  disconnects you.
+- Server ping is accurate while you are connected.
+- A server that connects but passes no traffic is reported after one attempt,
+  and the app reconnects you to your previous server.
+
+### Fixed
+
+- Nodes that report `accepting_clients: false` are marked **Full** in the
+  picker and can't be picked. Picking a full node no longer disconnects a
+  working tunnel.
+- Ping is no longer measured through the VPN. Probes through the tunnel
+  answered locally and showed 5–16 ms for every node. While connected, the
+  picker shows the pings measured before connecting, or none if none exist.
+- The node picker opens on the tab that holds the current node. Before, a
+  public node run by an organization opened an empty Private tab.
+- A server whose tunnel comes up but forwards no traffic now gets one pass
+  over its transports, not two. The app then shows "<node> is not passing
+  traffic — pick another node". When the user was switching away from a
+  working node, the app reconnects to that node, with the kill switch
+  blocking traffic in between.
+
+### Build
+
+- CI builds the macOS and iOS apps (unsigned) on every pull request and push
+  to `main`, with sing-box libbox cached between runs. Build failures are
+  repeated as workflow annotations, so they can be read without signing in.
+
 ## 1.0.8+9 — 2026-11-01
 
 ### TL;DR (store release notes)

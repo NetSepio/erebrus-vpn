@@ -133,6 +133,8 @@ class _NodeMainColumn extends StatelessWidget {
                   if (d.deploymentTypeLabel != null && d.deploymentTypeColor != null)
                     NodeAccessPill(label: d.deploymentTypeLabel!, color: d.deploymentTypeColor!),
                   if (d.tierLabel != null) NodeAccessPill(label: d.tierLabel!, color: AppColors.warn),
+                  if (d.unavailableLabel != null)
+                    NodeAccessPill(label: d.unavailableLabel!, color: AppColors.danger),
                 ],
               ),
             ),

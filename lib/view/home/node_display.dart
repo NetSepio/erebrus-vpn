@@ -25,6 +25,7 @@ class NodeDisplay {
     this.clientPingMs,
     this.peerCount,
     this.canConnect = true,
+    this.unavailableLabel,
     this.isPlaceholder = false,
     this.showLoad = true,
     this.showNodeSpeedtest = false,
@@ -53,6 +54,8 @@ class NodeDisplay {
   final int? clientPingMs;
   final String? peerCount;
   final bool canConnect;
+  /// Why [canConnect] is false (`Full` / `Offline`), shown as a pill.
+  final String? unavailableLabel;
   final bool isPlaceholder;
   final bool showLoad;
   final bool showNodeSpeedtest;
@@ -182,6 +185,9 @@ class NodeDisplay {
           ? '${node.wgPeersConnected} / ${node.wgPeersRegistered}'
           : null,
       canConnect: node.canAcceptClients,
+      unavailableLabel: node.isOffline
+          ? 'Offline'
+          : (node.canAcceptClients ? null : 'Full'),
     );
   }
 

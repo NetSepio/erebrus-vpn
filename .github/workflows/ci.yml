@@ -53,3 +53,82 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+  build-apple:
+    name: Build ${{ matrix.platform }} (unsigned)
+    needs: verify
+    runs-on: macos-26
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos
+            build: flutter build macos --release
+            app: build/macos/Build/Products/Release/Erebrus VPN.app
+            extension: Contents/PlugIns/ErebrusTunnel.appex
+          - platform: ios
+            build: flutter build ios --release --no-codesign
+            app: build/ios/iphoneos/Runner.app
+            extension: PlugIns/ErebrusTunnel.appex
+    # Runner and the ErebrusTunnel Network Extension sign with NetSepio's team
+    # (76KW3AMAW5), which CI has no certificate for. flutter passes
+    # FLUTTER_XCODE_* to xcodebuild as build settings, so this compiles both
+    # targets without signing.
+    env:
+      GOTOOLCHAIN: local
+      FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
+      FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
+      FLUTTER_XCODE_CODE_SIGN_IDENTITY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      # Go 1.27 cannot link sing-box v1.11.15; see release.yml build-android.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Select newest stable Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_[0-9]*.app 2>/dev/null | grep -vi beta | sort -V | tail -1 || true)
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::No stable Xcode on this runner:"; ls -d /Applications/Xcode*.app; exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      # libbox only changes with the pinned sing-box / gomobile versions and
+      # the Go toolchain, so reuse it until one of those moves.
+      - name: Restore libbox
+        id: libbox
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.platform }}/Frameworks/Libbox.xcframework
+          key: libbox-${{ matrix.platform }}-go1.26-${{ hashFiles('scripts/libbox-common.sh', format('scripts/build-libbox-{0}.sh', matrix.platform)) }}
+
+      - name: Build libbox
+        if: steps.libbox.outputs.cache-hit != 'true'
+        run: |
+          go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260611195102-4dd8f1dbf5d2
+          export PATH="$(go env GOPATH)/bin:${PATH}"
+          ./scripts/build-libbox-${{ matrix.platform }}.sh
+
+      - run: cp .env.example .env
+      - run: flutter pub get
+      - run: scripts/ci-annotate.sh ${{ matrix.build }}
+
+      - name: Verify the tunnel extension is embedded
+        env:
+          APP: ${{ matrix.app }}
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          if [[ ! -d "${APP}/${EXTENSION}" ]]; then
+            echo "::error::${EXTENSION} is missing from ${APP}"
+            exit 1
+          fi
+          echo "✓ ${APP}/${EXTENSION}"
