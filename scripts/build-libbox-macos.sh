@@ -3,7 +3,7 @@
 # Build sing-box libbox for macOS (Apple Silicon + Intel) into
 # macos/Frameworks/Libbox.xcframework.
 #
-# Prereqs: Go ≥1.23, Xcode CLT, gomobile.
+# Prereqs: Go 1.23–1.26 (1.27 cannot link sing-box v1.11.15), Xcode CLT, gomobile.
 # Usage: ./scripts/build-libbox-macos.sh
 #
 set -euo pipefail

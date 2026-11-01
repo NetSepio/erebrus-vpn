@@ -132,9 +132,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # sing-box v1.11.15 links into golang.org/x/net/http2 internals that Go 1.27
+      # leaves unresolved, so libgojni.so fails to load when the VPN starts.
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.27"
+          go-version: "1.26"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -323,10 +325,11 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.gate.outputs.enabled == 'true'
 
+      # Go 1.27 breaks sing-box v1.11.15; see build-android.
       - uses: actions/setup-go@v5
         if: steps.gate.outputs.enabled == 'true'
         with:
-          go-version: "1.27"
+          go-version: "1.26"
 
       - uses: subosito/flutter-action@v2
         if: steps.gate.outputs.enabled == 'true'

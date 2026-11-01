@@ -132,7 +132,6 @@ final class LinkStreamHandler: NSObject, FlutterStreamHandler, FlutterSceneLifeC
       userActivities: Array(connectionOptions.userActivities),
       hasOtherPayload: connectionOptions.shortcutItem != nil ||
         connectionOptions.notificationResponse != nil ||
-        connectionOptions.cloudKitShareMetadata != nil ||
         connectionOptions.handoffUserActivityType != nil
     )
   }

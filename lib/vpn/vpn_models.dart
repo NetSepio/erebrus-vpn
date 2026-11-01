@@ -628,9 +628,6 @@ class SingboxConfigBuilder {
   }) {
     final (host, port) = _splitHostPort(bundle.endpoint);
     final peerHost = _peerHost(host, resolvedHosts);
-    final clientAddr = bundle.address.contains('/')
-        ? bundle.address
-        : '${bundle.address}/32';
     final dnsServer = bundle.dns.isNotEmpty ? bundle.dns : '1.1.1.1';
 
     return _withClashApi({
@@ -649,7 +646,7 @@ class SingboxConfigBuilder {
         {
           'type': 'wireguard',
           'tag': wgEndpointTag,
-          'address': [clientAddr],
+          'address': _interfacePrefixes(bundle.address),
           'private_key': clientPrivateKey,
           'mtu': 1280,
           'peers': [
@@ -687,9 +684,7 @@ class SingboxConfigBuilder {
     final wg = endpoints.first;
     wg['private_key'] = clientPrivateKey;
     if (bundle.address.isNotEmpty) {
-      wg['address'] = [
-        bundle.address.contains('/') ? bundle.address : '${bundle.address}/32',
-      ];
+      wg['address'] = _interfacePrefixes(bundle.address);
     }
     final peers = (wg['peers'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     if (peers.isNotEmpty && bundle.serverPublicKey.isNotEmpty) {
@@ -890,6 +885,16 @@ class SingboxConfigBuilder {
     });
     return inbounds;
   }
+
+  /// WireGuard interface addresses as sing-box prefixes. Nodes send a wg-quick
+  /// `Address` list (`"100.64.0.8/32, fd00:64:64::8/128"`) or a bare address.
+  static List<String> _interfacePrefixes(String address) => [
+    for (final a in address.split(','))
+      if (a.trim().isNotEmpty)
+        a.contains('/')
+            ? a.trim()
+            : '${a.trim()}/${a.contains(':') ? 128 : 32}',
+  ];
 
   /// sing-box `ip_cidr` rules require literal IPs; hostnames must use `domain`.
   static bool _isIpLiteral(String host) {

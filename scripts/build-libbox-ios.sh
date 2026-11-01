@@ -3,7 +3,7 @@
 # Build sing-box libbox for iOS (device + simulator) into
 # ios/Frameworks/Libbox.xcframework.
 #
-# Prereqs: Go ≥1.23, Xcode CLT, gomobile.
+# Prereqs: Go 1.23–1.26 (1.27 cannot link sing-box v1.11.15), Xcode CLT, gomobile.
 # Usage: ./scripts/build-libbox-ios.sh
 #
 set -euo pipefail

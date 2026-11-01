@@ -7,7 +7,7 @@ From "just cloned" to "connected to a VPN", in order.
 - **Flutter** (stable) — `flutter doctor` should be all green for the platforms
   you target. See https://docs.flutter.dev/get-started/install.
 - For Android: Android Studio + an SDK + an arm64 device or emulator.
-- For the native tunnel build (step 3): **Go ≥ 1.23** and the **Android NDK**.
+- For the native tunnel build (step 3): **Go 1.23–1.26** and the **Android NDK**. Go 1.27 cannot link sing-box v1.11.15 (the app crashes when connecting); `build-libbox.sh` rejects such a build.
 
 ## 2. Run the app (UI only)
 

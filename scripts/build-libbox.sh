@@ -2,8 +2,9 @@
 #
 # Build the sing-box mobile core (libbox) into android/app/libs/libbox.aar.
 #
-# Prereqs: Go ≥1.23, Android NDK (matching app build.gradle ndkVersion),
-# gomobile. Run from the repo root:  ./scripts/build-libbox.sh
+# Prereqs: Go 1.23–1.26 (1.27 cannot link sing-box v1.11.15), Android NDK
+# (matching app build.gradle ndkVersion), gomobile. Run from the repo root:
+#   ./scripts/build-libbox.sh
 #
 set -euo pipefail
 
@@ -38,6 +39,18 @@ gomobile bind -v \
   -trimpath -ldflags="-s -w" \
   -o "$OUT_DIR/libbox.aar" \
   ./experimental/libbox
+
+# A //go:linkname the toolchain cannot resolve (sing-box v1.11 with Go 1.27) is
+# left as an undefined dynamic symbol, and only fails when Android loads it.
+unzip -p "$OUT_DIR/libbox.aar" jni/arm64-v8a/libgojni.so > "$WORK/libgojni.so"
+NM="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-nm)"
+unresolved="$("$NM" -D -u "$WORK/libgojni.so" | grep -vE ' U [A-Za-z_][A-Za-z0-9_]*(@.*)?$' || true)"
+if [[ -n "$unresolved" ]]; then
+  echo "✗ libgojni.so has unresolved Go symbols (built with $(go env GOVERSION)):"
+  echo "$unresolved"
+  rm -f "$OUT_DIR/libbox.aar"
+  exit 1
+fi
 
 echo "✓ wrote $OUT_DIR/libbox.aar (from sing-box $SING_BOX_COMMIT)"
 rm -rf "$WORK"

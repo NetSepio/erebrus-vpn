@@ -39,6 +39,10 @@ class AuthRepository {
   final SessionSender _send;
   final DateTime Function() _now;
   final String _brokerName;
+
+  /// Broker names this isolate owns. Statics are per isolate, so a new engine
+  /// (an Android activity recreated in a surviving process) starts empty.
+  static final Set<String> _ownedHere = {};
   ReceivePort? _owner;
   Future<void> _queue = Future.value();
   final Map<String, List<SendPort>> _tokenWaiters = {};
@@ -53,6 +57,13 @@ class AuthRepository {
     Map<String, dynamic> args = const {},
   ]) async {
     var port = IsolateNameServer.lookupPortByName(_brokerName);
+    // The name server outlives engines. A root isolate that has not claimed the
+    // name yet would otherwise wait forever on a previous engine's dead owner.
+    if (RootIsolateToken.instance != null &&
+        !_ownedHere.contains(_brokerName)) {
+      if (port != null) IsolateNameServer.removePortNameMapping(_brokerName);
+      port = null;
+    }
     if (port == null) {
       if (RootIsolateToken.instance == null) {
         throw AuthException(
@@ -62,6 +73,7 @@ class AuthRepository {
       }
       final owner = ReceivePort();
       if (IsolateNameServer.registerPortWithName(owner.sendPort, _brokerName)) {
+        _ownedHere.add(_brokerName);
         _owner = owner;
         owner.listen(_receive);
         port = owner.sendPort;
@@ -467,6 +479,7 @@ class AuthRepository {
   void dispose() {
     if (_owner != null) {
       IsolateNameServer.removePortNameMapping(_brokerName);
+      _ownedHere.remove(_brokerName);
       _owner!.close();
       _owner = null;
     }

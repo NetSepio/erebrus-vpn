@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.8+9 — 2026-11-01
+
+### TL;DR (store release notes)
+
+- Fixes a crash on Android when connecting to a VPN server.
+- Connects to servers that assign both an IPv4 and an IPv6 address.
+- Fixes the app freezing on the splash screen after returning from a wallet
+  app such as Jupiter.
+
+### Fixed
+
+- Android 1.0.7 crashed on connect: its sing-box core was built with Go 1.27,
+  which leaves an http2 symbol that sing-box v1.11.15 links to unresolved, so
+  the library failed to load. Release builds use Go 1.26 again, and the libbox
+  build now fails if any Go symbol is left unresolved.
+- WireGuard connections failed when a node assigned a dual-stack address list
+  (for example `100.64.0.8/32, fd00:64:64::8/128`); each address is now passed
+  to sing-box as its own prefix, on every platform.
+- The app no longer freezes on the splash screen when Android restarts it
+  without ending the process (for example after returning from a wallet such
+  as Jupiter on the Seeker).
+- iOS archives build with Xcode 27, which rejected an unused CloudKit check in
+  the scene delegate.
+
 ## 1.0.7+8 — 2026-10-29
 
 ### TL;DR (store release notes)

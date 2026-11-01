@@ -91,6 +91,23 @@ void main() {
     expect(b.hasStealth, isTrue);
   });
 
+  test('dual-stack wg-quick address list becomes one prefix per address', () {
+    final json = jsonDecode(_bundleJson) as Map<String, dynamic>;
+    json['wireguard']['address'] = '100.64.0.8/32, fd00:64:64::8';
+    final b = CredentialBundle.fromJson(json);
+    for (final transport in Transport.values) {
+      final cfg = SingboxConfigBuilder.build(
+        bundle: b,
+        transport: transport,
+        clientPrivateKey: 'PRIV',
+      );
+      expect((cfg['endpoints'] as List).first['address'], [
+        '100.64.0.8/32',
+        'fd00:64:64::8/128',
+      ], reason: transport.name);
+    }
+  });
+
   test('WireGuard transport dials the real endpoint, no carrier detour', () {
     final b = CredentialBundle.fromJson(jsonDecode(_bundleJson));
     final cfg = SingboxConfigBuilder.build(

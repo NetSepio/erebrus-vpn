@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
+import 'dart:ui' show IsolateNameServer;
 
 import 'package:erebrus_vpn/auth/auth_repository.dart';
 import 'package:erebrus_vpn/auth/auth_session_store.dart';
@@ -115,6 +116,19 @@ void main() {
     repo = create();
   });
   tearDown(() => repo.dispose());
+
+  test('a new engine takes over the owner left by a destroyed one', () async {
+    // An Android activity recreated in a surviving process starts a new root
+    // isolate, but the name server still maps the broker to the dead one.
+    final dead = ReceivePort();
+    IsolateNameServer.registerPortWithName(dead.sendPort, name);
+    dead.close();
+    store.value = stored(1);
+
+    final restored = await repo.restore().timeout(const Duration(seconds: 5));
+
+    expect(restored?.token, 'access-1');
+  });
 
   test(
     'resume retries startup storage failures without deleting credentials',
