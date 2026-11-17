@@ -49,7 +49,8 @@ void main() {
     controller.setShellTabVisible(true);
     await controller.navigate('https://example.com');
     await tester.pump();
-    expect(find.text('Connect VPN to browse securely'), findsOneWidget);
+    expect(find.text('Connect to browse'), findsOneWidget);
+    expect(find.text('Open VPN'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, skip: !secureDesktop);

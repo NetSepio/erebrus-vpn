@@ -548,7 +548,7 @@ void main() {
       vpn.tunnelHealthy.value = false;
       await tester.pump();
       expect(find.byKey(const ValueKey('fake-native-browser')), findsNothing);
-      expect(find.text('Connect VPN to browse securely'), findsOneWidget);
+      expect(find.text('Connect to browse'), findsOneWidget);
       browser.onClose();
       vpn.onClose();
       await tester.pumpWidget(const SizedBox.shrink());
