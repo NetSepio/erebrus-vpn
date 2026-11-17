@@ -55,6 +55,13 @@ class ShellBackScope extends StatelessWidget {
   static const homeIndex = 0;
   static const browserIndex = 1;
 
+  /// Switches the enclosing shell to the VPN tab (no-op outside the shell).
+  static void selectHome(BuildContext context) {
+    context.findAncestorWidgetOfExactType<ShellBackScope>()?.onSelectTab(
+      homeIndex,
+    );
+  }
+
   final int index;
   final ValueChanged<int> onSelectTab;
 

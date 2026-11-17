@@ -112,6 +112,11 @@ class VpnController extends GetxController {
   /// traffic while the inner WireGuard/carrier is dead — "connected, no internet").
   final tunnelHealthy = true.obs;
 
+  /// True while a tunnel adopted from native (cold start / resume) awaits its
+  /// first egress probe. Not protected yet, but not "stalled" either — the UI
+  /// shows a neutral verifying state instead of flashing a failure.
+  final tunnelVerifying = false.obs;
+
   /// When the tunnel entered the connected state (null while not connected).
   /// Tracked here so the connect screen's elapsed timer stays accurate across
   /// view rebuilds instead of restarting from zero each time the view mounts.
@@ -383,8 +388,15 @@ class VpnController extends GetxController {
         // rather than counting from app launch. Set before flipping the stage
         // so the stage worker's `??=` keeps this value; falls back to now when
         // the snapshot predates this field.
-        connectedSince.value = session?.savedAt;
-        tunnelHealthy.value = false;
+        // Resuming onto the same live, already-verified tunnel keeps its health
+        // (the periodic monitor keeps re-probing); only an unverified adoption
+        // — cold start or recovery from another state — waits for a probe.
+        final alreadyVerified = isConnected && tunnelHealthy.value;
+        if (!alreadyVerified) {
+          connectedSince.value = session?.savedAt;
+          tunnelHealthy.value = false;
+          tunnelVerifying.value = true;
+        }
         stage.value = VpnStage.connected;
         error.value = null;
         if (session?.killSwitchActive == true) {
@@ -982,6 +994,7 @@ class VpnController extends GetxController {
     _healthTimer = null;
     _egressFailures = 0;
     tunnelHealthy.value = false;
+    tunnelVerifying.value = false;
   }
 
   void _scheduleHealthCheck(Duration delay) {
@@ -1002,6 +1015,7 @@ class VpnController extends GetxController {
   }
 
   void _recordEgressResult(String? ip) {
+    tunnelVerifying.value = false;
     if (ip != null) {
       if (!tunnelHealthy.value) debugPrint('[VPN] tunnel egress recovered');
       _egressFailures = 0;

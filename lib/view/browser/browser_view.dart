@@ -9,6 +9,9 @@ import '../../platform/desktop_browser.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
+import '../../settings/app_settings_controller.dart';
+import '../bottombar/shell_back_scope.dart';
+import 'browser_chrome.dart';
 import 'browser_controller.dart';
 import 'browser_link_menu.dart';
 import 'browser_session_status.dart';
@@ -93,36 +96,15 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
   @override
   Widget build(BuildContext context) {
     if (!PlatformCapabilities.supportsEmbeddedBrowser) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppColors.bg,
         body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.web_asset_off,
-                    size: 40,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Embedded browser unavailable',
-                    textAlign: TextAlign.center,
-                    style: grotesk(size: 20, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'In-app browsing is not supported on this platform. '
-                    'VPN controls remain available.',
-                    textAlign: TextAlign.center,
-                    style: grotesk(size: 14, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
+          child: BrowserStatePanel(
+            icon: Icons.web_asset_off,
+            title: 'Embedded browser unavailable',
+            message:
+                'In-app browsing is not supported on this platform. '
+                'VPN controls remain available.',
           ),
         ),
       );
@@ -132,6 +114,12 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: AppColors.bg,
+      // Desktop carries navigation, tabs and the menu in the toolbar row; a
+      // bottom bar would duplicate it. As the Scaffold's bottom bar, toasts
+      // float above it instead of covering it.
+      bottomNavigationBar: PlatformCapabilities.isDesktop
+          ? null
+          : _ControlBar(controller: c),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -143,6 +131,9 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
             }),
             Obx(() {
               c.addressBar.value; // observe
+              c.tabs.length; // canGoBack/Forward updates refresh the list
+              c.activeIndex.value;
+              c.isLoading.value;
               return _Omnibox(controller: c);
             }),
             const BrowserSessionStrip(),
@@ -156,33 +147,26 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
                 if (tab.isStart) return const _StartPage();
                 if (PlatformCapabilities.usesDesktopVpnRunner &&
                     !c.protectionAvailable.value) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Connect VPN to browse securely',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  return BrowserStatePanel(
+                    icon: Icons.shield_outlined,
+                    tone: AppColors.warn,
+                    title: 'Connect to browse',
+                    message:
+                        'Pages load only through a verified VPN connection. '
+                        'Connect, then come back to this tab.',
+                    actionLabel: 'Open VPN',
+                    onAction: () => ShellBackScope.selectHome(context),
                   );
                 }
                 final error = c.browserError.value;
                 if (error != null) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(error, textAlign: TextAlign.center),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: c.reload,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
+                  return BrowserStatePanel(
+                    icon: Icons.cloud_off_outlined,
+                    tone: AppColors.danger,
+                    title: 'Page unavailable',
+                    message: error,
+                    actionLabel: 'Retry',
+                    onAction: c.reload,
                   );
                 }
                 if (!c.canMountBrowser || !tab.configured) {
@@ -198,10 +182,7 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
                       SizedBox(
                         height: 2,
                         child: c.isLoading.value
-                            ? const LinearProgressIndicator(
-                                backgroundColor: Colors.transparent,
-                                color: AppColors.accent,
-                              )
+                            ? const _PageProgressBar()
                             : null,
                       ),
                       Expanded(
@@ -221,16 +202,11 @@ class _BrowserViewState extends State<BrowserView> with RouteAware {
                       controller: tab.controller,
                     ),
                     if (c.isLoading.value)
-                      const LinearProgressIndicator(
-                        minHeight: 2,
-                        backgroundColor: Colors.transparent,
-                        color: AppColors.accent,
-                      ),
+                      const SizedBox(height: 2, child: _PageProgressBar()),
                   ],
                 );
               }),
             ),
-            _ControlBar(controller: c),
           ],
         ),
       ),
@@ -246,31 +222,26 @@ class _PendingWebPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (loading)
-              const CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.accent,
-              ),
-            if (loading) const SizedBox(height: 16),
-            Text(
-              'Ready to load',
-              style: grotesk(size: 16, weight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              url,
-              textAlign: TextAlign.center,
-              style: mono(size: 12, color: AppColors.textTertiary),
-            ),
-          ],
-        ),
-      ),
+    return BrowserStatePanel(
+      icon: Icons.language,
+      tone: AppColors.accent,
+      loading: loading,
+      title: loading ? 'Loading securely' : 'Ready to load',
+      message: url,
+      monoMessage: true,
+    );
+  }
+}
+
+class _PageProgressBar extends StatelessWidget {
+  const _PageProgressBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return const LinearProgressIndicator(
+      minHeight: 2,
+      backgroundColor: Colors.transparent,
+      color: AppColors.accent,
     );
   }
 }
@@ -318,7 +289,10 @@ class _TabStrip extends StatelessWidget {
       height: 48,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: kBrowserGutter,
+          vertical: 8,
+        ),
         children: [
           ...List.generate(controller.tabs.length, (i) {
             final tab = controller.tabs[i];
@@ -329,12 +303,10 @@ class _TabStrip extends StatelessWidget {
                 onTap: () => controller.selectTab(i),
                 child: Container(
                   constraints: const BoxConstraints(maxWidth: 150),
-                  padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
                   decoration: BoxDecoration(
-                    color: active
-                        ? AppColors.surface3
-                        : const Color(0xFF101014),
-                    borderRadius: BorderRadius.circular(11),
+                    color: active ? AppColors.surface3 : AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                     border: Border.all(
                       color: active
                           ? AppColors.accent.withValues(alpha: 0.35)
@@ -348,9 +320,7 @@ class _TabStrip extends StatelessWidget {
                         width: 7,
                         height: 7,
                         decoration: BoxDecoration(
-                          color: active
-                              ? AppColors.accent
-                              : const Color(0xFF4A4A52),
+                          color: active ? AppColors.accent : AppColors.textDim,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -369,13 +339,17 @@ class _TabStrip extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
                       GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => controller.closeTab(i),
-                        child: const Icon(
-                          Icons.close,
-                          size: 13,
-                          color: AppColors.textMuted,
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.close,
+                            size: 14,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ),
                     ],
@@ -384,23 +358,11 @@ class _TabStrip extends StatelessWidget {
               ),
             );
           }),
-          GestureDetector(
+          VisibleIconButton(
+            icon: Icons.add,
+            size: 32,
+            iconSize: 17,
             onTap: () => controller.addTab(),
-            child: Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: AppColors.strokeHi),
-              ),
-              child: const Icon(
-                Icons.add,
-                size: 17,
-                color: AppColors.textSecondary,
-              ),
-            ),
           ),
         ],
       ),
@@ -423,10 +385,33 @@ class _OmniboxState extends State<_Omnibox> {
   void initState() {
     super.initState();
     _text = TextEditingController(text: widget.controller.addressBar.value);
+    _focus.addListener(_onFocusChange);
+  }
+
+  /// Browser convention: tapping the address selects all of it (so typing
+  /// replaces it), and leaving the field scrolls back to the URL's start.
+  void _onFocusChange() {
+    if (_focus.hasFocus) {
+      // After the tap's own caret placement, which would otherwise win.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_focus.hasFocus) return;
+        _text.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _text.text.length,
+        );
+      });
+    } else {
+      final url = widget.controller.addressBar.value;
+      _text.value = TextEditingValue(
+        text: url == kStartPage ? '' : url,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _focus.removeListener(_onFocusChange);
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -438,43 +423,67 @@ class _OmniboxState extends State<_Omnibox> {
     // Don't surface the internal start-page scheme (erebrus://home) in the
     // address bar — keep it blank so the "Search or enter address" hint shows.
     final url = rawUrl == kStartPage ? '' : rawUrl;
-    if (!_focus.hasFocus && _text.text != url) _text.text = url;
+    if (!_focus.hasFocus && _text.text != url) {
+      _text.value = TextEditingValue(
+        text: url,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    }
     final desktop = PlatformCapabilities.isDesktop;
+    final c = widget.controller;
+    final tab = c.tabs.isEmpty ? null : c.activeTab;
+    final onWeb = tab != null && !tab.isStart && tab.configured;
+    final loading = c.isLoading.value && tab != null && !tab.isStart;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      padding: const EdgeInsets.fromLTRB(kBrowserGutter, 0, kBrowserGutter, 10),
       child: Row(
         children: [
           if (desktop) ...[
             _DesktopBrowserButton(
               icon: Icons.arrow_back,
               tooltip: 'Back',
-              onTap: widget.controller.goBack,
+              enabled: onWeb && tab.canGoBack,
+              onTap: c.goBack,
             ),
             const SizedBox(width: 6),
             _DesktopBrowserButton(
               icon: Icons.arrow_forward,
               tooltip: 'Forward',
-              onTap: widget.controller.goForward,
+              enabled: onWeb && tab.canGoForward,
+              onTap: c.goForward,
             ),
             const SizedBox(width: 6),
             _DesktopBrowserButton(
               icon: Icons.home_outlined,
               tooltip: 'Home',
-              onTap: widget.controller.goHome,
+              onTap: c.goHome,
             ),
             const SizedBox(width: 10),
           ],
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              height: 40,
+              padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
               decoration: BoxDecoration(
                 color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(AppRadius.md),
                 border: Border.all(color: AppColors.stroke),
               ),
               child: Row(
                 children: [
+                  Icon(
+                    url.startsWith('https://')
+                        ? Icons.lock_outline
+                        : url.isEmpty
+                        ? Icons.search
+                        : Icons.public,
+                    size: 15,
+                    color: url.startsWith('https://')
+                        ? AppColors.success
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: TextField(
                       controller: _text,
@@ -482,30 +491,54 @@ class _OmniboxState extends State<_Omnibox> {
                       style: mono(
                         size: 13,
                         weight: FontWeight.w400,
-                        color: const Color(0xFFC8C7C2),
+                        color: AppColors.textPrimary,
                       ),
                       cursorColor: AppColors.accent,
                       textInputAction: TextInputAction.go,
-                      decoration: const InputDecoration(
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      decoration: InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
                         hintText: 'Search or enter address',
+                        hintStyle: mono(
+                          size: 13,
+                          weight: FontWeight.w400,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                       onSubmitted: (v) => widget.controller.navigate(v),
                     ),
                   ),
-                  GestureDetector(
-                    onTap: widget.controller.reload,
-                    child: const Icon(
-                      Icons.refresh,
-                      size: 17,
-                      color: AppColors.textMuted,
+                  Tooltip(
+                    message: loading ? 'Stop' : 'Reload',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: loading ? c.stopLoading : c.reload,
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          loading ? Icons.close : Icons.refresh,
+                          size: 17,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          if (desktop) ...[
+            const SizedBox(width: 10),
+            _TabCountButton(controller: c),
+            const SizedBox(width: 6),
+            _DesktopBrowserButton(
+              icon: Icons.more_horiz,
+              tooltip: 'Menu',
+              onTap: () => showBrowserMenu(context, c),
+            ),
+          ],
         ],
       ),
     );
@@ -517,29 +550,59 @@ class _DesktopBrowserButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.enabled = true,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      child: VisibleIconButton(
+        icon: icon,
+        size: 40,
+        onTap: onTap,
+        enabled: enabled,
+      ),
+    );
+  }
+}
+
+/// Open-tab count; opens the tab switcher. Shared by the mobile bottom bar
+/// and the desktop toolbar.
+class _TabCountButton extends StatelessWidget {
+  const _TabCountButton({required this.controller});
+  final BrowserController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Tabs',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onTap,
+        onTap: () => showBrowserTabsSheet(context, controller),
         child: Container(
-          width: 36,
-          height: 36,
+          height: 40,
+          constraints: const BoxConstraints(minWidth: 40),
           alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.stroke),
+            color: AppColors.surface2,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.strokeHi),
           ),
-          child: Icon(icon, size: 18, color: AppColors.textSecondary),
+          child: Text(
+            '${controller.tabs.length}',
+            style: mono(
+              size: 11,
+              weight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ),
       ),
     );
@@ -637,9 +700,9 @@ class _StartPageState extends State<_StartPage> {
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.fromLTRB(
-        22,
+        kBrowserGutter,
         tightHeight ? 4 : 8,
-        22,
+        kBrowserGutter,
         16 + bottomInset,
       ),
       children: [
@@ -656,7 +719,7 @@ class _StartPageState extends State<_StartPage> {
           padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
           decoration: BoxDecoration(
             color: AppColors.surface2,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.stroke),
           ),
           child: Row(
@@ -751,7 +814,8 @@ class _SearchActionButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.accent.withValues(alpha: 0.35)),
           ),
           child: Icon(icon, size: 18, color: AppColors.accent),
         ),
@@ -790,7 +854,7 @@ class _ServiceCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: AppColors.stroke),
         ),
         child: Row(
@@ -800,7 +864,7 @@ class _ServiceCard extends StatelessWidget {
               height: 32,
               decoration: BoxDecoration(
                 color: service.chip,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: Icon(service.icon, size: 16, color: service.color),
             ),
@@ -841,87 +905,19 @@ class _ControlBar extends StatelessWidget {
   const _ControlBar({required this.controller});
   final BrowserController controller;
 
-  void _showMenu(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.raised,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.sheet),
-        ),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(
-                Icons.refresh,
-                color: AppColors.textSecondary,
-              ),
-              title: Text(
-                'Reload page',
-                style: grotesk(size: 15, weight: FontWeight.w600),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                controller.reload();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.add, color: AppColors.textSecondary),
-              title: Text(
-                'New tab',
-                style: grotesk(size: 15, weight: FontWeight.w600),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                controller.addTab();
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.open_in_new,
-                color: AppColors.textSecondary,
-              ),
-              title: Text(
-                'Open in new tab',
-                style: grotesk(size: 15, weight: FontWeight.w600),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                final tab = controller.activeTab;
-                if (tab.isStart) {
-                  controller.addTab();
-                  return;
-                }
-                controller.openInNewTab(tab.url);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.tab, color: AppColors.textSecondary),
-              title: Text(
-                'All tabs',
-                style: grotesk(size: 15, weight: FontWeight.w600),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                showBrowserTabsSheet(context, controller);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+        padding: const EdgeInsets.fromLTRB(
+          kBrowserGutter,
+          10,
+          kBrowserGutter,
+          8,
+        ),
         decoration: const BoxDecoration(
+          color: AppColors.bg,
           border: Border(top: BorderSide(color: AppColors.strokeSoft)),
         ),
         child: Obx(() {
@@ -943,31 +939,11 @@ class _ControlBar extends StatelessWidget {
                 enabled: onWeb && tab.canGoForward,
               ),
               _CtlIcon(Icons.home_outlined, onTap: controller.goHome),
-              GestureDetector(
-                onTap: () => showBrowserTabsSheet(context, controller),
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface2,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.strokeHi),
-                  ),
-                  child: Text(
-                    '${controller.tabs.length}',
-                    style: mono(
-                      size: 11,
-                      weight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
+              _TabCountButton(controller: controller),
+              _CtlIcon(
+                Icons.more_horiz,
+                onTap: () => showBrowserMenu(context, controller),
               ),
-              _CtlIcon(Icons.more_horiz, onTap: () => _showMenu(context)),
             ],
           );
         }),
@@ -976,145 +952,224 @@ class _ControlBar extends StatelessWidget {
   }
 }
 
-void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColors.raised,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(
-        top: Radius.circular(AppRadius.sheet),
+/// The browser ⋯ menu (mobile bottom bar and desktop toolbar).
+void showBrowserMenu(BuildContext context, BrowserController controller) {
+  final tab = controller.activeTab;
+  showBrowserSheet<void>(
+    context,
+    builder: (ctx) => SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BrowserSheetHeader(
+            icon: Icons.travel_explore,
+            title: tab.isStart ? 'Private browser' : tab.title,
+            subtitle: tab.isStart ? 'Erebrus home' : tab.url,
+          ),
+          BrowserSheetGroup(
+            children: [
+              if (!tab.isStart)
+                BrowserSheetTile(
+                  icon: Icons.refresh,
+                  title: 'Reload page',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    controller.reload();
+                  },
+                ),
+              BrowserSheetTile(
+                icon: Icons.add,
+                title: 'New tab',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  controller.addTab();
+                },
+              ),
+              if (!tab.isStart)
+                BrowserSheetTile(
+                  icon: Icons.open_in_new,
+                  title: 'Duplicate in new tab',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    controller.openInNewTab(tab.url);
+                  },
+                ),
+              BrowserSheetTile(
+                icon: Icons.tab,
+                title: 'All tabs',
+                trailing: MonoChip(
+                  label: '${controller.tabs.length}',
+                  color: AppColors.textSecondary,
+                  background: AppColors.surface2,
+                  borderColor: AppColors.stroke,
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showBrowserTabsSheet(context, controller);
+                },
+              ),
+            ],
+          ),
+          if (Get.isRegistered<AppSettingsController>())
+            BrowserSheetGroup(
+              children: [
+                Obx(() {
+                  final on =
+                      Get.find<AppSettingsController>().browserDarkPages.value;
+                  return BrowserSheetTile(
+                    icon: Icons.dark_mode_outlined,
+                    title: 'Dark web pages',
+                    subtitle: 'Render light-only sites in dark mode',
+                    onTap: () => controller.setDarkPages(!on),
+                    trailing: EreToggle(
+                      value: on,
+                      onChanged: controller.setDarkPages,
+                    ),
+                  );
+                }),
+              ],
+            ),
+        ],
       ),
     ),
-    builder: (ctx) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.55,
-      minChildSize: 0.35,
-      maxChildSize: 0.9,
-      builder: (_, scrollController) => Obx(() {
-        controller.tabs.length;
-        controller.activeIndex.value;
-        final tabs = controller.tabs;
-        final active = controller.activeIndex.value;
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 8),
-              child: Row(
-                children: [
-                  Text(
-                    'Tabs',
-                    style: grotesk(size: 18, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
-                  MonoChip(
-                    label: '${tabs.length}',
-                    color: AppColors.textSecondary,
-                    background: AppColors.surface2,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.add, color: AppColors.textSecondary),
-                    tooltip: 'New tab',
-                    onPressed: () => controller.addTab(),
-                  ),
-                ],
-              ),
+  );
+}
+
+void showBrowserTabsSheet(BuildContext context, BrowserController controller) {
+  showBrowserSheet<void>(
+    context,
+    maxHeightFactor: 0.85,
+    builder: (ctx) => Obx(() {
+      controller.tabs.length;
+      controller.activeIndex.value;
+      final tabs = controller.tabs;
+      final active = controller.activeIndex.value;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BrowserSheetHeader(
+            icon: Icons.tab,
+            title: 'Tabs',
+            count: tabs.length,
+            action: VisibleIconButton(
+              icon: Icons.add,
+              size: 34,
+              onTap: () {
+                controller.addTab();
+                Navigator.pop(ctx);
+              },
             ),
-            const Divider(height: 1, color: AppColors.strokeSoft),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                itemCount: tabs.length,
-                itemBuilder: (_, i) {
-                  final tab = tabs[i];
-                  final isActive = i == active;
-                  final subtitle = tab.isStart ? 'Erebrus home' : tab.url;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Material(
-                      color: isActive ? AppColors.surface3 : AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          controller.selectTab(i);
-                          Navigator.pop(ctx);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isActive
-                                  ? AppColors.accent.withValues(alpha: 0.35)
-                                  : AppColors.stroke,
-                            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              itemCount: tabs.length,
+              itemBuilder: (_, i) {
+                final tab = tabs[i];
+                final isActive = i == active;
+                final subtitle = tab.isStart ? 'Erebrus home' : tab.url;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: isActive ? AppColors.surface3 : AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      onTap: () {
+                        controller.selectTab(i);
+                        Navigator.pop(ctx);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(
+                            color: isActive
+                                ? AppColors.accent.withValues(alpha: 0.35)
+                                : AppColors.stroke,
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: isActive
+                                    ? AppColors.accent.withValues(alpha: 0.14)
+                                    : AppColors.surface2,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
+                                border: Border.all(
                                   color: isActive
-                                      ? AppColors.accent
-                                      : AppColors.textMuted,
-                                  shape: BoxShape.circle,
+                                      ? AppColors.accent.withValues(alpha: 0.35)
+                                      : AppColors.stroke,
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      tab.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: grotesk(
-                                        size: 14.5,
-                                        weight: FontWeight.w600,
-                                        color: isActive
-                                            ? AppColors.textPrimary
-                                            : AppColors.textSecondary,
-                                      ),
+                              child: Icon(
+                                tab.isStart
+                                    ? Icons.home_outlined
+                                    : Icons.public,
+                                size: 17,
+                                color: isActive
+                                    ? AppColors.accent
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tab.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: grotesk(
+                                      size: 14.5,
+                                      weight: FontWeight.w600,
+                                      color: isActive
+                                          ? AppColors.textPrimary
+                                          : AppColors.textSecondary,
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      subtitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: mono(
-                                        size: 11,
-                                        color: AppColors.textMuted,
-                                      ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: mono(
+                                      size: 11,
+                                      color: AppColors.textMuted,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: AppColors.textMuted,
-                                ),
-                                onPressed: () => controller.closeTab(i),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 8),
+                            VisibleIconButton(
+                              icon: Icons.close,
+                              size: 32,
+                              iconSize: 16,
+                              onTap: () => controller.closeTab(i),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
-          ],
-        );
-      }),
-    ),
+          ),
+        ],
+      );
+    }),
   );
 }
 

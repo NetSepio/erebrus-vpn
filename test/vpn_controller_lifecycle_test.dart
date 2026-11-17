@@ -537,6 +537,72 @@ void main() {
     },
   );
 
+  group('foreground resume', () {
+    late LifecycleEngine resumeEngine;
+    late VpnController resumeController;
+    Completer<String?>? probe;
+
+    setUp(() {
+      controller.onClose();
+      resumeEngine = LifecycleEngine();
+      probe = null;
+      resumeController = VpnController(
+        engine: resumeEngine,
+        egressProbe: () => probe?.future ?? Future.value('203.0.113.1'),
+      );
+      resumeController.onInit();
+    });
+    tearDown(() async {
+      if (probe?.isCompleted == false) probe!.complete(null);
+      resumeController.onClose();
+      await resumeEngine.events.close();
+    });
+
+    test(
+      'adopting a native tunnel reads as verifying, never stalled',
+      () async {
+        probe = Completer<String?>();
+        await resumeController.syncWithNative();
+        await flush();
+        expect(resumeController.stage.value, VpnStage.connected);
+        expect(resumeController.isProtected, isFalse);
+        expect(resumeController.tunnelVerifying.value, isTrue);
+        probe!.complete('203.0.113.1');
+        await flush();
+        expect(resumeController.tunnelVerifying.value, isFalse);
+        expect(resumeController.isProtected, isTrue);
+      },
+    );
+
+    test('a failed first probe ends verifying and reports unhealthy', () async {
+      probe = Completer<String?>();
+      await resumeController.syncWithNative();
+      probe!.complete(null);
+      await flush();
+      expect(resumeController.tunnelVerifying.value, isFalse);
+      expect(resumeController.tunnelHealthy.value, isFalse);
+      expect(resumeController.isProtected, isFalse);
+    });
+
+    test(
+      'resuming onto a verified tunnel stays protected throughout',
+      () async {
+        await resumeController.syncWithNative();
+        await flush();
+        expect(resumeController.isProtected, isTrue);
+        probe = Completer<String?>();
+        final syncing = resumeController.syncWithNative();
+        expect(resumeController.isProtected, isTrue);
+        await syncing;
+        expect(resumeController.isProtected, isTrue);
+        expect(resumeController.tunnelVerifying.value, isFalse);
+        probe!.complete('203.0.113.1');
+        await flush();
+        expect(resumeController.isProtected, isTrue);
+      },
+    );
+  });
+
   test('accepted block start must still wait for connected stage', () async {
     await controller.syncWithNative();
     engine.connectOnStart = false;

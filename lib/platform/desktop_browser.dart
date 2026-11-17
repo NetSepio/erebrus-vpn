@@ -98,6 +98,7 @@ class DesktopBrowser {
           onNavigationRequest: delegate.onNavigationRequest,
           onPageStarted: delegate.onPageStarted,
           onPageFinished: delegate.onPageFinished,
+          onProgress: delegate.onProgress,
           onWebResourceError: delegate.onWebResourceError,
         ),
       );

@@ -275,7 +275,10 @@ class _DesktopSidebar extends StatelessWidget {
                   : switch (vpn.stage.value) {
                       VpnStage.connecting => 'Connecting…',
                       VpnStage.disconnecting => 'Disconnecting…',
-                      VpnStage.connected => 'Connection health check failed',
+                      VpnStage.connected =>
+                        vpn.tunnelVerifying.value
+                            ? 'Verifying connection…'
+                            : 'Connection health check failed',
                       VpnStage.error => 'Connection error · open VPN to retry',
                       _ => 'Ready to connect',
                     },

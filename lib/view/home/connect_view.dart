@@ -223,7 +223,8 @@ class _ConnectViewState extends State<ConnectView> {
                                 transport != Transport.wireguard;
                             final stalled =
                                 stage == VpnStage.connected &&
-                                !_c.tunnelHealthy.value;
+                                !_c.tunnelHealthy.value &&
+                                !_c.tunnelVerifying.value;
                             return Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [

@@ -16,6 +16,7 @@ class AppSettingsController extends GetxController {
   static const _kDiagnostics = 'settings.anonymous_diagnostics';
   static const _kOnboardingSeen = 'settings.onboarding_seen';
   static const _kDnsResolver = 'settings.dns_resolver';
+  static const _kBrowserDarkPages = 'settings.browser_dark_pages';
   static const _kSplitTunnelEnabled = 'settings.split_tunnel_enabled';
   static const _kSplitTunnelMode = 'settings.split_tunnel_mode';
   static const _kSplitTunnelInclude = 'settings.split_tunnel_include';
@@ -29,6 +30,10 @@ class AppSettingsController extends GetxController {
   final anonymousDiagnostics = false.obs;
   final dnsResolver = 'system'.obs;
   final splitTunnelEnabled = false.obs;
+
+  /// Render light-only web pages dark in the in-app browser (pages with a
+  /// native dark theme get it via `prefers-color-scheme` either way).
+  final browserDarkPages = true.obs;
   final splitTunnelMode = SplitTunnelMode.exclude.obs;
   final splitTunnelIncludePackages = <String>[].obs;
   final splitTunnelExcludePackages = <String>[].obs;
@@ -53,6 +58,7 @@ class AppSettingsController extends GetxController {
     dnsResolver.value = prefs.getString(_kDnsResolver) ?? 'system';
     onboardingSeen.value = prefs.getBool(_kOnboardingSeen) ?? false;
     splitTunnelEnabled.value = prefs.getBool(_kSplitTunnelEnabled) ?? false;
+    browserDarkPages.value = prefs.getBool(_kBrowserDarkPages) ?? true;
     splitTunnelMode.value = SplitTunnelMode.fromName(
       prefs.getString(_kSplitTunnelMode),
     );
@@ -98,6 +104,12 @@ class AppSettingsController extends GetxController {
     if (PlatformCapabilities.isIOS) {
       await SingboxEngine.instance.setOnDemandEnabled(value);
     }
+  }
+
+  Future<void> setBrowserDarkPages(bool value) async {
+    browserDarkPages.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBrowserDarkPages, value);
   }
 
   Future<void> setSplitTunnelEnabled(bool value) async {

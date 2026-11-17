@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../platform/platform_capabilities.dart';
 import '../../theme/app_theme.dart';
 import '../home/connect_dial.dart';
+import 'browser_chrome.dart';
 import '../../vpn/singbox_engine.dart';
 import '../../vpn/vpn_controller.dart';
 import '../../vpn/vpn_models.dart';
@@ -90,6 +91,7 @@ class BrowserSessionStrip extends StatelessWidget {
       vpn.killSwitchBlocking.value;
       vpn.killSwitchEngaging.value;
       vpn.tunnelHealthy.value;
+      vpn.tunnelVerifying.value;
       return _BrowserSessionStripBody(status: browserSessionStatus(vpn));
     });
   }
@@ -103,7 +105,7 @@ class _BrowserSessionStripBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+      padding: const EdgeInsets.fromLTRB(kBrowserGutter, 0, kBrowserGutter, 8),
       child: Row(
         children: [
           _SessionDot(color: status.tint, pulse: status.pulse),

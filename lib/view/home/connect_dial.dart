@@ -40,6 +40,12 @@ VpnSafetyStatus vpnSafetyStatus(VpnController vpn, {bool? proxyScoped}) {
       isProtected: true,
     );
   }
+  if (vpn.stage.value == VpnStage.connected && vpn.tunnelVerifying.value) {
+    return const VpnSafetyStatus(
+      label: 'VERIFYING TUNNEL',
+      color: AppColors.accent,
+    );
+  }
   if (vpn.stage.value == VpnStage.connected) {
     return const VpnSafetyStatus(
       label: 'TUNNEL STALLED',

@@ -1,12 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart' show Color;
 import 'package:get/get.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../platform/desktop_browser.dart';
 import '../../platform/platform_capabilities.dart';
+import '../../settings/app_settings_controller.dart';
+import '../../theme/app_theme.dart';
 import '../../vpn/vpn_controller.dart';
+import 'browser_dark_mode.dart';
 import 'browser_link_menu.dart';
 
 /// The private start page (the "Sovereign web." service grid). New tabs open
@@ -37,6 +41,10 @@ class BrowserTab {
   Future<void>? pendingLoad;
   bool canGoBack = false;
   bool canGoForward = false;
+
+  /// Highest load-progress bucket the auto-dark script was injected at for
+  /// the current page load (reset on each page start).
+  int darkProgressBucket = 0;
 
   /// Created lazily — Android WebView init is expensive and must not run off-screen.
   WebViewController get controller =>
@@ -84,11 +92,15 @@ class BrowserController extends GetxController {
       Get.find<VpnController>().isProtected;
   bool get _canBrowse =>
       !_closed && !_disposalFailed && (!_desktop || _protected);
+
+  /// Only the desktop runner's native window floats above Flutter and must
+  /// be unmounted under modal routes; on mobile the WebView is a normal
+  /// platform view that stays visible (dimmed) under sheets and dialogs.
   bool get canMountBrowser =>
       !_closed &&
       !_disposalFailed &&
       shellTabVisible.value &&
-      !routeCovered.value &&
+      (!_desktop || !routeCovered.value) &&
       (!_desktop || protectionAvailable.value);
 
   final tabs = <BrowserTab>[].obs;
@@ -114,10 +126,63 @@ class BrowserController extends GetxController {
   String? _lastPageNewTabUrl;
   DateTime _lastPageNewTabAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Whether light-only pages are rendered dark (persisted user setting).
+  bool get darkPages =>
+      !Get.isRegistered<AppSettingsController>() ||
+      Get.find<AppSettingsController>().browserDarkPages.value;
+
+  Future<void> setDarkPages(bool value) async {
+    if (Get.isRegistered<AppSettingsController>()) {
+      await Get.find<AppSettingsController>().setBrowserDarkPages(value);
+    }
+  }
+
+  void _darkPagesChanged(bool enabled) {
+    for (final tab in tabs) {
+      final controller = tab._controller;
+      if (!tab.configured || controller == null) continue;
+      unawaited(_applyBackdrop(controller, enabled));
+      unawaited(_injectAutoDark(controller, enabled));
+    }
+  }
+
+  /// Paints the WebView behind page content: app-dark while dark pages are on
+  /// (no white flash before first paint), white otherwise so transparent
+  /// light-only pages stay readable. macOS WKWebView has no backdrop API.
+  Future<void> _applyBackdrop(WebViewController controller, bool dark) async {
+    if (PlatformCapabilities.isMacOS) return;
+    try {
+      await controller.setBackgroundColor(
+        dark ? AppColors.bg : const Color(0xFFFFFFFF),
+      );
+    } catch (e) {
+      debugPrint('[Browser] backdrop unsupported: $e');
+    }
+  }
+
+  Future<void> _injectAutoDark(
+    WebViewController controller,
+    bool enabled,
+  ) async {
+    try {
+      await controller.runJavaScript(autoDarkScript(enabled: enabled));
+    } catch (e) {
+      debugPrint('[Browser] auto-dark inject failed: $e');
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();
     if (tabs.isEmpty) addTab();
+    if (Get.isRegistered<AppSettingsController>()) {
+      _workers.add(
+        ever<bool>(
+          Get.find<AppSettingsController>().browserDarkPages,
+          _darkPagesChanged,
+        ),
+      );
+    }
     protectionAvailable.value = !_desktop || _protected;
     if (Get.isRegistered<VpnController>()) {
       final vpn = Get.find<VpnController>();
@@ -450,6 +515,8 @@ class BrowserController extends GetxController {
         tab._controller = controller;
         if (_desktop) await _secureDesktop(controller);
         if (!_valid(tab, generation)) return;
+        await _applyBackdrop(controller, darkPages);
+        if (!_valid(tab, generation)) return;
         await _configure(tab, controller, generation);
         if (!_valid(tab, generation)) return;
         tab.configured = true;
@@ -467,6 +534,20 @@ class BrowserController extends GetxController {
         tabs.refresh();
       }
       debugPrint('[Browser] initialization or navigation failed: $error');
+    }
+  }
+
+  /// Stops the active page load (the address bar's ✕ while loading).
+  /// webview_flutter has no native stop, so this uses `window.stop()`.
+  Future<void> stopLoading() async {
+    if (tabs.isEmpty) return;
+    final tab = activeTab;
+    isLoading.value = false;
+    if (!tab.configured || tab._controller == null) return;
+    try {
+      await tab.controller.runJavaScript('window.stop();');
+    } catch (e) {
+      debugPrint('[Browser] stop failed: $e');
     }
   }
 
@@ -557,6 +638,8 @@ class BrowserController extends GetxController {
         onPageStarted: (url) {
           if (!_valid(tab, generation)) return;
           isLoading.value = true;
+          tab.darkProgressBucket = 0;
+          unawaited(_injectAutoDark(controller, darkPages));
           if (isWebUrl(url)) {
             tab.url = url;
             addressBar.value = url;
@@ -572,17 +655,29 @@ class BrowserController extends GetxController {
             if (!_valid(tab, generation)) return;
             await _injectLinkContextMenu(controller);
             if (!_valid(tab, generation)) return;
+            await _injectAutoDark(controller, darkPages);
+            if (!_valid(tab, generation)) return;
             final title = await controller.getTitle();
             if (!_valid(tab, generation)) return;
             if (title != null && title.isNotEmpty) {
-              tab.title = title.length > 24
-                  ? '${title.substring(0, 24)}…'
-                  : title;
+              // Kept whole: each surface (tab strip, switcher, menu header)
+              // ellipsizes to its own width.
+              tab.title = title;
               tabs.refresh();
             }
           } catch (error) {
             debugPrint('[Browser] page metadata failed: $error');
           }
+        },
+        // Inject early (and again as the load advances) so the script's
+        // DOMContentLoaded hook lands on the new document before first paint
+        // where possible, rather than only after the page has finished.
+        onProgress: (progress) {
+          if (!_valid(tab, generation)) return;
+          final bucket = progress ~/ 30;
+          if (bucket <= tab.darkProgressBucket) return;
+          tab.darkProgressBucket = bucket;
+          unawaited(_injectAutoDark(controller, darkPages));
         },
         onWebResourceError: (error) {
           if (!_valid(tab, generation)) return;

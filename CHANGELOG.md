@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.0.10+11 — 2026-11-17
+
+### TL;DR (store release notes)
+
+- Coming back to the app no longer flashes "Tunnel stalled" while the
+  connection is checked.
+- The private browser shows web pages in dark mode, with a setting to turn it
+  off.
+- A cleaner, more consistent browser: one toolbar on desktop, a stop button
+  while pages load, and full tab titles.
+
+### Fixed
+
+- When the app was restored or brought to the foreground, the connect screen
+  showed "Tunnel stalled" for a moment before the health check ran. A tunnel
+  adopted from the system now reads "Verifying tunnel" until its first egress
+  probe answers, and a tunnel that was already verified stays "Protected".
+- On phones, the browser menu, tab switcher and link menu open over the
+  dimmed page instead of a blank area.
+- Tapping the address bar selects the whole address, so typing replaces it
+  instead of being appended to the current URL. After editing, the address
+  scrolls back to its start.
+- Browser toasts sit above the bottom bar instead of covering it.
+- Tab titles are no longer cut to 24 characters; each view shortens them only
+  when it runs out of room.
+
+### Changed
+
+- The app uses a dark appearance on every platform, so sites with their own
+  dark theme use it in the browser. Light-only pages are darkened
+  automatically, with photos and video kept in their real colours. "Dark web
+  pages" in the browser menu turns this off.
+- Browser menus, the tab switcher, the link menu and the loading, error and
+  "Connect to browse" screens share the app's sheet and panel styling, and
+  every browser row uses the same side margin.
+- While a page loads, the reload button becomes a stop button and a progress
+  bar shows under the address bar.
+- On desktop, back, forward, home, the tab count and the menu are in one
+  toolbar; back and forward are greyed out when there is nowhere to go, and
+  the bottom bar is gone. "Connect to browse" has an "Open VPN" button.
+
 ## 1.0.9+10 — 2026-11-01
 
 ### TL;DR (store release notes)

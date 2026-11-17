@@ -19,7 +19,7 @@ without you having to fiddle with settings.
 - **Actually stays connected** — auto-fallback to stealth mode on strict networks
 - **Flexible sign-in** — wallet, Google, Apple, browser, and token flows where supported
 - **Organization nodes** — switch organizations and connect to their public or private nodes
-- **Private browser built in** — Brave Search plus speed, IP, DNS, WebRTC, and IPv6 tools
+- **Private browser built in** — Brave Search, tabs, and dark web pages, plus speed, IP, DNS, WebRTC, and IPv6 tools
 - **Clear diagnostics** — see whether WireGuard, VLESS + REALITY, or Hysteria2 is active
 - **Easy config import** — file import everywhere, plus QR scanning on Android and iOS
 - **Works on phone and desktop** — Android, iOS, macOS, Windows, and Linux
@@ -50,7 +50,7 @@ without you having to fiddle with settings.
 | **iOS** | TestFlight / App Store (see [docs/BUILD.md](docs/BUILD.md)) |
 | **Desktop** | Build from source — [docs/BUILD.md](docs/BUILD.md) |
 
-Current source version: **1.0.6+7**. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current source version: **1.0.10+11**. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 
