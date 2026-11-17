@@ -383,7 +383,9 @@ jobs:
 
   build-linux:
     needs: [prepare, verify]
-    runs-on: ubuntu-latest
+    # Pinned: the Linux bundle needs the glibc of the Ubuntu it is built on,
+    # so a newer runner image would quietly drop users on older distros.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       TAG: ${{ needs.prepare.outputs.tag }}

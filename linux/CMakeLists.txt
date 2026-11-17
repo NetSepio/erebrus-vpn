@@ -42,6 +42,10 @@ endif()
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_14)
   target_compile_options(${TARGET} PRIVATE -Wall -Werror)
+  # Plugins are built with these settings too. Keep deprecation warnings visible
+  # but non-fatal, so a newer system library (e.g. libayatana-appindicator
+  # deprecating app_indicator_new, used by tray_manager) can't break the build.
+  target_compile_options(${TARGET} PRIVATE -Wno-error=deprecated-declarations)
   target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O3>")
   target_compile_definitions(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
 endfunction()

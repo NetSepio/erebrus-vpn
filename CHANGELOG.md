@@ -46,6 +46,9 @@
 - CI and release builds are pinned to Flutter 3.47.7, the version this release
   was tested on. Flutter 3.50 deprecates `package:flutter/material.dart`,
   which failed `flutter analyze` when CI followed the latest stable.
+- The Linux release builds on Ubuntu 24.04, so the bundle runs on the same
+  distributions as before. Deprecation warnings from system libraries no
+  longer stop the Linux build.
 
 ## 1.0.9+10 — 2026-11-01
 
