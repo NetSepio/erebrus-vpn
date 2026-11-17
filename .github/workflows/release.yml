@@ -17,8 +17,12 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# Public production endpoints baked into every build's .env.
+# Flutter is pinned so a new stable release can't change analyzer results or
+# builds under a tagged version. Bump it with the local toolchain, after
+# `flutter analyze` and `flutter test` pass on the new version.
+# Public production endpoints are baked into every build's .env.
 env:
+  FLUTTER_VERSION: "3.47.7"
   EREBRUS_WEB_ORIGIN: https://erebrus.io
   GATEWAY_URL: https://gateway.erebrus.io
 
@@ -111,6 +115,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - run: flutter pub get
@@ -141,6 +146,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Check signing secrets
@@ -335,6 +341,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Configure build env
@@ -386,6 +393,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Install Linux build dependencies
@@ -433,6 +441,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Configure build env

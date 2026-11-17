@@ -41,6 +41,12 @@
   toolbar; back and forward are greyed out when there is nowhere to go, and
   the bottom bar is gone. "Connect to browse" has an "Open VPN" button.
 
+### Build
+
+- CI and release builds are pinned to Flutter 3.47.7, the version this release
+  was tested on. Flutter 3.50 deprecates `package:flutter/material.dart`,
+  which failed `flutter analyze` when CI followed the latest stable.
+
 ## 1.0.9+10 — 2026-11-01
 
 ### TL;DR (store release notes)
