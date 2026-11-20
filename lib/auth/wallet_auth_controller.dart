@@ -123,7 +123,6 @@ class WalletAuthController extends GetxController with WidgetsBindingObserver {
   final authError = RxnString();
   final entitlement = EntitlementState.none.obs;
   final isLoadingEntitlement = false.obs;
-  final isRefreshingNft = false.obs;
   final profileEmail = ''.obs;
   final profileEmailVerified = false.obs;
   final profileName = ''.obs;
@@ -1026,30 +1025,6 @@ class WalletAuthController extends GetxController with WidgetsBindingObserver {
       entitlementError.value = e.toString();
     } finally {
       isLoadingEntitlement.value = false;
-    }
-  }
-
-  Future<void> refreshNftEntitlement() async {
-    if (!isAuthenticated) {
-      entitlementError.value = 'Sign in first to verify your NFT';
-      return;
-    }
-    if (!entitlement.value.nftGatingEnabled) {
-      entitlementError.value = 'NFT gating is not enabled on this gateway';
-      return;
-    }
-
-    isRefreshingNft.value = true;
-    entitlementError.value = null;
-    try {
-      await _authClient.refreshNftEntitlement(_token!);
-      await refreshEntitlement();
-    } on AuthException catch (e) {
-      entitlementError.value = e.message;
-    } catch (e) {
-      entitlementError.value = e.toString();
-    } finally {
-      isRefreshingNft.value = false;
     }
   }
 

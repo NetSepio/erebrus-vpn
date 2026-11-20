@@ -1,5 +1,63 @@
 # Changelog
 
+## Unreleased — app disguise and leak lockdown
+
+### TL;DR
+
+- The app can wear another name and icon in the launcher: Notes, Calculator or
+  Weather. The VPN notification follows the disguise, so a "Notes" icon is not
+  given away by a notification that says Erebrus.
+- Screenshots, screen recording and the recents thumbnail are blocked on
+  Android; on iOS and macOS the UI is covered whenever the app is not frontmost.
+- Backups can no longer lift the app's stored keys off a device, and cleartext
+  networking is narrowed from "anything" to the engine's own loopback ports.
+- The app no longer offers to verify a gating NFT; the gateway stopped granting
+  that entitlement and now answers 410.
+
+### Added
+
+- **Launcher disguise.** The `MAIN`/`LAUNCHER` filter moves off `MainActivity`
+  onto four `<activity-alias>` entries, exactly one enabled at a time, so the
+  launcher's name and icon change without a reinstall. Settings → App disguise
+  picks one. The incoming alias is enabled *before* the outgoing one is
+  disabled: several OEM launchers drop an app that passes through a moment with
+  no enabled launcher component, and the only way back is to reinstall. The
+  `erebrusvpn://` deep link stays on `MainActivity`, so sign-in survives every
+  switch.
+  - The copy lives in `lib/settings/disguise_profile.dart` and the aliases in
+    the manifest; `test/disguise_profile_test.dart` fails if they drift apart,
+    including the launcher labels and the icon resources, because nothing at
+    runtime notices — the icon simply fails to change.
+  - A disguise hides that Erebrus is *installed*. It does not protect what is
+    stored: an unlocked device still hands everything over. The picker says so,
+    and so should the marketing copy — "discreet", never "seizure-proof".
+
+### Changed
+
+- `FLAG_SECURE` on Android blanks the recents thumbnail and refuses screenshots
+  and screen recording. This matters more with a disguise, not less: a
+  calculator icon whose recents preview shows a node list defeats itself.
+- iOS and macOS have no equivalent flag, so `PrivacyCover` in
+  `lib/view/root_view.dart` covers the UI on `inactive` — the state the OS
+  snapshot is taken in — and uncovers on `resumed`.
+- `android:allowBackup="false"`, an empty `data_extraction_rules.xml` and
+  `fullBackupContent="false"`: `adb backup` and cloud or device-to-device
+  transfer can no longer carry off `EncryptedSharedPreferences`, which holds the
+  session token, the WireGuard private keys and the stealth credentials.
+- `android:usesCleartextTraffic="true"` is replaced by a network security config
+  that permits cleartext to `127.0.0.1` and `localhost` only — the Clash API on
+  :9090 and the mixed inbound on :10808. Everything that leaves the device is
+  HTTPS, so the blanket flag was permitting far more than the app has ever used.
+
+### Removed
+
+- NFT gating. The gateway stopped granting a personal NFT entitlement and
+  returns 410 on `POST /api/v2/subscriptions/nft/refresh`, so this removes an
+  offer the app could not honour: `refreshNftEntitlement` on the auth client and
+  the controller, `nftGatingEnabled` on `EntitlementState`, `kNftEntitlementDays`
+  and the NFT badge in settings. The entitlement `source` doc now lists
+  `onchain`, which is what prepaid USDC terms arrive as.
+
 ## 1.0.10+11 — 2026-11-17
 
 ### TL;DR (store release notes)

@@ -6,11 +6,9 @@ void main() {
     final ent = EntitlementState.fromJson({
       'status': 'none',
       'entitled': false,
-      'nft_gating': true,
     });
     expect(ent.entitled, isFalse);
     expect(ent.status, 'none');
-    expect(ent.nftGatingEnabled, isTrue);
     expect(ent.trialConsumed, isFalse);
     expect(ent.planLabel, 'Free');
   });

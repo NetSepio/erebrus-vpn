@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's only cleartext traffic is to the engine running in this same
+     process: the Clash API on 127.0.0.1:9090 and the mixed inbound on
+     127.0.0.1:10808. Everything that leaves the device is HTTPS, so the blanket
+     android:usesCleartextTraffic="true" this replaces permitted far more than
+     the app has ever used — including any plaintext redirect a hostile network
+     cared to inject. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false"/>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

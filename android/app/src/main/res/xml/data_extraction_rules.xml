@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing leaves the app: no cloud backup, no device-to-device transfer.
+     EncryptedSharedPreferences holds the session token, the WireGuard private
+     keys and the stealth credentials; the Keystore key that wraps them never
+     leaves the device, so a restored copy is useless at best and a disclosure
+     at worst. android:allowBackup="false" covers API 30 and below, these rules
+     cover 31 and above. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root"/>
+        <exclude domain="file"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root"/>
+        <exclude domain="file"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+    </device-transfer>
+</data-extraction-rules>

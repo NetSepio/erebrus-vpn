@@ -8,6 +8,7 @@ import '../../auth/gateway_auth_client.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../vpn/gateway_config.dart';
 import '../../settings/app_settings_controller.dart';
+import '../../settings/disguise_profile.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/vpn_controller.dart';
@@ -62,11 +63,21 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   String _appVersion = '';
+  DisguiseProfile _disguise = DisguiseProfile.active;
 
   @override
   void initState() {
     super.initState();
     _loadAppVersion();
+    _loadDisguise();
+  }
+
+  Future<void> _loadDisguise() async {
+    // The enabled launcher alias is the source of truth, so this is read from
+    // the platform rather than from a stored preference: a disguise survives
+    // reinstall-free updates and nothing can drift out of step with it.
+    final active = await const DisguiseChannel().current();
+    if (mounted) setState(() => _disguise = active);
   }
 
   Future<void> _loadAppVersion() async {
@@ -291,6 +302,23 @@ class _SettingsViewState extends State<SettingsView> {
                     );
                   }),
                 ],
+                if (PlatformCapabilities.supportsLauncherDisguise) ...[
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.apps_outlined,
+                    title: 'App disguise',
+                    subtitleMaxLines: null,
+                    subtitle: _disguise.isDisguised
+                        ? 'Launcher shows "${_disguise.label}". Hides that Erebrus is installed, not what it stores.'
+                        : 'Change the name and icon in your launcher',
+                    onTap: _pickDisguise,
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 18),
@@ -391,6 +419,95 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  /// Launcher disguise picker. Switching enables one `<activity-alias>` and
+  /// disables the rest, so the launcher entry is replaced rather than added to.
+  void _pickDisguise() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.raised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'App disguise',
+                style: grotesk(size: 18, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Changes the launcher name, the icon and the VPN notification. '
+                'It hides that Erebrus is installed — it does not protect what '
+                'is stored on an unlocked device.',
+                style: grotesk(
+                  size: 12,
+                  weight: FontWeight.w400,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final profile in DisguiseProfile.all)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    profile.label,
+                    style: grotesk(size: 14.5, weight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    profile.description,
+                    style: grotesk(
+                      size: 11.5,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  trailing: profile.alias == _disguise.alias
+                      ? const Icon(
+                          Icons.check,
+                          size: 18,
+                          color: AppColors.accent,
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _applyDisguise(profile);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyDisguise(DisguiseProfile profile) async {
+    if (profile.alias == _disguise.alias) return;
+    final ok = await const DisguiseChannel().set(profile);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not change the launcher icon')),
+      );
+      return;
+    }
+    setState(() => _disguise = profile);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          profile.isDisguised
+              ? 'Launcher now shows "${profile.label}"'
+              : 'Launcher restored to Erebrus VPN',
         ),
       ),
     );
@@ -930,11 +1047,11 @@ class _SubscriptionCard extends StatelessWidget {
     final entitled = ent.entitled;
     final source = ent.source;
     final days = ent.daysRemaining;
-    final busy = auth.isLoadingEntitlement.value || auth.isRefreshingNft.value;
+    final busy = auth.isLoadingEntitlement.value;
 
     final badge = switch (source) {
       'trial' => 'TRIAL',
-      'nft' => 'NFT',
+      'onchain' => 'USDC',
       'rank' => 'RANK',
       'admin' => 'ADMIN',
       _ => entitled ? 'ACTIVE' : 'FREE',

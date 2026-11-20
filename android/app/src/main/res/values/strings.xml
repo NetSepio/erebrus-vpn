@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Erebrus VPN</string>
+    <!-- Launcher disguise names. These are what the launcher shows, so they are
+         deliberately dull; test/disguise_profile_test.dart keeps them in step
+         with lib/settings/disguise_profile.dart. -->
+    <string name="disguise_notes_name">Notes</string>
+    <string name="disguise_calc_name">Calculator</string>
+    <string name="disguise_weather_name">Weather</string>
 </resources>

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Base64
+import android.view.WindowManager
 import androidx.webkit.ProxyConfig
 import androidx.webkit.ProxyController
 import androidx.webkit.WebViewFeature
@@ -36,6 +37,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Blank the recents thumbnail and refuse screenshots and screen
+        // recording. This matters more with a launcher disguise, not less: a
+        // calculator icon whose recents preview shows a node list defeats
+        // itself. iOS has no equivalent flag; RootView covers it with an opaque
+        // overlay while the app is inactive.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         initialLink = intent?.data?.toString()
     }
 
@@ -70,6 +77,24 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "moveTaskToBack" -> result.success(moveTaskToBack(true))
+                // Launcher disguise. Dart owns the alias list (it is the same
+                // list the manifest declares and a test compares the two), so
+                // this layer only flips components.
+                "disguise.current" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val all = call.argument<List<String>>("aliases") ?: emptyList()
+                    result.success(AppDisguise.current(this, all))
+                }
+                "disguise.set" -> {
+                    val alias = call.argument<String>("alias") ?: ""
+                    @Suppress("UNCHECKED_CAST")
+                    val all = call.argument<List<String>>("aliases") ?: emptyList()
+                    if (AppDisguise.set(this, alias, all)) {
+                        result.success(true)
+                    } else {
+                        result.error("UNKNOWN_DISGUISE", "No launcher alias named $alias", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -89,6 +114,11 @@ class MainActivity : FlutterActivity() {
                         splitTunnelEnabled = call.argument<Boolean>("splitTunnelEnabled") ?: false,
                         splitTunnelMode = call.argument<String>("splitTunnelMode") ?: "exclude",
                         splitTunnelPackages = packages,
+                        // Notification copy follows the active disguise: an icon
+                        // called Notes whose ongoing notification says "Erebrus"
+                        // has hidden nothing.
+                        notificationTitle = call.argument<String>("notificationTitle"),
+                        notificationText = call.argument<String>("notificationText"),
                     )
                     result.success(null)
                 }

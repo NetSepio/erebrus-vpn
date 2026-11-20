@@ -25,9 +25,6 @@ const kGatewayUrl = _kGatewayUrlDefine;
 /// v2 trial length (`trial_period=168h` in gateway platform_settings).
 const kTrialPeriodDays = 7;
 
-/// NFT gating grant (`nft_gate_period` — typically 30d).
-const kNftEntitlementDays = 30;
-
 /// Bounded label for gateway metrics / activity (`X-Erebrus-Client`).
 String gatewayClientHeader() {
   if (kIsWeb) return 'webapp';
