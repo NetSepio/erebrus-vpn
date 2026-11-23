@@ -38,6 +38,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         private const val EXTRA_SPLIT_ENABLED = "split_tunnel_enabled"
         private const val EXTRA_SPLIT_MODE = "split_tunnel_mode"
         private const val EXTRA_SPLIT_PACKAGES = "split_tunnel_packages"
+        private const val EXTRA_NOTIF_TITLE = "notif_title"
+        private const val EXTRA_NOTIF_TEXT = "notif_text"
         private const val NOTIF_CHANNEL = "erebrus_vpn"
         private const val NOTIF_ID = 0x5713
         /** Tunnel DNS — must match SingboxConfigBuilder.tunDnsAddress in Dart. */
@@ -55,6 +57,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             splitTunnelEnabled: Boolean = false,
             splitTunnelMode: String = "exclude",
             splitTunnelPackages: List<String> = emptyList(),
+            notificationTitle: String? = null,
+            notificationText: String? = null,
         ) {
             SingboxBridge.setSplitTunnel(splitTunnelEnabled, splitTunnelMode, splitTunnelPackages)
             val i = Intent(ctx, ErebrusVpnService::class.java).apply {
@@ -64,6 +68,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 putExtra(EXTRA_SPLIT_ENABLED, splitTunnelEnabled)
                 putExtra(EXTRA_SPLIT_MODE, splitTunnelMode)
                 putStringArrayListExtra(EXTRA_SPLIT_PACKAGES, ArrayList(splitTunnelPackages))
+                notificationTitle?.let { putExtra(EXTRA_NOTIF_TITLE, it) }
+                notificationText?.let { putExtra(EXTRA_NOTIF_TEXT, it) }
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(i)
@@ -76,6 +82,10 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             ctx.startService(Intent(ctx, ErebrusVpnService::class.java).apply { action = ACTION_STOP })
         }
     }
+
+    /** Notification copy from the active launcher disguise, if any. */
+    private var notifTitle: String? = null
+    private var notifText: String? = null
 
     private var box: BoxService? = null
     private var tunInterface: ParcelFileDescriptor? = null
@@ -104,6 +114,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
                 val splitPackages = intent.getStringArrayListExtra(EXTRA_SPLIT_PACKAGES) ?: arrayListOf()
                 SingboxBridge.setSplitTunnel(splitEnabled, splitMode, splitPackages)
                 // Android requires startForeground within seconds of startForegroundService().
+                notifTitle = intent.getStringExtra(EXTRA_NOTIF_TITLE)
+                notifText = intent.getStringExtra(EXTRA_NOTIF_TEXT)
                 startForeground(NOTIF_ID, buildNotification(name))
                 val generation = ++tunnelGeneration
                 tunnelExecutor.execute {
@@ -404,6 +416,11 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
         android.util.Log.i("erebrus-singbox", message)
     }
 
+    /**
+     * Builds the ongoing tunnel notification. The copy comes from the active
+     * launcher disguise, which the start intent carries; with none set this is
+     * the copy the app has always shown.
+     */
     private fun buildNotification(name: String): Notification {
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -424,8 +441,8 @@ class ErebrusVpnService : VpnService(), PlatformInterface {
             Notification.Builder(this)
         }
         return builder
-            .setContentTitle("Erebrus")
-            .setContentText("Protected · $name")
+            .setContentTitle(notifTitle?.takeIf { it.isNotBlank() } ?: "Erebrus")
+            .setContentText(notifText?.takeIf { it.isNotBlank() } ?: "Protected · $name")
             .setSmallIcon(applicationInfo.icon)
             .setOngoing(true)
             .setContentIntent(tap)

@@ -36,7 +36,7 @@ class AuthSessionStore {
 
   Future<StoredAuthSession?> read() async {
     _requireNative();
-    final blob = await _storage.read(key: _sessionKey);
+    final blob = await _readSecret(_sessionKey);
     if (blob != null) {
       // A tombstone prevents resurrection from old, partially removed keys.
       final json = jsonDecode(blob) as Map<String, dynamic>;
@@ -46,11 +46,10 @@ class AuthSessionStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final token =
-        await _storage.read(key: kToken) ??
-        prefs.getString('erebrus_auth_$kToken');
+        await _readSecret(kToken) ?? prefs.getString('erebrus_auth_$kToken');
     if (token == null || token.isEmpty) return null;
     Future<String?> legacy(String key) async =>
-        await _storage.read(key: key) ?? prefs.getString('erebrus_auth_$key');
+        await _readSecret(key) ?? prefs.getString('erebrus_auth_$key');
     final migrated = StoredAuthSession(
       credentials: AuthSession(
         token: token,
@@ -67,14 +66,39 @@ class AuthSessionStore {
 
   Future<void> write(StoredAuthSession session) async {
     _requireNative();
-    await _storage.write(key: _sessionKey, value: jsonEncode(session.toJson()));
+    await _writeSecret(_sessionKey, jsonEncode(session.toJson()));
     await _removeLegacy();
   }
 
   Future<void> clear() async {
     _requireNative();
-    await _storage.write(key: _sessionKey, value: '{"signed_out":true}');
+    await _writeSecret(_sessionKey, '{"signed_out":true}');
     await _removeLegacy();
+  }
+
+  /// Secure-storage reads and writes never throw out of this store.
+  ///
+  /// The platform side can fail for reasons the app cannot fix at run time —
+  /// a Keystore key that no longer unwraps its data being the one seen in the
+  /// wild — and an exception from here used to travel straight through the auth
+  /// flow and end the sign-in the user had just completed. A session that
+  /// cannot be persisted is a session that does not survive a restart; it is
+  /// not a reason to refuse the one in hand.
+  Future<String?> _readSecret(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (e) {
+      debugPrint('[Auth] secure read failed for $key: $e');
+      return null;
+    }
+  }
+
+  Future<void> _writeSecret(String key, String value) async {
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (e) {
+      debugPrint('[Auth] secure write failed for $key: $e');
+    }
   }
 
   Future<void> _removeLegacy() async {

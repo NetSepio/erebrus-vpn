@@ -1,5 +1,138 @@
 # Changelog
 
+## 1.0.11+12 — 2026-11-24
+
+### TL;DR
+
+- Dismissing the wallet signature prompt no longer makes the app disappear.
+- The app draws its first frame without waiting for the network. Launch used to
+  block on three gateway round-trips, so a slow, lossy or blocked connection
+  meant a black screen for up to half a minute — reported as the app crashing
+  or hanging on launch.
+- The app can wear another name and icon in the launcher: Notes, Calculator or
+  Weather. The VPN notification follows the disguise, and while one is on the
+  app stays out of screenshots and the app switcher — under its own name,
+  screenshots work as before.
+- On iOS and macOS the UI is covered whenever the app is not frontmost, so the
+  app switcher never holds a picture of your nodes or your wallet.
+- The plan card no longer claims "23 of 7 days remaining", and sends you where
+  plans are actually managed.
+- The session token and VPN keys are excluded from Android backups, while
+  settings still restore to a new phone; cleartext networking is narrowed from
+  "anything" to the engine's own loopback ports.
+- The app no longer offers to verify a gating NFT; the gateway stopped granting
+  that entitlement and now answers 410.
+
+### Fixed
+
+- **The app vanished when a wallet sign-in was dismissed.** Cancelling the
+  wallet's signature prompt — or in some cases returning from it — destroyed the
+  app's whole task one second later: the window disappeared, the process was
+  left frozen in the background, and the sign-in died mid-flight. It was never a
+  crash, which is why nothing turned up in the crash logs. The cause was
+  `android:taskAffinity=""` on MainActivity, carried in from the project's first
+  commit: with no task affinity, the activity could not be re-parented back into
+  its own task when the wallet (started as a single-task activity from another
+  app) went away, so the task went with it. Reproduced and fixed on a Seeker —
+  cancelling the prompt now returns to the app with the session intact.
+- **Sign-in could fail for good on a device whose secure store had become
+  unreadable.** The Android Keystore key that wraps the stored secrets cannot be
+  exported, backed up or rebuilt, so once it no longer matches the stored
+  ciphertext every secure-storage call fails — seen on a Seeker as "Failed to
+  unwrap key" on every operation, which broke sign-in and left the app with no
+  way out. Two things fixed it:
+  - The store is now configured to reset itself when it cannot be read. It
+    discards data that was already unreadable; the user signs in again and the
+    client re-provisions. Previously the plugin threw for ever and nothing in
+    the app could clear it.
+  - `AuthSessionStore` no longer lets a storage failure escape into the auth
+    flow. A session that cannot be written to disk will not survive a restart,
+    which is not a reason to end the sign-in the user just completed.
+- **The app could show a black screen for half a minute at launch, or not start
+  at all.** `main()` awaited the session restore before `runApp`, and that
+  restore awaited a token refresh, an entitlement read and a profile read —
+  three sequential gateway round-trips with 8–12s timeouts each. On a slow,
+  lossy or blocked network nothing was drawn until they finished or gave up: no
+  splash, no error, and long enough for the OS to kill the start-up. For a VPN
+  app a blocked gateway is a normal Tuesday, not an edge case.
+  - The restore now lifts the splash as soon as secure storage has answered —
+    which is what tells the app who the user is — and refreshes from the
+    gateway behind the UI. `test/launch_startup_test.dart` stalls the gateway
+    and fails if anything starts waiting on it again.
+  - `detectDevice()` is bounded to two seconds. It is a platform-channel call
+    into device_info_plus and it decides which wallet stack wraps the app, so
+    it stays ahead of the first frame — but a channel that never answers no
+    longer means an app that never draws.
+  - A preference store that cannot be opened no longer stops the app from
+    starting; every setting it holds has a default.
+
+### Added
+
+- **The plan card says what is actually true.** It showed "23 of 7 days
+  remaining" for anything longer than the trial, because the remaining days were
+  measured against the 7-day trial length — and the progress bar, clamped, sat
+  permanently full. A paid term's length is not part of the entitlement, so the
+  bar is now the trial's alone and a paid plan shows the date it runs to. Both
+  states also end somewhere useful: plans belong to a workspace, so the card
+  opens the workspace sheet instead of the "upgrade · coming soon" button it
+  used to show to subscribers and free accounts alike. The card only takes the
+  brand colour when there is a plan to show.
+
+- **Launcher disguise.** The `MAIN`/`LAUNCHER` filter moves off `MainActivity`
+  onto four `<activity-alias>` entries, exactly one enabled at a time, so the
+  launcher's name and icon change without a reinstall. Settings → App disguise
+  picks one. The incoming alias is enabled *before* the outgoing one is
+  disabled: several OEM launchers drop an app that passes through a moment with
+  no enabled launcher component, and the only way back is to reinstall. The
+  `erebrusvpn://` deep link stays on `MainActivity`, so sign-in survives every
+  switch.
+  - The calculator wears a calculator's face — a light body, a dark display and
+    round keys with the operator column in the brand orange — so it sits among
+    real utilities in the drawer rather than announcing itself.
+  - The copy lives in `lib/settings/disguise_profile.dart` and the aliases in
+    the manifest; `test/disguise_profile_test.dart` fails if they drift apart,
+    including the launcher labels and the icon resources, because nothing at
+    runtime notices — the icon simply fails to change.
+  - A disguise hides that Erebrus is *installed*. It does not protect what is
+    stored: an unlocked device still hands everything over. The picker says so,
+    and so should the marketing copy — "discreet", never "seizure-proof".
+
+### Changed
+
+- `FLAG_SECURE` blanks the recents thumbnail and refuses screenshots and screen
+  recording **while a disguise is on**. A calculator icon whose recents preview
+  shows a node list has told on itself, and Android writes that preview to
+  disk — but under the app's own name there is nothing to give away, and the
+  flag would otherwise cost every screenshot a user might legitimately want:
+  of a connection problem, for support, or to show someone. The window follows
+  the launcher the moment the disguise changes.
+- iOS and macOS have no equivalent flag, so `PrivacyCover` in
+  `lib/view/root_view.dart` covers the UI on `inactive` — the state the OS
+  snapshot is taken in — and uncovers on `resumed`.
+- Backup and device-to-device transfer stay enabled, so a new phone still
+  restores the user's settings, but the secure store is excluded from both
+  (`backup_rules.xml` for API 24–30, `data_extraction_rules.xml` for 31+). Two
+  reasons pointing the same way: the key that encrypts it lives in the Android
+  Keystore and is never backed up, so a restored copy is ciphertext the new
+  device cannot read — and with `resetOnError: false` that unreadable copy
+  surfaces as "could not restore the secure session" rather than a clean
+  sign-in prompt. Leaving it out means a restored device starts signed out,
+  which is the honest state, and the session token, WireGuard private keys and
+  stealth credentials never leave the device.
+- `android:usesCleartextTraffic="true"` is replaced by a network security config
+  that permits cleartext to `127.0.0.1` and `localhost` only — the Clash API on
+  :9090 and the mixed inbound on :10808. Everything that leaves the device is
+  HTTPS, so the blanket flag was permitting far more than the app has ever used.
+
+### Removed
+
+- NFT gating. The gateway stopped granting a personal NFT entitlement and
+  returns 410 on `POST /api/v2/subscriptions/nft/refresh`, so this removes an
+  offer the app could not honour: `refreshNftEntitlement` on the auth client and
+  the controller, `nftGatingEnabled` on `EntitlementState`, `kNftEntitlementDays`
+  and the NFT badge in settings. The entitlement `source` doc now lists
+  `onchain`, which is what prepaid USDC terms arrive as.
+
 ## 1.0.10+11 — 2026-11-17
 
 ### TL;DR (store release notes)

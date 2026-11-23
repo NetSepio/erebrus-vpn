@@ -8,6 +8,7 @@ import '../../auth/gateway_auth_client.dart';
 import '../../auth/wallet_auth_controller.dart';
 import '../../vpn/gateway_config.dart';
 import '../../settings/app_settings_controller.dart';
+import '../../settings/disguise_profile.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/premium_widgets.dart';
 import '../../vpn/vpn_controller.dart';
@@ -31,23 +32,30 @@ String _formatChainLabel(String chain) {
   }
 }
 
+const _kMonthsShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 String _formatMemberSinceLabel(DateTime? createdAt) {
   if (createdAt == null) return '—';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${months[createdAt.month - 1]} ${createdAt.year}';
+  return '${_kMonthsShort[createdAt.month - 1]} ${createdAt.year}';
+}
+
+/// "24 Dec 2026" — day precision, for dates the user plans around.
+String _formatDayMonth(DateTime date) {
+  final local = date.toLocal();
+  return '${local.day} ${_kMonthsShort[local.month - 1]} ${local.year}';
 }
 
 /// The settings tab — account, subscription, VPN & security, about, log out.
@@ -62,11 +70,21 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   String _appVersion = '';
+  DisguiseProfile _disguise = DisguiseProfile.active;
 
   @override
   void initState() {
     super.initState();
     _loadAppVersion();
+    _loadDisguise();
+  }
+
+  Future<void> _loadDisguise() async {
+    // The enabled launcher alias is the source of truth, so this is read from
+    // the platform rather than from a stored preference: a disguise survives
+    // reinstall-free updates and nothing can drift out of step with it.
+    final active = await const DisguiseChannel().current();
+    if (mounted) setState(() => _disguise = active);
   }
 
   Future<void> _loadAppVersion() async {
@@ -291,6 +309,23 @@ class _SettingsViewState extends State<SettingsView> {
                     );
                   }),
                 ],
+                if (PlatformCapabilities.supportsLauncherDisguise) ...[
+                  _RowDivider(),
+                  _GroupRow(
+                    icon: Icons.apps_outlined,
+                    title: 'App disguise',
+                    subtitleMaxLines: null,
+                    subtitle: _disguise.isDisguised
+                        ? 'Launcher shows "${_disguise.label}". Hides that Erebrus is installed, not what it stores.'
+                        : 'Change the name and icon in your launcher',
+                    onTap: _pickDisguise,
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 18),
@@ -391,6 +426,100 @@ class _SettingsViewState extends State<SettingsView> {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  /// Launcher disguise picker. Switching enables one `<activity-alias>` and
+  /// disables the rest, so the launcher entry is replaced rather than added to.
+  void _pickDisguise() {
+    showModalBottomSheet(
+      context: context,
+      // Four options plus the explanation is taller than the default sheet, and
+      // an option the user cannot reach is an option they do not have.
+      isScrollControlled: true,
+      backgroundColor: AppColors.raised,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'App disguise',
+                style: grotesk(size: 18, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Changes the launcher name, the icon and the VPN notification, '
+                'and blanks the app in recents and screenshots while it is on. '
+                'It hides that Erebrus is installed — it does not protect what '
+                'is stored on an unlocked device.',
+                style: grotesk(
+                  size: 12,
+                  weight: FontWeight.w400,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final profile in DisguiseProfile.all)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  title: Text(
+                    profile.label,
+                    style: grotesk(size: 14.5, weight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    profile.description,
+                    style: grotesk(
+                      size: 11.5,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  trailing: profile.alias == _disguise.alias
+                      ? const Icon(
+                          Icons.check,
+                          size: 18,
+                          color: AppColors.accent,
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    await _applyDisguise(profile);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyDisguise(DisguiseProfile profile) async {
+    if (profile.alias == _disguise.alias) return;
+    final ok = await const DisguiseChannel().set(profile);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not change the launcher icon')),
+      );
+      return;
+    }
+    setState(() => _disguise = profile);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          profile.isDisguised
+              ? 'Launcher now shows "${profile.label}"'
+              : 'Launcher restored to Erebrus VPN',
         ),
       ),
     );
@@ -916,6 +1045,11 @@ class _ProfileDetails extends StatelessWidget {
   }
 }
 
+/// The plan card: what you have, until when, and the one place to change it.
+///
+/// It only lights up when there is something to light up — a free account gets
+/// a quiet surface rather than a brand-coloured banner for a plan it does not
+/// have.
 class _SubscriptionCard extends StatelessWidget {
   const _SubscriptionCard({required this.auth});
   final WalletAuthController auth;
@@ -928,88 +1062,128 @@ class _SubscriptionCard extends StatelessWidget {
   Widget _buildCard(BuildContext context) {
     final ent = auth.entitlement.value;
     final entitled = ent.entitled;
-    final source = ent.source;
+    final busy = auth.isLoadingEntitlement.value;
+    final isTrial = ent.source == 'trial';
     final days = ent.daysRemaining;
-    final busy = auth.isLoadingEntitlement.value || auth.isRefreshingNft.value;
+    final rawError = auth.entitlementError.value;
+    final error = rawError != null && rawError.isNotEmpty ? rawError : null;
 
-    final badge = switch (source) {
+    final badge = switch (ent.source) {
       'trial' => 'TRIAL',
-      'nft' => 'NFT',
+      'onchain' => 'USDC',
       'rank' => 'RANK',
       'admin' => 'ADMIN',
       _ => entitled ? 'ACTIVE' : 'FREE',
     };
-    final title = entitled ? ent.planLabel : 'Erebrus Free';
-    final sub = busy
-        ? 'Checking subscription…'
-        : entitled
-        ? (days != null
-              ? '$days of $kTrialPeriodDays days remaining'
-              : 'Active')
-        : 'Free plan · Upgrade an organization for VPN access';
-    final progress = entitled && days != null
+    final accent = entitled ? AppColors.accent : AppColors.textTertiary;
+
+    // Only a trial can be shown as a bar. A paid term's length is not part of
+    // the entitlement, and measuring one against the 7-day trial read "23 of 7
+    // days remaining" with the bar always full.
+    final trialProgress = isTrial && days != null
         ? (days / kTrialPeriodDays).clamp(0.0, 1.0)
-        : 0.0;
+        : null;
+
+    final String detail;
+    if (busy) {
+      detail = 'Checking your plan…';
+    } else if (!entitled) {
+      detail = 'VPN access comes with a workspace plan';
+    } else if (isTrial && days != null) {
+      detail = days == 0
+          ? 'Trial ends today'
+          : '$days of $kTrialPeriodDays trial days left';
+    } else if (ent.periodEnd != null) {
+      detail = 'Active until ${_formatDayMonth(ent.periodEnd!)}';
+    } else {
+      detail = 'Included with your workspace plan';
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.accent.withValues(alpha: 0.14),
-            AppColors.accent.withValues(alpha: 0.04),
-          ],
-        ),
+        gradient: entitled
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.accent.withValues(alpha: 0.14),
+                  AppColors.accent.withValues(alpha: 0.04),
+                ],
+              )
+            : null,
+        color: entitled ? null : AppColors.surface2,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: entitled
+              ? AppColors.accent.withValues(alpha: 0.3)
+              : AppColors.strokeSoft,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(title, style: grotesk(size: 15, weight: FontWeight.w600)),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  entitled ? ent.planLabel : 'Erebrus Free',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: grotesk(size: 16, weight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 10),
               MonoChip(
                 label: badge,
-                color: AppColors.accent,
-                background: AppColors.accent.withValues(alpha: 0.16),
+                color: accent,
+                background: accent.withValues(alpha: 0.16),
               ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 7),
           Text(
-            sub,
+            detail,
             style: mono(
               size: 12,
               weight: FontWeight.w400,
               color: AppColors.textSecondary,
             ),
           ),
-          if (entitled) ...[
-            const SizedBox(height: 8),
+          if (trialProgress != null) ...[
+            const SizedBox(height: 10),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
-                value: progress,
+                value: trialProgress,
                 minHeight: 6,
                 backgroundColor: Colors.white.withValues(alpha: 0.1),
                 valueColor: const AlwaysStoppedAnimation(AppColors.accent),
               ),
             ),
-            const SizedBox(height: 14),
-            _DisabledButton(label: 'UPGRADE · COMING SOON'),
-          ] else ...[
-            const SizedBox(height: 14),
-            _DisabledButton(label: 'UPGRADE · COMING SOON'),
           ],
-          if (auth.entitlementError.value != null &&
-              auth.entitlementError.value!.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          // Plans belong to a workspace, so that is where the card sends you —
+          // rather than the dead "coming soon" button this used to show to
+          // subscribers and free accounts alike.
+          if (entitled)
+            _CardLink(
+              label: 'Manage workspace',
+              onTap: () => showOrganizationsSheet(context, auth),
+            )
+          else
+            PrimaryButton(
+              label: 'SEE WORKSPACE PLANS',
+              expanded: true,
+              fontSize: 13.5,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              trailingIcon: Icons.arrow_forward,
+              onPressed: () => showOrganizationsSheet(context, auth),
+            ),
+          if (error != null) ...[
             const SizedBox(height: 10),
             Text(
-              auth.entitlementError.value!,
+              error,
               style: grotesk(
                 size: 12,
                 weight: FontWeight.w400,
@@ -1023,27 +1197,30 @@ class _SubscriptionCard extends StatelessWidget {
   }
 }
 
-class _DisabledButton extends StatelessWidget {
-  const _DisabledButton({required this.label});
+/// A quiet in-card action: the text plus a chevron, no button chrome.
+class _CardLink extends StatelessWidget {
+  const _CardLink({required this.label, required this.onTap});
   final String label;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Text(
-        label,
-        style: mono(
-          size: 13,
-          weight: FontWeight.w600,
-          color: AppColors.textMuted,
-          letterSpacing: 13 * 0.05,
-        ),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: grotesk(
+              size: 13.5,
+              weight: FontWeight.w600,
+              color: AppColors.accent,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right, size: 17, color: AppColors.accent),
+        ],
       ),
     );
   }

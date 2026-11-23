@@ -13,6 +13,14 @@ class PlatformCapabilities {
     return Platform.isAndroid || Platform.isIOS;
   }
 
+  /// Launcher name and icon are swapped by enabling one `<activity-alias>`,
+  /// which is an Android mechanism; iOS offers nothing equivalent to an
+  /// installed app.
+  static bool get supportsLauncherDisguise {
+    if (kIsWeb) return false;
+    return Platform.isAndroid;
+  }
+
   /// Per-app bypass via Android VpnService.Builder.addDisallowedApplication.
   static bool get supportsSplitTunnel {
     if (kIsWeb) return false;

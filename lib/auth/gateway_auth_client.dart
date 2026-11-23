@@ -297,24 +297,6 @@ class GatewayAuthClient {
     return UserProfile.fromJson(map);
   }
 
-  /// `POST /api/v2/subscriptions/nft/refresh` — verify gating NFT, grant ~30d.
-  Future<EntitlementState> refreshNftEntitlement(String bearerToken) async {
-    final map = await _postJson(
-      GatewayHttp.apiUri(_base, path: '/api/v2/subscriptions/nft/refresh'),
-      const {},
-      bearerToken: bearerToken,
-    );
-    return EntitlementState.fromJson({
-      'entitled': true,
-      'status': map['status'] ?? 'active',
-      'plan_id': map['plan_id'],
-      'source': map['source'] ?? 'nft',
-      'current_period_end': map['current_period_end'],
-      'trial_consumed': map['trial_consumed'],
-      'nft_gating': true,
-    });
-  }
-
   /// `POST /api/v2/account/deletion-request` — request account deletion.
   Future<String> requestAccountDeletion(String bearerToken) async {
     final map = await _postJson(

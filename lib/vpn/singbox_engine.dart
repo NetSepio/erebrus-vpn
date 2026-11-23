@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../platform/desktop_system_proxy.dart';
 import '../platform/platform_capabilities.dart';
+import '../settings/disguise_profile.dart';
 import '../settings/split_tunnel_config.dart';
 import 'singbox_desktop_runner.dart';
 import 'vpn_models.dart';
@@ -176,6 +177,11 @@ class SingboxEngine {
     await _method.invokeMethod('start', {
       'config': configJson,
       'name': profileName,
+      // The ongoing notification follows the active launcher disguise: an icon
+      // called Notes whose notification reads "Protected · Frankfurt-1" has
+      // given the game away.
+      'notificationTitle': DisguiseProfile.active.notificationTitle,
+      'notificationText': DisguiseProfile.active.notificationText(profileName),
       'splitTunnelEnabled': splitTunnel.enabled,
       'splitTunnelMode': splitTunnel.mode.name,
       'splitTunnelPackages': splitTunnel.packages,

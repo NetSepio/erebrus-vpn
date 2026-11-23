@@ -9,7 +9,6 @@ class EntitlementState {
     this.capabilityTier = 'free',
     this.source,
     this.periodEnd,
-    this.nftGatingEnabled = false,
     this.trialConsumed = false,
     this.orgMember = false,
   });
@@ -19,11 +18,12 @@ class EntitlementState {
   final String? planId;
   final String capabilityTier;
 
-  /// `trial` | `nft` | `plan` | `admin` | `rank` | null. `plan` = entitled via an
-  /// owned paid-plan org (ongoing; `periodEnd` is null).
+  /// `trial` | `plan` | `onchain` | `admin` | `rank` | null. `plan` = entitled
+  /// via an owned paid-plan org (ongoing; `periodEnd` is null). `onchain` is a
+  /// prepaid USDC term. The gateway retired NFT entitlement, so `nft` can no
+  /// longer arrive; an unknown value is carried through untouched.
   final String? source;
   final DateTime? periodEnd;
-  final bool nftGatingEnabled;
 
   /// True when the wallet has already used its one-time v2 trial.
   final bool trialConsumed;
@@ -52,7 +52,6 @@ class EntitlementState {
       capabilityTier: (j['capability_tier'] ?? 'free').toString(),
       source: j['source']?.toString(),
       periodEnd: periodEnd,
-      nftGatingEnabled: j['nft_gating'] == true,
       trialConsumed: j['trial_consumed'] == true,
       orgMember: j['org_member'] == true,
     );

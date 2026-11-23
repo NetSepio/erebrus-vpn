@@ -3,4 +3,9 @@
     <color name="launch_background">#0A0A0C</color>
     <color name="erebrus_orange">#FF6B35</color>
 	<color name="ic_launcher_background">#050505</color>
+	<!-- Launcher disguise backgrounds. Each one is the colour an app of that
+	     kind would plausibly use; the point is to look unremarkable. -->
+	<color name="disguise_notes_background">#F2B01E</color>
+	<color name="disguise_calc_background">#2E3338</color>
+	<color name="disguise_weather_background">#2F7FE4</color>
 </resources>

@@ -123,7 +123,6 @@ class WalletAuthController extends GetxController with WidgetsBindingObserver {
   final authError = RxnString();
   final entitlement = EntitlementState.none.obs;
   final isLoadingEntitlement = false.obs;
-  final isRefreshingNft = false.obs;
   final profileEmail = ''.obs;
   final profileEmailVerified = false.obs;
   final profileName = ''.obs;
@@ -340,32 +339,56 @@ class WalletAuthController extends GetxController with WidgetsBindingObserver {
     PlatformCapabilities.isSolanaMobileDevice = detected;
   }
 
-  /// Restores token + profile from secure storage before the UI loads.
+  /// Restores the session from secure storage, then refreshes it from the
+  /// gateway behind the UI.
+  ///
+  /// Only the secure-storage read gates [sessionReady]. The gateway calls that
+  /// follow are three sequential round-trips at 8–12s timeouts each, and
+  /// holding the first frame for them turned a slow, lossy or blocked network
+  /// into half a minute of black screen at launch — indistinguishable from a
+  /// crash, and long enough for the OS to kill the start-up. The splash in
+  /// RootView covers the restore; nothing covers a frame that never arrives.
   Future<void> loadPersistedSession() async {
     sessionReady.value = false;
     try {
       final stored = await sessions.restore();
-      if (stored != null) {
-        _applyStoredSession(stored);
-        await sessions.ensureFresh();
-        await refreshEntitlement();
-        await refreshProfile();
-        unawaited(refreshReferrals());
-        unawaited(refreshRank());
-        unawaited(refreshAccountOrgInvites());
-        if (isAuthenticated) {
-          debugPrint('[Auth] restored session for ${stored.walletAddress}');
-        }
-      } else {
+      if (stored == null) {
         _applyToken(null);
         entitlement.value = EntitlementState.none;
+        return;
       }
+      _applyStoredSession(stored);
+      // Who the user is comes from storage, so the UI can render now.
+      sessionReady.value = true;
+      unawaited(_refreshRestoredSession(stored));
     } catch (e) {
       authError.value = e is AuthException
           ? e.message
           : 'Could not restore the secure session.';
     } finally {
       sessionReady.value = true;
+    }
+  }
+
+  /// Brings a restored session up to date. Every call here is a round-trip, so
+  /// it runs behind the UI; a failure surfaces as [authError] with the restored
+  /// session still usable, and an expired token clears itself through the
+  /// repository's own 401 handling.
+  Future<void> _refreshRestoredSession(StoredAuthSession stored) async {
+    try {
+      await sessions.ensureFresh();
+      await refreshEntitlement();
+      await refreshProfile();
+      unawaited(refreshReferrals());
+      unawaited(refreshRank());
+      unawaited(refreshAccountOrgInvites());
+      if (isAuthenticated) {
+        debugPrint('[Auth] restored session for ${stored.walletAddress}');
+      }
+    } catch (e) {
+      authError.value = e is AuthException
+          ? e.message
+          : 'Could not refresh the restored session.';
     }
   }
 
@@ -1026,30 +1049,6 @@ class WalletAuthController extends GetxController with WidgetsBindingObserver {
       entitlementError.value = e.toString();
     } finally {
       isLoadingEntitlement.value = false;
-    }
-  }
-
-  Future<void> refreshNftEntitlement() async {
-    if (!isAuthenticated) {
-      entitlementError.value = 'Sign in first to verify your NFT';
-      return;
-    }
-    if (!entitlement.value.nftGatingEnabled) {
-      entitlementError.value = 'NFT gating is not enabled on this gateway';
-      return;
-    }
-
-    isRefreshingNft.value = true;
-    entitlementError.value = null;
-    try {
-      await _authClient.refreshNftEntitlement(_token!);
-      await refreshEntitlement();
-    } on AuthException catch (e) {
-      entitlementError.value = e.message;
-    } catch (e) {
-      entitlementError.value = e.toString();
-    } finally {
-      isRefreshingNft.value = false;
     }
   }
 

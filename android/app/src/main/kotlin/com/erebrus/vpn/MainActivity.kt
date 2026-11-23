@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.util.Base64
+import android.view.WindowManager
 import androidx.webkit.ProxyConfig
 import androidx.webkit.ProxyController
 import androidx.webkit.WebViewFeature
@@ -36,6 +37,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyScreenshotPolicy()
         initialLink = intent?.data?.toString()
     }
 
@@ -70,6 +72,28 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "moveTaskToBack" -> result.success(moveTaskToBack(true))
+                // Launcher disguise. Dart owns the alias list (it is the same
+                // list the manifest declares and a test compares the two), so
+                // this layer only flips components.
+                "disguise.current" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val all = call.argument<List<String>>("aliases") ?: emptyList()
+                    result.success(AppDisguise.current(this, all))
+                }
+                "disguise.set" -> {
+                    val alias = call.argument<String>("alias") ?: ""
+                    @Suppress("UNCHECKED_CAST")
+                    val all = call.argument<List<String>>("aliases") ?: emptyList()
+                    if (AppDisguise.set(this, alias, all)) {
+                        // The window flag follows the launcher immediately: the
+                        // recents snapshot is taken when this task is left, and
+                        // leaving it is the next thing the user does.
+                        applyScreenshotPolicy()
+                        result.success(true)
+                    } else {
+                        result.error("UNKNOWN_DISGUISE", "No launcher alias named $alias", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -89,6 +113,11 @@ class MainActivity : FlutterActivity() {
                         splitTunnelEnabled = call.argument<Boolean>("splitTunnelEnabled") ?: false,
                         splitTunnelMode = call.argument<String>("splitTunnelMode") ?: "exclude",
                         splitTunnelPackages = packages,
+                        // Notification copy follows the active disguise: an icon
+                        // called Notes whose ongoing notification says "Erebrus"
+                        // has hidden nothing.
+                        notificationTitle = call.argument<String>("notificationTitle"),
+                        notificationText = call.argument<String>("notificationText"),
                     )
                     result.success(null)
                 }
@@ -128,6 +157,28 @@ class MainActivity : FlutterActivity() {
                 override fun onCancel(args: Any?) = SingboxBridge.setStatsSink(null)
             }
         )
+    }
+
+    /**
+     * Hides the app from screenshots, screen recording and the recents
+     * thumbnail — but only while a disguise is on.
+     *
+     * A disguise is undone by its own app switcher: a calculator icon whose
+     * recents preview shows a node list has told on itself, and Android writes
+     * that preview to disk. Under the app's real name there is nothing to give
+     * away, and FLAG_SECURE would cost the user every screenshot they might
+     * legitimately want to take — of a connection problem, for support, or to
+     * show someone.
+     */
+    private fun applyScreenshotPolicy() {
+        if (AppDisguise.isDisguised(this)) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
