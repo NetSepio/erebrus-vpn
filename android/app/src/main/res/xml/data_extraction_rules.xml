@@ -1,23 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nothing leaves the app: no cloud backup, no device-to-device transfer.
-     EncryptedSharedPreferences holds the session token, the WireGuard private
-     keys and the stealth credentials; the Keystore key that wraps them never
-     leaves the device, so a restored copy is useless at best and a disclosure
-     at worst. android:allowBackup="false" covers API 30 and below, these rules
-     cover 31 and above. -->
+<!-- Backup and device-to-device transfer stay on, so a new phone restores the
+     user's settings. The one thing kept out is the secure store, for two
+     reasons that point the same way: the key that encrypts it lives in the
+     Android Keystore and is never backed up, so a restored copy is ciphertext
+     the new device cannot read — and flutter_secure_storage is configured with
+     resetOnError: false, so that unreadable copy surfaces as "could not restore
+     the secure session" instead of a clean sign-in prompt. Leaving it out of
+     the backup means a restored device starts signed out, which is the honest
+     state, and the session token, WireGuard private keys and stealth
+     credentials never leave the device at all.
+
+     API 31 and above read this file; android/app/src/main/res/xml/backup_rules.xml
+     is the same exclusion for API 24-30. -->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="root"/>
-        <exclude domain="file"/>
-        <exclude domain="database"/>
-        <exclude domain="sharedpref"/>
-        <exclude domain="external"/>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureStorageConfiguration.xml"/>
     </cloud-backup>
     <device-transfer>
-        <exclude domain="root"/>
-        <exclude domain="file"/>
-        <exclude domain="database"/>
-        <exclude domain="sharedpref"/>
-        <exclude domain="external"/>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="sharedpref" path="FlutterSecureStorageConfiguration.xml"/>
     </device-transfer>
 </data-extraction-rules>

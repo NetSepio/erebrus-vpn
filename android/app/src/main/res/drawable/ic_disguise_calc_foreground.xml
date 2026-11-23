@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A calculator the way one looks now: a light rounded body, a dark display
+     and round keys, with the operator column in the brand orange so the icon
+     still reads at launcher size. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M34,24h40a6,6 0 0 1 6,6v48a6,6 0 0 1 -6,6H34a6,6 0 0 1 -6,-6V30a6,6 0 0 1 6,-6z"/>
-    <path android:fillColor="#1A1A1A"
-        android:pathData="M34,31h40v12H34z"/>
-    <path android:fillColor="#1A1A1A"
-        android:pathData="M36,50h10v8H36zM49,50h10v8H49zM62,50h10v8H62zM36,62h10v8H36zM49,62h10v8H49zM62,62h10v20H62zM36,74h23v8H36z"/>
+    <!-- body -->
+    <path android:fillColor="#F7F8FA"
+        android:pathData="M36,20h36a10,10 0 0 1 10,10v48a10,10 0 0 1 -10,10H36a10,10 0 0 1 -10,-10V30a10,10 0 0 1 10,-10z"/>
+    <!-- display -->
+    <path android:fillColor="#20242B"
+        android:pathData="M38,28h32a4,4 0 0 1 4,4v8a4,4 0 0 1 -4,4H38a4,4 0 0 1 -4,-4v-8a4,4 0 0 1 4,-4z"/>
+    <!-- digit keys -->
+    <path android:fillColor="#20242B"
+        android:pathData="M40,58m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0M54,58m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0M40,74m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0M54,74m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0"/>
+    <!-- operator column -->
+    <path android:fillColor="#FF6B35"
+        android:pathData="M68,58m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0M68,74m-5,0a5,5 0 1,0 10,0a5,5 0 1,0 -10,0"/>
 </vector>

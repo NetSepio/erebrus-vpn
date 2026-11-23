@@ -33,16 +33,32 @@ Future<void> main() async {
   }
   Get.put(VpnController(), permanent: true);
   Get.put(AppSettingsController(), permanent: true);
-  await Get.find<AppSettingsController>().load();
+  // Local preference reads. A store that cannot be opened must not stop the
+  // app from starting: every value here has a default.
+  try {
+    await Get.find<AppSettingsController>().load();
+  } catch (e) {
+    debugPrint('[Erebrus] settings unavailable at launch: $e');
+  }
   Get.put(GuestConfigController(), permanent: true);
   Get.put(BrowserController(), permanent: true);
   final auth = WalletAuthController();
   Get.put(auth, permanent: true);
-  await auth.detectDevice();
-  await auth.loadPersistedSession();
-  unawaited(auth.loadAuthMethods());
+  // Which wallet stack wraps the app is decided by this, so it stays ahead of
+  // the first frame — but bounded. It is a platform-channel call into
+  // device_info_plus, and a channel that never answers would mean an app that
+  // never draws. Falling back to the non-Solana-Mobile path is what every
+  // other device already does.
+  await auth
+      .detectDevice()
+      .timeout(const Duration(seconds: 2), onTimeout: () {});
   Get.put(GatewayController(), permanent: true);
-  // Refresh nodes and native state after the first frame so the app renders faster.
+
+  // Nothing past this point blocks the first frame. The session restore sets
+  // `sessionReady`, which RootView covers with the splash, and the node and
+  // native-state refreshes run after the first frame.
+  unawaited(auth.loadPersistedSession());
+  unawaited(auth.loadAuthMethods());
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     await Get.find<GatewayController>().refreshNodes();
     await Get.find<VpnController>().syncWithNative();
@@ -58,7 +74,7 @@ Future<void> main() async {
   });
   debugPrint(
     '[Erebrus] started — platform=${PlatformCapabilities.platformLabel} '
-    'solanaMobile=${auth.isSolanaMobileDevice.value}, session restored',
+    'solanaMobile=${auth.isSolanaMobileDevice.value}, restoring session',
   );
   runApp(
     ErebrusVpnApp(

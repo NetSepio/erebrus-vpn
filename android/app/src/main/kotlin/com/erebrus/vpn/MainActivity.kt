@@ -37,12 +37,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Blank the recents thumbnail and refuse screenshots and screen
-        // recording. This matters more with a launcher disguise, not less: a
-        // calculator icon whose recents preview shows a node list defeats
-        // itself. iOS has no equivalent flag; RootView covers it with an opaque
-        // overlay while the app is inactive.
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        applyScreenshotPolicy()
         initialLink = intent?.data?.toString()
     }
 
@@ -90,6 +85,10 @@ class MainActivity : FlutterActivity() {
                     @Suppress("UNCHECKED_CAST")
                     val all = call.argument<List<String>>("aliases") ?: emptyList()
                     if (AppDisguise.set(this, alias, all)) {
+                        // The window flag follows the launcher immediately: the
+                        // recents snapshot is taken when this task is left, and
+                        // leaving it is the next thing the user does.
+                        applyScreenshotPolicy()
                         result.success(true)
                     } else {
                         result.error("UNKNOWN_DISGUISE", "No launcher alias named $alias", null)
@@ -158,6 +157,28 @@ class MainActivity : FlutterActivity() {
                 override fun onCancel(args: Any?) = SingboxBridge.setStatsSink(null)
             }
         )
+    }
+
+    /**
+     * Hides the app from screenshots, screen recording and the recents
+     * thumbnail — but only while a disguise is on.
+     *
+     * A disguise is undone by its own app switcher: a calculator icon whose
+     * recents preview shows a node list has told on itself, and Android writes
+     * that preview to disk. Under the app's real name there is nothing to give
+     * away, and FLAG_SECURE would cost the user every screenshot they might
+     * legitimately want to take — of a connection problem, for support, or to
+     * show someone.
+     */
+    private fun applyScreenshotPolicy() {
+        if (AppDisguise.isDisguised(this)) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

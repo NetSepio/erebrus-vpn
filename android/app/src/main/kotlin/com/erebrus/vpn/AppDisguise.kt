@@ -17,6 +17,33 @@ import android.content.pm.PackageManager
  */
 object AppDisguise {
 
+    /** The alias that ships enabled: the app under its own name and icon. */
+    const val DEFAULT_ALIAS = ".LauncherDefault"
+
+    /**
+     * Whether the launcher is showing something other than Erebrus.
+     *
+     * Used to decide whether this window hides itself from screenshots and the
+     * recents thumbnail. Asking the package manager rather than caching it
+     * means the answer is right even on the first frame after a cold start,
+     * before any Dart code has run.
+     */
+    fun isDisguised(context: Context): Boolean {
+        val pm = context.packageManager
+        val component = component(context, DEFAULT_ALIAS)
+        val state = try {
+            pm.getComponentEnabledSetting(component)
+        } catch (_: IllegalArgumentException) {
+            return false
+        }
+        return when (state) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> false
+            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT ->
+                !manifestEnabled(pm, context, DEFAULT_ALIAS)
+            else -> true
+        }
+    }
+
     /**
      * Enables [alias] and disables every other alias in [all].
      *
