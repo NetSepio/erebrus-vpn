@@ -305,47 +305,38 @@ jobs:
 
   build-macos:
     needs: [prepare, verify]
+    # The macOS app embeds the ErebrusTunnel Network Extension, which Xcode only
+    # builds with NetSepio's Apple Developer team (76KW3AMAW5) signing and
+    # provisioning profiles. Until those reach CI the job does not run at all.
+    #
+    # The gate is on the job rather than on its steps for a reason that cost a
+    # release: a step-level gate still queues a macOS runner to do nothing, and
+    # when GitHub cannot hand one out — arm64 capacity is routinely short — the
+    # job is cancelled, and a cancelled dependency took github-release down with
+    # it. v1.0.11 built every artifact and published none.
+    #
+    # Set the repo variable ENABLE_MACOS_BUILD=true once signing is configured.
+    if: vars.ENABLE_MACOS_BUILD == 'true'
     runs-on: macos-latest
     timeout-minutes: 60
     env:
       GOTOOLCHAIN: local
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
-      # The macOS app embeds the ErebrusTunnel Network Extension, which Xcode
-      # only builds with NetSepio's Apple Developer team (76KW3AMAW5) signing
-      # and provisioning profiles. Until those are available to CI, skip the
-      # build (job stays green) instead of failing on "No profiles found".
-      # Set the repo variable ENABLE_MACOS_BUILD=true once signing is set up.
-      - name: Check macOS signing availability
-        id: gate
-        env:
-          ENABLED: ${{ vars.ENABLE_MACOS_BUILD }}
-        run: |
-          if [[ "${ENABLED}" == "true" ]]; then
-            echo "enabled=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "::notice::macOS build skipped — needs Apple Developer signing for team 76KW3AMAW5. Set repo variable ENABLE_MACOS_BUILD=true once it is configured."
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.enabled == 'true'
 
       # Go 1.27 breaks sing-box v1.11.15; see build-android.
       - uses: actions/setup-go@v5
-        if: steps.gate.outputs.enabled == 'true'
         with:
           go-version: "1.26"
 
       - uses: subosito/flutter-action@v2
-        if: steps.gate.outputs.enabled == 'true'
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Configure build env
-        if: steps.gate.outputs.enabled == 'true'
         env:
           REOWN_PROJECT_ID: ${{ secrets.REOWN_PROJECT_ID }}
         run: |
@@ -356,7 +347,6 @@ jobs:
           } > .env
 
       - name: Pre-install pinned gobind
-        if: steps.gate.outputs.enabled == 'true'
         run: |
           go install golang.org/x/mobile/cmd/gobind@v0.0.0-20260611195102-4dd8f1dbf5d2
           echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
@@ -364,18 +354,13 @@ jobs:
       # One interpreter for install and run: the runner's bare `pip` targets a
       # different Python than `python3`, so Pillow went missing.
       - uses: actions/setup-python@v5
-        if: steps.gate.outputs.enabled == 'true'
         with:
           python-version: "3.12"
-      - if: steps.gate.outputs.enabled == 'true'
-        run: python -m pip install pillow
-      - if: steps.gate.outputs.enabled == 'true'
-        run: chmod +x scripts/build-desktop.sh scripts/fetch-singbox-cli.sh
-      - if: steps.gate.outputs.enabled == 'true'
-        run: ./scripts/build-desktop.sh macos
+      - run: python -m pip install pillow
+      - run: chmod +x scripts/build-desktop.sh scripts/fetch-singbox-cli.sh
+      - run: ./scripts/build-desktop.sh macos
 
       - uses: actions/upload-artifact@v4
-        if: steps.gate.outputs.enabled == 'true'
         with:
           name: macos-${{ env.TAG }}
           if-no-files-found: error
@@ -470,7 +455,17 @@ jobs:
           path: dist/*
 
   github-release:
-    if: github.ref_type == 'tag'
+    # A skipped job skips everything that needs it, so the macOS result is
+    # checked by name instead: built or not run is fine, failed or cancelled is
+    # not. always() is what lets this job evaluate at all once a dependency has
+    # been skipped.
+    if: >-
+      always() && github.ref_type == 'tag'
+      && needs.prepare.result == 'success'
+      && needs.build-android.result == 'success'
+      && needs.build-linux.result == 'success'
+      && needs.build-windows.result == 'success'
+      && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped')
     needs: [prepare, build-android, build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
