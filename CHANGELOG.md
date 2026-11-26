@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.0.12+13 — 2026-11-27
+
+### TL;DR
+
+- Android release builds are now shrunk and obfuscated by R8. Google Play
+  reported DEX code optimisation below its threshold (obfuscation 1%), which
+  limits an app's visibility and publishing. The APK also gets smaller, since
+  unused classes and resources are dropped along the way.
+
+### Changed
+
+- **Release builds run R8.** `minifyEnabled` and `shrinkResources` were both
+  off, so every class in the APK shipped under its original name. They are on
+  for both store flavors, with keep rules in `android/app/proguard-rules.pro`.
+
+  The fragile part is the VPN core: the Go runtime inside `libbox.aar` resolves
+  Java classes and methods by name over JNI, so anything renamed there fails at
+  runtime — a tunnel that will not start — rather than at build time. `go.**`,
+  `io.nekohasekai.libbox.**` and the four classes on our side of that bridge are
+  kept whole. Nothing else of ours is.
+
+  Dart code is unaffected either way: it ships as a native snapshot in
+  `libapp.so`, not as DEX, so Play's DEX measurement never saw it.
+
+- **Release workflow archives the R8 mappings.** An obfuscated stack trace is
+  unreadable without them. Play reads the copy embedded in the App Bundle; the
+  APKs published on GitHub now ship a `mapping.txt` beside them, and the build
+  fails if one is missing, which also catches minification silently not running.
+
 ## 1.0.11+12 — 2026-11-24
 
 ### TL;DR

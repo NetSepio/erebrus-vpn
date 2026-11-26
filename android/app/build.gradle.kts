@@ -135,8 +135,19 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // R8: shrink, optimise and obfuscate the Java/Kotlin DEX. Without
+            // this Google Play reports "DEX code optimisation below threshold"
+            // (obfuscation 1%), which limits visibility and publishing.
+            //
+            // Dart code is not in the DEX — it ships as a native snapshot in
+            // libapp.so and is unaffected either way. Keep rules live in
+            // proguard-rules.pro; the libbox JNI bridge is the fragile part.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
