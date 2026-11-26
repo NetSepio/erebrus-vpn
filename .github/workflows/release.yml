@@ -297,6 +297,22 @@ jobs:
             exit 1
           fi
 
+      # Release builds are obfuscated by R8, so a stack trace from a shipped APK
+      # is unreadable without the mapping. Play reads the copy embedded in the
+      # AAB; these are for the APKs we publish ourselves. A missing mapping means
+      # R8 did not run — fail rather than ship a release nobody can debug.
+      - name: Archive R8 mappings
+        run: |
+          set -euo pipefail
+          for flavor in playstore dappstore; do
+            src="build/app/outputs/mapping/${flavor}Release/mapping.txt"
+            if [[ ! -f "${src}" ]]; then
+              echo "::error::${src} is missing — minification did not run for ${flavor}."
+              exit 1
+            fi
+            cp "${src}" "dist/erebrus-vpn-${flavor}-${TAG}-mapping.txt"
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: android-${{ env.TAG }}
